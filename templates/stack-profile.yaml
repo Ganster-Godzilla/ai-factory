@@ -1,0 +1,21 @@
+project:
+  name: "{{PROJECT_NAME}}"
+  type: "{{PROJECT_TYPE}}"
+stack:
+  language: {{LANGUAGE}}
+  lint_cmd: "{{LINT_CMD}}"
+  test_cmd: "{{TEST_CMD}}"
+  typecheck_cmd: null
+vcs:
+  branch_model: "feature→main"
+  protected_branches: [main]
+ci:
+  type: none
+  trigger_ref: ""
+paths:
+  requirements: "document/business"
+  specs: "docs/superpowers/specs"
+security:
+  protected_paths: []
+budget:
+  concurrent_max: 2

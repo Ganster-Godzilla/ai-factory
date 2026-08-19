@@ -1,0 +1,9 @@
+{
+  "project": "{{PROJECT_NAME}}",
+  "version": "1.0",
+  "last_updated": "",
+  "overview": { "description": "{{PROJECT_TYPE}}", "status": "active", "active_modules": [] },
+  "modules": {},
+  "budget": { "concurrent_max": 2, "currently_executing": 0 },
+  "pending_notifications": []
+}

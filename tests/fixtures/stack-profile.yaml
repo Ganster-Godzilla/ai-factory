@@ -1,0 +1,21 @@
+project:
+  name: "fixture-demo"
+  type: "测试夹具"
+stack:
+  language: python
+  lint_cmd: "python -m pyflakes {changed_files}"
+  test_cmd: "pytest tests/"
+  typecheck_cmd: null
+vcs:
+  branch_model: "feature→main"
+  protected_branches: [main, test]
+ci:
+  type: none
+  trigger_ref: ""
+paths:
+  requirements: "document/business"
+  specs: "docs/superpowers/specs"
+security:
+  protected_paths: ["migrations/", ".env"]
+budget:
+  concurrent_max: 2

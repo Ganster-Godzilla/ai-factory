@@ -1,0 +1,17 @@
+# 运行时状态(编排器)
+pool/
+.orc-worktrees/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# 机密
+.env
+*.local
+
+# 系统
+Thumbs.db
+.DS_Store
