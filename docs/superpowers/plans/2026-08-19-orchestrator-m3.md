@@ -202,7 +202,6 @@ def test_deadlocked_tasks_suspend(pool, tmp_path):
     msg = advance_once(pool, t.id, FakeHarness(), proj)
     t2 = load_ticket(pool, t.id)
     assert t2.state == "suspended"
-    assert "依赖" in t2.resume_state or msg  # reason 含依赖提示
     from orchestrator.daemon.events import read_events
     assert any("依赖" in str(e.get("reason", "")) for e in read_events(pool, t.id))
 ```
@@ -464,12 +463,12 @@ def test_consult_then_retry_once_then_suspend(pool, tmp_path):
     h = FakeHarness(script=["failed"] * 10)
     cfg = {"budgets": {"k3_week_token_budget": 10**9, "ds_daily_cny": 10**9}}
     consult = FakeHarness()
-    for _ in range(3):  # 3 次 retry
+    for _ in range(2):  # 2 次 retry(第 3 次失败触发会诊)
         advance_once(pool, t.id, h, proj, cfg=cfg, consult_adapter=consult)
-    r = advance_once(pool, t.id, h, proj, cfg=cfg, consult_adapter=consult)  # consult
+    r = advance_once(pool, t.id, h, proj, cfg=cfg, consult_adapter=consult)  # 第 3 次失败→consult
     assert r.startswith("consult:")
     assert consult.received and consult.received[0].role == "architect"
-    advance_once(pool, t.id, h, proj, cfg=cfg, consult_adapter=consult)      # 会诊后再失败
+    advance_once(pool, t.id, h, proj, cfg=cfg, consult_adapter=consult)      # 会诊后再失败(attempts 回到 3)
     assert load_ticket(pool, t.id).state == "suspended"
 
 
@@ -699,9 +698,9 @@ def test_circuit_breaker_full_lifecycle(pool, tmp_path):
     t2.state = "p3_running"
     save_ticket(pool, t2)
 
-    dev = FakeHarness(script=["failed", "failed", "failed", "failed", "done"])
+    dev = FakeHarness(script=["failed", "failed", "failed", "done"])
     cfg = {"budgets": {"k3_week_token_budget": 10**9, "ds_daily_cny": 10**9}}
-    for _ in range(6):
+    for _ in range(4):  # retry、retry、consult(第 3 次失败)、会诊后成功
         advance_once(pool, t.id, dev, tmp_path, cfg=cfg, consult_adapter=FakeHarness())
     t3 = load_ticket(pool, t.id)
     assert t3.tasks[0]["status"] == "done"
