@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import shutil
 import subprocess
 
 from orchestrator.adapters.base import HarnessAdapter, HarnessResult, TaskPacket
@@ -11,7 +12,10 @@ class ClaudeCodeAdapter(HarnessAdapter):
     name = "claude_code"
 
     def run(self, packet: TaskPacket) -> HarnessResult:
-        cmd = ["claude", "-p", packet.prompt, "--output-format", "json"]
+        # Windows 上 npm 安装的 claude 是 .cmd shim,CreateProcess 只自动补 .exe;
+        # shutil.which 解析出带扩展名的全路径(POSIX 同样返回真实路径),缺失时回退裸名。
+        exe = shutil.which("claude") or "claude"
+        cmd = [exe, "-p", packet.prompt, "--output-format", "json"]
         try:
             r = subprocess.run(cmd, cwd=packet.workdir, capture_output=True,
                                text=True, encoding="utf-8", errors="replace",
