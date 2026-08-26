@@ -39,3 +39,14 @@ def test_make_packet_has_tdd(pool, tmp_path):
     assert pkt.role == "dev"
     assert "TDD" in pkt.prompt and "pytest -x" in pkt.prompt
     assert pkt.workdir == tmp_path
+
+
+def test_circular_dependency_rejected(tmp_path):
+    f = tmp_path / "tasks.yaml"
+    f.write_text(
+        "- id: a\n  title: x\n  acceptance_cmd: c\n  depends_on: [b]\n"
+        "- id: b\n  title: y\n  acceptance_cmd: c\n  depends_on: [a]\n",
+        encoding="utf-8")
+    import pytest
+    with pytest.raises(ValueError, match="循环依赖"):
+        load_task_list(f)

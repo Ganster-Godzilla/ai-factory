@@ -117,3 +117,19 @@ def test_failed_task_run_event_carries_output(pool, tmp_path):
     ev = [e for e in read_events(pool, t.id) if e["event"] == "task_run"]
     assert ev and ev[-1]["status"] == "failed"
     assert "output" in ev[-1] and "fake" in ev[-1]["output"]
+
+
+def test_deadlocked_tasks_suspend(pool, tmp_path):
+    proj = _git_repo(tmp_path)
+    t = new_ticket(pool, project="p", summary="x")
+    t.state = "p3_running"
+    t.tasks = [
+        {"id": "a", "title": "x", "acceptance_cmd": "true", "depends_on": ["gone"],
+         "status": "pending", "attempts": 0},
+    ]
+    save_ticket(pool, t)
+    msg = advance_once(pool, t.id, FakeHarness(), proj)
+    t2 = load_ticket(pool, t.id)
+    assert t2.state == "suspended"
+    from orchestrator.daemon.events import read_events
+    assert any("依赖" in str(e.get("reason", "")) for e in read_events(pool, t.id))

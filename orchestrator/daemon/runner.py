@@ -53,7 +53,9 @@ def run_dev_tasks(pool: Path, ticket, adapter: HarnessAdapter,
         if all(t["status"] == "done" for t in ticket.tasks):
             transition(pool, ticket, "p4_verifying", actor="system")
             return "auto: p4_verifying"
-        return "idle: p3_running(no ready tasks)"
+        suspend(pool, ticket, actor="system",
+                reason="无可派发任务且未完成:依赖死锁或依赖缺失")
+        return "suspend: 依赖死锁"
     task = ready[0]
     wt = ensure_worktree(project_dir, f"{ticket.id}-{task['id']}")
     packet = make_packet(task, ticket, wt, design_excerpt="")
