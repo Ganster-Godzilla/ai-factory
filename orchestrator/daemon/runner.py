@@ -1,6 +1,9 @@
 """执行器:对工单当前状态推进一步。M1 形态:同步单步;常驻循环在 M3+。"""
 from __future__ import annotations
 
+import os
+import shutil
+import subprocess
 from pathlib import Path
 
 from orchestrator.adapters.base import HarnessAdapter, TaskPacket
@@ -61,10 +64,26 @@ def run_dev_tasks(pool: Path, ticket, adapter: HarnessAdapter,
     packet = make_packet(task, ticket, wt, design_excerpt="")
     result = adapter.run(packet)
     task["attempts"] += 1
+    verify = None
+    if result.status == "done" and task.get("acceptance_cmd"):
+        if os.name == "nt":
+            # Windows 下 shell=True+executable 会按 cmd /c 拼装(bash 不认 /c),
+            # 且 CreateProcess 不对 executable 搜 PATH;改用 argv 直调 git-bash
+            r = subprocess.run([shutil.which("bash") or "bash", "-c", task["acceptance_cmd"]],
+                               cwd=wt, capture_output=True, text=True,
+                               encoding="utf-8", errors="replace", timeout=600)
+        else:
+            r = subprocess.run(task["acceptance_cmd"], shell=True, executable="bash",
+                               cwd=wt, capture_output=True, text=True,
+                               encoding="utf-8", errors="replace", timeout=600)
+        verify = "passed" if r.returncode == 0 else "failed"
+        if r.returncode != 0:
+            result.status = "failed"
+            result.output += f"\n[acceptance 复检失败 exit={r.returncode}]\n{(r.stdout + r.stderr)[-1000:]}"
     append_event(pool, ticket.id, "dev", "task_run", task=task["id"],
                  attempt=task["attempts"], status=result.status,
                  tokens=result.tokens, cost_cny=result.cost_cny,
-                 output=result.output[:500])
+                 output=result.output[:500], verify=verify)
     if result.status == "done":
         task["status"] = "done"
         save_ticket(pool, ticket)

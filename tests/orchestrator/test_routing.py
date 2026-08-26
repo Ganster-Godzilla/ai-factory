@@ -119,6 +119,33 @@ def test_failed_task_run_event_carries_output(pool, tmp_path):
     assert "output" in ev[-1] and "fake" in ev[-1]["output"]
 
 
+def test_acceptance_recheck_catches_lying_harness(pool, tmp_path):
+    proj = _git_repo(tmp_path)
+    t = new_ticket(pool, project="p", summary="x")
+    t.state = "p3_running"
+    t.tasks = [{"id": "task-1", "title": "a", "acceptance_cmd": "exit 1",
+                "depends_on": [], "status": "pending", "attempts": 0}]
+    save_ticket(pool, t)
+    h = FakeHarness()  # harness 谎报 done
+    advance_once(pool, t.id, h, proj)
+    t2 = load_ticket(pool, t.id)
+    assert t2.tasks[0]["status"] == "pending"   # 复检揪出,不算 done
+    from orchestrator.daemon.events import read_events
+    evts = [e for e in read_events(pool, t.id) if e["event"] == "task_run"]
+    assert evts[-1]["verify"] == "failed"
+
+
+def test_acceptance_recheck_pass(pool, tmp_path):
+    proj = _git_repo(tmp_path)
+    t = new_ticket(pool, project="p", summary="x")
+    t.state = "p3_running"
+    t.tasks = [{"id": "task-1", "title": "a", "acceptance_cmd": "exit 0",
+                "depends_on": [], "status": "pending", "attempts": 0}]
+    save_ticket(pool, t)
+    advance_once(pool, t.id, FakeHarness(), proj)
+    assert load_ticket(pool, t.id).tasks[0]["status"] == "done"
+
+
 def test_deadlocked_tasks_suspend(pool, tmp_path):
     proj = _git_repo(tmp_path)
     t = new_ticket(pool, project="p", summary="x")
