@@ -17,7 +17,7 @@ def test_full_lifecycle_with_fake_harness(pool, tmp_path):
     # p2: architect 干完后老板批
     transition(pool, load_ticket(pool, t.id), "p2_approved", actor="boss")
     advance_once(pool, t.id, h, tmp_path)   # auto→p3_running
-    advance_once(pool, t.id, h, tmp_path)   # dev→p4
+    advance_once(pool, t.id, h, tmp_path)   # p3 无 tasks,auto→p4(不再产生 dev role_run)
     advance_once(pool, t.id, h, tmp_path)   # qa→p5_ready
     transition(pool, load_ticket(pool, t.id), "p5_releasing", actor="boss")
     advance_once(pool, t.id, h, tmp_path)   # release→monitoring
@@ -28,4 +28,7 @@ def test_full_lifecycle_with_fake_harness(pool, tmp_path):
     assert kinds[0] == "created"
     assert "state_changed" in kinds and "role_run" in kinds
     roles = [e["actor"] for e in read_events(pool, t.id) if e["event"] == "role_run"]
-    assert roles == ["pm", "architect", "dev", "qa", "release", "sre"]
+    # dev 不再出现在角色级 role_run 中:p3_running 已改为任务级派发(run_dev_tasks),
+    # 空 tasks 工单直接 auto 到 p4_verifying。dev 任务级派发路径由
+    # test_routing.py 的 test_p3_dispatches_ready_tasks 覆盖。
+    assert roles == ["pm", "architect", "qa", "release", "sre"]

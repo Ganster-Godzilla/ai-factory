@@ -7,9 +7,10 @@ from pathlib import Path
 
 import yaml
 
+from orchestrator.adapters import get_adapter
 from orchestrator.adapters.fake import FakeHarness
 from orchestrator.daemon.events import read_events
-from orchestrator.daemon.runner import advance_once
+from orchestrator.daemon.runner import ROLE_ROUTING, WORK_STATES, advance_once
 from orchestrator.daemon.statemachine import (
     APPROVALS, IllegalTransition, resume, suspend, transition,
 )
@@ -69,10 +70,9 @@ def main(argv: list[str] | None = None) -> int:
             resume(pool, load_ticket(pool, args.id), actor="boss")
             print(f"{args.id} → resumed")
         elif args.cmd == "advance":
-            if not args.fake:
-                print("真实适配器未接入(M2),请用 --fake", file=sys.stderr)
-                return 1
-            print(advance_once(pool, args.id, FakeHarness(), Path(args.project_dir)))
+            adapter = FakeHarness() if args.fake else get_adapter(ROLE_ROUTING.get(
+                WORK_STATES.get(load_ticket(pool, args.id).state, "dev"), "dsh"))
+            print(advance_once(pool, args.id, adapter, Path(args.project_dir)))
     except (IllegalTransition, ValueError) as e:
         print(f"error: {e}", file=sys.stderr)
         return 1
