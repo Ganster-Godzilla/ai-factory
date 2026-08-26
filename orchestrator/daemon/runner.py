@@ -6,8 +6,13 @@ import shutil
 import subprocess
 from pathlib import Path
 
+from orchestrator.adapters import get_adapter
 from orchestrator.adapters.base import HarnessAdapter, TaskPacket
+from orchestrator.daemon.circuitbreaker import (
+    MAX_RETRY, consult_packet, next_action, retry_prompt,
+)
 from orchestrator.daemon.events import append_event
+from orchestrator.daemon.ledger import append_ledger, k3_budget_exceeded
 from orchestrator.daemon.slicer import load_task_list, make_packet, ready_tasks
 from orchestrator.daemon.statemachine import suspend, transition
 from orchestrator.daemon.ticket import load_ticket, save_ticket
@@ -38,9 +43,34 @@ SUCCESS_NEXT = {
 
 SYSTEM_NEXT = {"p2_approved": "p3_queued", "p3_queued": "p3_running"}
 
+ADAPTER_RESOURCE = {"claude_code": ("k3", "tokens"), "dsh": ("deepseek", "cny")}
+
+
+def _record_cost(pool: Path, ticket, adapter: HarnessAdapter, result, role: str) -> None:
+    res = ADAPTER_RESOURCE.get(adapter.name)
+    if not res:
+        return
+    resource, unit = res
+    amount = sum(result.tokens.values()) if unit == "tokens" else result.cost_cny
+    if amount:
+        append_ledger(pool, resource, amount, unit, ticket.id, role, adapter.name)
+
+
+def _run_acceptance(cmd: str, cwd: Path, timeout: int = 600) -> subprocess.CompletedProcess:
+    if os.name == "nt":
+        # Windows 下 shell=True+executable 会按 cmd /c 拼装(bash 不认 /c),
+        # 且 CreateProcess 不对 executable 搜 PATH;改用 argv 直调 git-bash
+        return subprocess.run([shutil.which("bash") or "bash", "-c", cmd],
+                              cwd=cwd, capture_output=True, text=True,
+                              encoding="utf-8", errors="replace", timeout=timeout)
+    return subprocess.run(cmd, shell=True, executable="bash",
+                          cwd=cwd, capture_output=True, text=True,
+                          encoding="utf-8", errors="replace", timeout=timeout)
+
 
 def run_dev_tasks(pool: Path, ticket, adapter: HarnessAdapter,
-                  project_dir: Path) -> str:
+                  project_dir: Path, cfg: dict | None = None,
+                  consult_adapter: HarnessAdapter | None = None) -> str:
     if not ticket.tasks:
         # 架构师产物 lazy-load:docs/specs/<ticket.id>-tasks.yaml → ticket.tasks
         spec = project_dir / "docs" / "specs" / f"{ticket.id}-tasks.yaml"
@@ -62,24 +92,23 @@ def run_dev_tasks(pool: Path, ticket, adapter: HarnessAdapter,
     task = ready[0]
     wt = ensure_worktree(project_dir, f"{ticket.id}-{task['id']}")
     packet = make_packet(task, ticket, wt, design_excerpt="")
+    if task["attempts"] > 0:
+        packet.prompt = retry_prompt(task, packet.prompt, task.get("last_error", ""))
     result = adapter.run(packet)
     task["attempts"] += 1
     verify = None
     if result.status == "done" and task.get("acceptance_cmd"):
-        if os.name == "nt":
-            # Windows 下 shell=True+executable 会按 cmd /c 拼装(bash 不认 /c),
-            # 且 CreateProcess 不对 executable 搜 PATH;改用 argv 直调 git-bash
-            r = subprocess.run([shutil.which("bash") or "bash", "-c", task["acceptance_cmd"]],
-                               cwd=wt, capture_output=True, text=True,
-                               encoding="utf-8", errors="replace", timeout=600)
-        else:
-            r = subprocess.run(task["acceptance_cmd"], shell=True, executable="bash",
-                               cwd=wt, capture_output=True, text=True,
-                               encoding="utf-8", errors="replace", timeout=600)
-        verify = "passed" if r.returncode == 0 else "failed"
-        if r.returncode != 0:
+        try:
+            r = _run_acceptance(task["acceptance_cmd"], wt)
+        except subprocess.TimeoutExpired:
+            verify = "failed"
             result.status = "failed"
-            result.output += f"\n[acceptance 复检失败 exit={r.returncode}]\n{(r.stdout + r.stderr)[-1000:]}"
+            result.output += "\n[acceptance 复检超时]"
+        else:
+            verify = "passed" if r.returncode == 0 else "failed"
+            if r.returncode != 0:
+                result.status = "failed"
+                result.output += f"\n[acceptance 复检失败 exit={r.returncode}]\n{(r.stdout + r.stderr)[-1000:]}"
     append_event(pool, ticket.id, "dev", "task_run", task=task["id"],
                  attempt=task["attempts"], status=result.status,
                  tokens=result.tokens, cost_cny=result.cost_cny,
@@ -87,11 +116,35 @@ def run_dev_tasks(pool: Path, ticket, adapter: HarnessAdapter,
     if result.status == "done":
         task["status"] = "done"
         save_ticket(pool, ticket)
-    else:
-        save_ticket(pool, ticket)  # attempts 已记;熔断阶梯 M3 接管
-        suspend(pool, ticket, actor="system",
-                reason=f"任务 {task['id']} 第 {task['attempts']} 次失败")
-    return f"task:{task['id']}:{result.status}"
+        if cfg:
+            _record_cost(pool, ticket, adapter, result, "dev")
+        return f"task:{task['id']}:done"
+
+    task["last_error"] = result.output[:800]
+    save_ticket(pool, ticket)  # attempts 已记
+    action = next_action(task)
+    if action == "retry":
+        return f"retry:{task['id']}:{task['attempts']}"
+    if action == "consult":
+        if cfg and ticket.type != "incident" and k3_budget_exceeded(pool, cfg):
+            suspend(pool, ticket, actor="system",
+                    reason="k3 配额超线,会诊通道关闭,任务挂起")
+            return "suspend: k3 配额超线"
+        ca = consult_adapter or get_adapter("claude_code")
+        cp = consult_packet(task, ticket, result.output, wt)
+        cr = ca.run(cp)
+        task["consulted"] = True
+        task["consult_note"] = cr.output[:1000]
+        task["attempts"] = MAX_RETRY - 1   # 会诊后只再给 1 次
+        append_event(pool, ticket.id, "architect", "consult",
+                     task=task["id"], status=cr.status, output=cr.output[:500])
+        save_ticket(pool, ticket)
+        if cfg:
+            _record_cost(pool, ticket, ca, cr, "architect")
+        return f"consult:{task['id']}:{cr.status}"
+    suspend(pool, ticket, actor="system",
+            reason=f"任务 {task['id']} 会诊后仍失败")
+    return f"suspend:{task['id']}"
 
 
 def _role_prompt(role: str) -> str:
@@ -100,7 +153,8 @@ def _role_prompt(role: str) -> str:
 
 
 def advance_once(pool: Path, ticket_id: str, adapter: HarnessAdapter,
-                 project_dir: Path) -> str:
+                 project_dir: Path, cfg: dict | None = None,
+                 consult_adapter: HarnessAdapter | None = None) -> str:
     t = load_ticket(pool, ticket_id)
 
     if t.state in SYSTEM_NEXT:
@@ -113,7 +167,8 @@ def advance_once(pool: Path, ticket_id: str, adapter: HarnessAdapter,
         return f"idle: {t.state}"
 
     if t.state == "p3_running":
-        return run_dev_tasks(pool, t, adapter, project_dir)
+        return run_dev_tasks(pool, t, adapter, project_dir,
+                             cfg=cfg, consult_adapter=consult_adapter)
 
     packet = TaskPacket(
         role=role,

@@ -17,9 +17,12 @@ from orchestrator.daemon.statemachine import (
 from orchestrator.daemon.ticket import load_ticket, new_ticket
 
 
+def _cfg() -> dict:
+    return yaml.safe_load(Path("orchestrator.yaml").read_text(encoding="utf-8"))
+
+
 def _pool() -> Path:
-    cfg = yaml.safe_load(Path("orchestrator.yaml").read_text(encoding="utf-8"))
-    return Path(cfg["pool"])
+    return Path(_cfg()["pool"])
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -72,7 +75,8 @@ def main(argv: list[str] | None = None) -> int:
         elif args.cmd == "advance":
             adapter = FakeHarness() if args.fake else get_adapter(ROLE_ROUTING.get(
                 WORK_STATES.get(load_ticket(pool, args.id).state, "dev"), "dsh"))
-            print(advance_once(pool, args.id, adapter, Path(args.project_dir)))
+            print(advance_once(pool, args.id, adapter, Path(args.project_dir),
+                               cfg=_cfg(), consult_adapter=None))
     except (IllegalTransition, ValueError) as e:
         print(f"error: {e}", file=sys.stderr)
         return 1

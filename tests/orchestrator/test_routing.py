@@ -160,3 +160,57 @@ def test_deadlocked_tasks_suspend(pool, tmp_path):
     assert t2.state == "suspended"
     from orchestrator.daemon.events import read_events
     assert any("依赖" in str(e.get("reason", "")) for e in read_events(pool, t.id))
+
+
+def test_retry_then_success(pool, tmp_path):
+    proj = _git_repo(tmp_path)
+    t = new_ticket(pool, project="p", summary="x")
+    t.state = "p3_running"
+    t.tasks = [{"id": "task-1", "title": "a", "acceptance_cmd": "exit 0",
+                "depends_on": [], "status": "pending", "attempts": 0}]
+    save_ticket(pool, t)
+    h = FakeHarness(script=["failed", "done"])
+    cfg = {"budgets": {"k3_week_token_budget": 10**9, "ds_daily_cny": 10**9}}
+    r1 = advance_once(pool, t.id, h, proj, cfg=cfg, consult_adapter=FakeHarness())
+    assert r1.startswith("retry:")
+    assert load_ticket(pool, t.id).state == "p3_running"   # 不挂起
+    advance_once(pool, t.id, h, proj, cfg=cfg, consult_adapter=FakeHarness())
+    assert load_ticket(pool, t.id).tasks[0]["status"] == "done"
+    assert "第 2 次尝试" in h.received[1].prompt            # 重试 prompt 生效
+
+
+def test_consult_then_retry_once_then_suspend(pool, tmp_path):
+    proj = _git_repo(tmp_path)
+    t = new_ticket(pool, project="p", summary="x")
+    t.state = "p3_running"
+    t.tasks = [{"id": "task-1", "title": "a", "acceptance_cmd": "exit 0",
+                "depends_on": [], "status": "pending", "attempts": 0}]
+    save_ticket(pool, t)
+    h = FakeHarness(script=["failed"] * 10)
+    cfg = {"budgets": {"k3_week_token_budget": 10**9, "ds_daily_cny": 10**9}}
+    consult = FakeHarness()
+    for _ in range(2):  # 2 次 retry(第 3 次失败触发会诊)
+        advance_once(pool, t.id, h, proj, cfg=cfg, consult_adapter=consult)
+    r = advance_once(pool, t.id, h, proj, cfg=cfg, consult_adapter=consult)  # 第 3 次失败→consult
+    assert r.startswith("consult:")
+    assert consult.received and consult.received[0].role == "architect"
+    advance_once(pool, t.id, h, proj, cfg=cfg, consult_adapter=consult)      # 会诊后再失败(attempts 回到 3)
+    assert load_ticket(pool, t.id).state == "suspended"
+
+
+def test_k3_quota_blocks_consult(pool, tmp_path):
+    from orchestrator.daemon.ledger import append_ledger
+    proj = _git_repo(tmp_path)
+    t = new_ticket(pool, project="p", summary="x")
+    t.state = "p3_running"
+    t.tasks = [{"id": "task-1", "title": "a", "acceptance_cmd": "exit 0",
+                "depends_on": [], "status": "pending", "attempts": 3}]
+    save_ticket(pool, t)
+    cfg = {"budgets": {"k3_week_token_budget": 10, "ds_daily_cny": 10**9}}
+    append_ledger(pool, "k3", 999, "tokens", "T-x", "pm", "k3")
+    advance_once(pool, t.id, FakeHarness(script=["failed"]), proj,
+                 cfg=cfg, consult_adapter=FakeHarness())
+    t2 = load_ticket(pool, t.id)
+    assert t2.state == "suspended"
+    from orchestrator.daemon.events import read_events
+    assert any("配额" in str(e.get("reason", "")) for e in read_events(pool, t.id))

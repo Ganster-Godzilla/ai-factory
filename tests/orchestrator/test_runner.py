@@ -1,8 +1,10 @@
 from orchestrator.adapters.fake import FakeHarness
 from orchestrator.daemon.runner import advance_once
 from orchestrator.daemon.statemachine import transition
-from orchestrator.daemon.ticket import load_ticket, new_ticket
+from orchestrator.daemon.ticket import load_ticket, new_ticket, save_ticket
 from orchestrator.daemon.events import read_events
+
+from test_routing import _git_repo
 
 
 def test_pm_drafts_prd(pool, tmp_path):
@@ -45,3 +47,26 @@ def test_architect_stays_for_approval(pool, tmp_path):
     t2 = load_ticket(pool, t.id)
     assert t2.state == "p2_designing"
     assert t2.owner_role == "boss"
+
+
+def test_acceptance_timeout_counts_as_failed(pool, tmp_path, monkeypatch):
+    # 复检 subprocess 超时不许冒泡:按复检失败处理(搭车修复 T3)
+    import subprocess as sp
+    from orchestrator.daemon import runner
+    proj = _git_repo(tmp_path)
+    t = new_ticket(pool, project="p", summary="x")
+    t.state = "p3_running"
+    t.tasks = [{"id": "task-1", "title": "a", "acceptance_cmd": "sleep 5",
+                "depends_on": [], "status": "pending", "attempts": 0}]
+    save_ticket(pool, t)
+
+    def boom(cmd, cwd, timeout=600):
+        raise sp.TimeoutExpired(cmd, timeout)
+    monkeypatch.setattr(runner, "_run_acceptance", boom)
+
+    advance_once(pool, t.id, FakeHarness(), proj)  # harness 谎报 done,复检超时
+    t2 = load_ticket(pool, t.id)
+    assert t2.tasks[0]["status"] == "pending"
+    evts = [e for e in read_events(pool, t.id) if e["event"] == "task_run"]
+    assert evts[-1]["verify"] == "failed"
+    assert "复检超时" in evts[-1]["output"]
