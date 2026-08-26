@@ -133,9 +133,11 @@ def run_dev_tasks(pool: Path, ticket, adapter: HarnessAdapter,
         ca = consult_adapter or get_adapter("claude_code")
         cp = consult_packet(task, ticket, result.output, wt)
         cr = ca.run(cp)
-        task["consulted"] = True
+        if cr.status == "done":
+            task["consulted"] = True
+            task["attempts"] = MAX_RETRY - 1   # 会诊后只再给 1 次
+        # 会诊失败不置 consulted、不重置 attempts:会诊机会保留,事件与台账如实记
         task["consult_note"] = cr.output[:1000]
-        task["attempts"] = MAX_RETRY - 1   # 会诊后只再给 1 次
         append_event(pool, ticket.id, "architect", "consult",
                      task=task["id"], status=cr.status, output=cr.output[:500])
         save_ticket(pool, ticket)
@@ -180,6 +182,9 @@ def advance_once(pool: Path, ticket_id: str, adapter: HarnessAdapter,
     append_event(pool, t.id, role, "role_run",
                  status=result.status, tokens=result.tokens,
                  cost_cny=result.cost_cny, output=result.output[:500])
+    if cfg:
+        # 成功失败都入账:k3 烧掉就是烧掉了,配额闸水位不能漏记
+        _record_cost(pool, t, adapter, result, role)
 
     if result.status == "done":
         if t.state == "p2_designing":

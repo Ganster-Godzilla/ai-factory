@@ -1,4 +1,6 @@
+from orchestrator.adapters.base import HarnessAdapter, HarnessResult
 from orchestrator.adapters.fake import FakeHarness
+from orchestrator.daemon.ledger import k3_week_tokens
 from orchestrator.daemon.runner import advance_once
 from orchestrator.daemon.statemachine import transition
 from orchestrator.daemon.ticket import load_ticket, new_ticket, save_ticket
@@ -87,3 +89,45 @@ def test_acceptance_timeout_counts_as_failed(pool, tmp_path, monkeypatch):
     evts = [e for e in read_events(pool, t.id) if e["event"] == "task_run"]
     assert evts[-1]["verify"] == "failed"
     assert "复检超时" in evts[-1]["output"]
+
+
+class StubAdapter(HarnessAdapter):
+    name = "claude_code"
+
+    def run(self, packet):
+        return HarnessResult(status="done",
+                             tokens={"input_tokens": 100, "output_tokens": 50})
+
+
+def test_role_run_records_k3_cost(pool, tmp_path):
+    # Finding 1:非 p3 的 role_run 烧掉的 k3 token 必须入台账,否则配额闸水位偏低
+    t = new_ticket(pool, project="p", summary="x")
+    t.state = "p1_drafting"
+    save_ticket(pool, t)
+    cfg = {"budgets": {"k3_week_token_budget": 10**9, "ds_daily_cny": 10**9}}
+    advance_once(pool, t.id, StubAdapter(), tmp_path, cfg=cfg)
+    assert k3_week_tokens(pool) == 150
+
+
+def test_consult_failure_keeps_consult_chance(pool, tmp_path):
+    # Finding 2:会诊自身失败不得烧掉唯一会诊机会(consulted 不置位、attempts 不重置)
+    proj = _git_repo(tmp_path)
+    t = new_ticket(pool, project="p", summary="x")
+    t.state = "p3_running"
+    t.tasks = [{"id": "task-1", "title": "a", "acceptance_cmd": "exit 0",
+                "depends_on": [], "status": "pending", "attempts": 3}]
+    save_ticket(pool, t)
+    cfg = {"budgets": {"k3_week_token_budget": 10**9, "ds_daily_cny": 10**9}}
+    dev = FakeHarness(script=["failed"] * 5)
+    consult = FakeHarness(script=["failed", "done"])  # 第一次会诊失败,第二次成功
+    r1 = advance_once(pool, t.id, dev, proj, cfg=cfg, consult_adapter=consult)
+    assert r1.startswith("consult:")
+    t1 = load_ticket(pool, t.id)
+    assert not t1.tasks[0].get("consulted")   # 会诊机会保留
+    assert t1.state == "p3_running"           # 任务还可再会诊,未挂起
+    r2 = advance_once(pool, t.id, dev, proj, cfg=cfg, consult_adapter=consult)
+    assert r2.startswith("consult:")
+    t2 = load_ticket(pool, t.id)
+    assert t2.tasks[0]["consulted"] is True   # 会诊成功后才置位
+    consults = [e for e in read_events(pool, t.id) if e["event"] == "consult"]
+    assert [e["status"] for e in consults] == ["failed", "done"]  # 事件如实记
