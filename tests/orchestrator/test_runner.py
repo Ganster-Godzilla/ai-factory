@@ -38,6 +38,23 @@ def test_failure_suspends(pool, tmp_path):
                for e in read_events(pool, t.id))
 
 
+def test_p5_failure_creates_incident(pool, tmp_path):
+    t = new_ticket(pool, project="p", summary="x")
+    t.state = "p5_releasing"
+    save_ticket(pool, t)
+    advance_once(pool, t.id, FakeHarness(script=["failed"]), tmp_path)
+    t2 = load_ticket(pool, t.id)
+    assert t2.state == "suspended"
+    # 自动事故工单进池
+    from pathlib import Path as P
+    tickets = list((pool / "tickets").glob("*.yaml"))
+    assert len(tickets) == 2
+    inc = [f.stem for f in tickets if f.stem != t.id][0]
+    from orchestrator.daemon.ticket import load_ticket as lt
+    it = lt(pool, inc)
+    assert it.type == "incident" and it.state == "p1_drafting"
+
+
 def test_architect_stays_for_approval(pool, tmp_path):
     t = new_ticket(pool, project="p", summary="x")
     t.state = "p2_designing"

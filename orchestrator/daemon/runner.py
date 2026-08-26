@@ -188,5 +188,11 @@ def advance_once(pool: Path, ticket_id: str, adapter: HarnessAdapter,
         else:
             transition(pool, t, SUCCESS_NEXT[t.state], actor="system" if t.state == "p3_running" else role)
     else:
-        suspend(pool, t, actor="system", reason=f"{role} 执行失败: {result.status}")
+        if t.state == "p5_releasing":
+            suspend(pool, t, actor="system", reason=f"发布失败: {result.status}")
+            from orchestrator.daemon.ticket import new_ticket as _nt
+            _nt(pool, t.project, f"发布失败: {t.id} {t.summary}",
+                created_by="system", type="incident")
+        else:
+            suspend(pool, t, actor="system", reason=f"{role} 执行失败: {result.status}")
     return f"role:{role}:{result.status}"

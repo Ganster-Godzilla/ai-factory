@@ -13,6 +13,13 @@ def test_new_ticket_defaults(pool):
     assert load_ticket(pool, t.id).summary == "补测试"
 
 
+def test_incident_ticket_fast_lane(pool):
+    t = new_ticket(pool, project="p", summary="发布失败", created_by="system", type="incident")
+    assert t.state == "p1_drafting"
+    assert t.priority == "high"
+    assert t.type == "incident"
+
+
 def test_validate_catches_bad(pool):
     t = new_ticket(pool, project="quant-lab", summary="x")
     t.state = "not_a_state"

@@ -29,6 +29,7 @@ def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(prog="orc")
     sub = p.add_subparsers(dest="cmd", required=True)
     c = sub.add_parser("new"); c.add_argument("project"); c.add_argument("summary"); c.add_argument("--by", default="human")
+    c.add_argument("--type", choices=["feature", "incident"], default="feature")
     sub.add_parser("list")
     c = sub.add_parser("show"); c.add_argument("id")
     c = sub.add_parser("approve"); c.add_argument("id"); c.add_argument("--as", dest="actor", default="boss")
@@ -41,8 +42,9 @@ def main(argv: list[str] | None = None) -> int:
 
     try:
         if args.cmd == "new":
-            t = new_ticket(pool, args.project, args.summary, created_by=args.by)
-            print(f"created {t.id} (draft)")
+            t = new_ticket(pool, args.project, args.summary, created_by=args.by,
+                           type=args.type)
+            print(f"created {t.id} ({t.state})")
         elif args.cmd == "list":
             for f in sorted((pool / "tickets").glob("*.yaml")):
                 t = load_ticket(pool, f.stem)

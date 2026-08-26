@@ -84,12 +84,15 @@ def _locked(pool: Path):
     raise TimeoutError("pool 锁超时")
 
 
-def new_ticket(pool: Path, project: str, summary: str, created_by: str = "human") -> Ticket:
+def new_ticket(pool: Path, project: str, summary: str, created_by: str = "human",
+               type: str = "feature") -> Ticket:
     lock = _locked(pool)
     try:
         t = Ticket(
-            id=_next_id(pool), type="feature", project=project,
-            state="draft", owner_role="pm", summary=summary, created_by=created_by,
+            id=_next_id(pool), type=type, project=project,
+            state="p1_drafting" if type == "incident" else "draft",
+            owner_role="pm", summary=summary, created_by=created_by,
+            priority="high" if type == "incident" else "normal",
         )
         save_ticket(pool, t)
         append_event(pool, t.id, created_by, "created", summary=summary)
