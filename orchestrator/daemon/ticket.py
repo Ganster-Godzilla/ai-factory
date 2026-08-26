@@ -44,6 +44,7 @@ class Ticket:
         path.write_text(
             yaml.safe_dump(asdict(self), allow_unicode=True, sort_keys=False),
             encoding="utf-8",
+            newline="\n",
         )
 
     def validate(self) -> list[str]:

@@ -33,3 +33,10 @@ def test_id_increments(pool):
     a = new_ticket(pool, project="p", summary="a")
     b = new_ticket(pool, project="p", summary="b")
     assert a.id != b.id
+
+
+def test_saved_yaml_is_lf_only(pool):
+    t = new_ticket(pool, project="quant-lab", summary="换行口径")
+    save_ticket(pool, t)
+    raw = (pool / "tickets" / f"{t.id}.yaml").read_bytes()
+    assert b"\r" not in raw
