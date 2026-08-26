@@ -19,7 +19,7 @@ TRANSITIONS = {
     "p5_ready":      {"p5_releasing": {"boss"}, "suspended": {"*"}},
     "p5_releasing":  {"monitoring": {"release"}, "suspended": {"*"}},
     "monitoring":    {"done": {"sre"}, "suspended": {"*"}},
-    "suspended":     {},
+    "suspended":     {"closed": {"boss"}},
     "done":          {},
     "closed":        {},
 }

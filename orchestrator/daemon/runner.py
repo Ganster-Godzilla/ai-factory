@@ -5,7 +5,7 @@ from pathlib import Path
 
 from orchestrator.adapters.base import HarnessAdapter, TaskPacket
 from orchestrator.daemon.events import append_event
-from orchestrator.daemon.slicer import make_packet, ready_tasks
+from orchestrator.daemon.slicer import load_task_list, make_packet, ready_tasks
 from orchestrator.daemon.statemachine import suspend, transition
 from orchestrator.daemon.ticket import load_ticket, save_ticket
 from orchestrator.daemon.worktree import ensure_worktree
@@ -38,6 +38,16 @@ SYSTEM_NEXT = {"p2_approved": "p3_queued", "p3_queued": "p3_running"}
 
 def run_dev_tasks(pool: Path, ticket, adapter: HarnessAdapter,
                   project_dir: Path) -> str:
+    if not ticket.tasks:
+        # 架构师产物 lazy-load:docs/specs/<ticket.id>-tasks.yaml → ticket.tasks
+        spec = project_dir / "docs" / "specs" / f"{ticket.id}-tasks.yaml"
+        if spec.exists():
+            try:
+                ticket.tasks = load_task_list(spec)
+            except Exception as e:
+                suspend(pool, ticket, "system", reason=f"任务清单装载失败: {e}")
+                return f"suspended: 任务清单装载失败: {e}"
+            save_ticket(pool, ticket)
     ready = ready_tasks(ticket.tasks)
     if not ready:
         if all(t["status"] == "done" for t in ticket.tasks):
@@ -45,13 +55,14 @@ def run_dev_tasks(pool: Path, ticket, adapter: HarnessAdapter,
             return "auto: p4_verifying"
         return "idle: p3_running(no ready tasks)"
     task = ready[0]
-    wt = ensure_worktree(project_dir, task["id"])
+    wt = ensure_worktree(project_dir, f"{ticket.id}-{task['id']}")
     packet = make_packet(task, ticket, wt, design_excerpt="")
     result = adapter.run(packet)
     task["attempts"] += 1
     append_event(pool, ticket.id, "dev", "task_run", task=task["id"],
                  attempt=task["attempts"], status=result.status,
-                 tokens=result.tokens, cost_cny=result.cost_cny)
+                 tokens=result.tokens, cost_cny=result.cost_cny,
+                 output=result.output[:500])
     if result.status == "done":
         task["status"] = "done"
         save_ticket(pool, ticket)

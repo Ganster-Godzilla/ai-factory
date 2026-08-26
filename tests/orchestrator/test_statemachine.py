@@ -46,3 +46,19 @@ def test_done_is_terminal(pool):
     t.state = "done"
     with pytest.raises(IllegalTransition):
         transition(pool, t, "p0_proposed", actor="boss")
+
+
+def test_suspended_can_close_by_boss(pool):
+    t = new_ticket(pool, project="p", summary="x")
+    transition(pool, t, "p0_proposed", actor="pm")
+    suspend(pool, t, actor="system", reason="熔断用尽")
+    transition(pool, t, "closed", actor="boss")
+    assert t.state == "closed"
+
+
+def test_suspended_close_requires_boss(pool):
+    t = new_ticket(pool, project="p", summary="x")
+    transition(pool, t, "p0_proposed", actor="pm")
+    suspend(pool, t, actor="system", reason="熔断用尽")
+    with pytest.raises(IllegalTransition):
+        transition(pool, t, "closed", actor="pm")  # 关闭挂起工单是老板特权

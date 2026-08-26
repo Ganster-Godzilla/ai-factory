@@ -6,7 +6,8 @@ from pathlib import Path
 
 
 def _git(project: Path, *args: str) -> str:
-    r = subprocess.run(["git", *args], cwd=project, capture_output=True, text=True)
+    r = subprocess.run(["git", *args], cwd=project, capture_output=True,
+                       text=True, encoding="utf-8", errors="replace")
     if r.returncode != 0:
         raise RuntimeError(f"git {' '.join(args)}: {r.stderr.strip()}")
     return r.stdout
