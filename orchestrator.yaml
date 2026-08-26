@@ -1,0 +1,4 @@
+pool: pool
+projects: {}            # M2 验收时登记:orc-e2e: d:/workspace/tmp/orc-e2e
+thresholds:
+  concurrent_max: 2

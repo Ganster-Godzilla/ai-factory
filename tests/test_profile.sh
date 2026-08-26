@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 cd "$(dirname "$0")/.."
-source scripts/lib/profile.sh
+source plugin/scripts/lib/profile.sh
 F=tests/fixtures/stack-profile.yaml
 fail=0
 chk() { [ "$2" = "$3" ] || { echo "FAIL: $1 期望[$3] 实际[$2]"; fail=1; }; }

@@ -1,0 +1,5 @@
+# P2 设计产物附件:任务切片清单。契约见 orchestrator/daemon/slicer.py
+- id: task-1
+  title: "{{TASK_TITLE}}"
+  acceptance_cmd: "{{ACCEPTANCE_CMD}}"   # 如 "python -m pytest tests/ -x"
+  depends_on: []
