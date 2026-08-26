@@ -2,3 +2,6 @@ pool: pool
 projects: {}            # M2 验收时登记:orc-e2e: d:/workspace/tmp/orc-e2e
 thresholds:
   concurrent_max: 2
+budgets:
+  k3_week_token_budget: 200000   # 编排器周 token 额度(静态代理,真实配额接口后续)
+  ds_daily_cny: 30
