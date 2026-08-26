@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 cd "$(dirname "$0")/.."
 ROOT="$PWD"
-SB="$ROOT/scripts"
+SB="$ROOT/plugin/scripts"
 FIX=$(mktemp -d)
 trap 'rm -rf "$FIX"' EXIT
 fail=0

@@ -34,3 +34,6 @@ E0 文档约定 / E1 提示注入 / E2 脚本校验 / E3 Hook 强制。
 ## 安装
 本机/他机分发、项目级与全局启用、升级与卸载:见 [distribution.md](distribution.md)。
 启用后 hooks 自动生效;skills 以 `ai-factory:<名>` 调用。
+
+## 平台层(2026-08 新增)
+本仓库同时是双 harness 编排器平台:根部 orchestrator/(守护进程)、pool/(运行时状态,gitignore)、orchestrator.yaml(平台配置)。插件库在 plugin/ 子目录,分发机制不变。设计规格:docs/superpowers/specs/2026-08-19-dual-harness-orchestrator-design.md

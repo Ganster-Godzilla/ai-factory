@@ -34,7 +34,7 @@
 
 ## 通道二:git 仓库(团队长期推荐)
 
-> 注:本目录本地不做 git 管理(决策记录见 spec);此通道是**单向发布**——发布时 push,不改变本地工作方式。
+> 注:本仓库已 git 化并托管于 GitHub(私有,github.com/Ganster-Godzilla/ai-factory),git push 即发布。
 
 1. 把 `ai-factory/` push 到内部 git 服务(GitLab/Gitea/GitHub 内网均可),例如 `http://git.internal/team/ai-factory`
 2. 他人安装:

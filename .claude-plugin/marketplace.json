@@ -6,7 +6,7 @@
   "plugins": [
     {
       "name": "ai-factory",
-      "source": "./",
+      "source": "./plugin",
       "version": "0.2.0",
       "description": "可复用 AI 工程架构:Phase 0-5 流程技能 + 状态机 + 规则强制分级(E0-E3) + 成长闭环。初始化: /ai-factory:ai-init"
     }
