@@ -15,7 +15,7 @@ llm-pi-ai:
     zhipu:
       apiKeyEnv: ZHIPU_API_KEY
       api: openai-completions
-      baseURL: https://open.bigmodel.cn/api/paas/v4
+      baseURL: https://open.bigmodel.cn/api/coding/paas/v4   # GLM Coding 套餐专用端点(标准 /api/paas/v4 会 429 余额不足)
       models:
         - id: glm-5.3-flash
           input: [text, image]
