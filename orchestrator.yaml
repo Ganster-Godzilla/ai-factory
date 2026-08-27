@@ -2,6 +2,7 @@ pool: pool
 projects:
   orc-e2e: d:/workspace/tmp/orc-e2e   # M4 e2e 验收项目(T7 登记)
   sk-video-studio: d:/workspace/sk-video-studio   # 商K视频工具(2026-08-27 接入;首个全流程测试项目)
+  ai-factory: d:/workspace/ai-factory   # 平台自身(2026-08-28 登记;编排器改进工单走自身流程,吃狗粮)
 thresholds:
   concurrent_max: 2
 budgets:
