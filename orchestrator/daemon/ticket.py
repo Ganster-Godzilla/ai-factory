@@ -34,7 +34,7 @@ class Ticket:
     budget: dict = field(default_factory=lambda: {"token_cap": 500000, "token_cap_cny": 10.0})
     created_by: str = "human"
     resume_state: str | None = None
-    consult_count: int = 0   # 工单级会诊累计(§5.2:第 3 次仍失败 → 整单挂起)
+    consult_count: int = 0   # 会诊后判负的任务数(§5.2:3 个任务判负 → 整单挂起)
 
     @classmethod
     def load(cls, path: Path) -> "Ticket":

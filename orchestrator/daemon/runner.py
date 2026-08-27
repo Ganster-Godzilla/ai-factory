@@ -157,9 +157,6 @@ def run_dev_tasks(pool: Path, ticket, adapter: HarnessAdapter,
     action = next_action(task)
     if action == "retry":
         return f"retry:{task['id']}:{task['attempts']}"
-    if action == "suspend" and ticket.consult_count < 3:
-        # 工单级会诊额度未尽:任务级挂起升级为再会诊(spec §5.2 工单级规则)
-        action = "consult"
     if action == "consult":
         if (cfg and ticket.type != "incident"
                 and k3_effective_week_tokens(pool, cfg) > cfg["budgets"]["k3_week_token_budget"]):
@@ -170,7 +167,6 @@ def run_dev_tasks(pool: Path, ticket, adapter: HarnessAdapter,
         ca = consult_adapter or get_adapter("claude_code")
         cp = consult_packet(task, ticket, result.output, wt)
         cr = ca.run(cp)
-        ticket.consult_count += 1
         if cr.status == "done":
             task["consulted"] = True
             task["attempts"] = MAX_RETRY - 1   # 会诊后只再给 1 次
@@ -182,10 +178,22 @@ def run_dev_tasks(pool: Path, ticket, adapter: HarnessAdapter,
         if cfg:
             _record_cost(pool, ticket, ca, cr, "architect")
         return f"consult:{task['id']}:{cr.status}"
-    suspend(pool, ticket, actor="system",
-            reason="连续 3 次会诊未解决:疑似设计/切片问题",
-            reason_code="consult_exhausted")
-    return f"suspend:{task['id']}"
+    # 会诊后仍失败 → 任务判负(spec §5.2 任务级终点);判负本身不挂工单
+    task["status"] = "failed"
+    ticket.consult_count += 1
+    if ticket.consult_count >= 3:
+        suspend(pool, ticket, actor="system",
+                reason="连续 3 个任务走到会诊级:疑似设计/切片问题",
+                reason_code="consult_exhausted")
+        return f"suspend:{task['id']}"
+    if not ready_tasks(ticket.tasks) and not all(t["status"] == "done" for t in ticket.tasks):
+        # 判负后无 ready 且未完工:没有可推进的任务了(单任务工单/依赖被判负堵死)
+        suspend(pool, ticket, actor="system",
+                reason=f"任务判负:{task['id']} 会诊后仍失败,无 ready 任务可派",
+                reason_code="circuit_exhausted")
+        return "suspend: 任务判负"
+    save_ticket(pool, ticket)
+    return f"task_failed:{task['id']}"
 
 
 def _role_prompt(role: str) -> str:

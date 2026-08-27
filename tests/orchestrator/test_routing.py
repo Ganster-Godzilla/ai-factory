@@ -194,16 +194,36 @@ def test_consult_then_retry_once_then_suspend(pool, tmp_path):
     r = advance_once(pool, t.id, h, proj, cfg=cfg, consult_adapter=consult)  # 第 3 次失败→consult
     assert r.startswith("consult:")
     assert consult.received and consult.received[0].role == "architect"
-    advance_once(pool, t.id, h, proj, cfg=cfg, consult_adapter=consult)      # 会诊后再失败(attempts 回到 3)
-    # M4-T2 工单级规则:consult_count=2 < 3,不挂起,升级为再会诊
+    advance_once(pool, t.id, h, proj, cfg=cfg, consult_adapter=consult)      # 会诊后再失败 → 任务判负
     t2 = load_ticket(pool, t.id)
-    assert t2.state == "p3_running"
-    assert t2.consult_count == 2
-    for _ in range(6):  # 第 3 次会诊后仍失败 → 整单挂起
-        advance_once(pool, t.id, h, proj, cfg=cfg, consult_adapter=consult)
-        if load_ticket(pool, t.id).state == "suspended":
-            break
-    assert load_ticket(pool, t.id).state == "suspended"
+    # 任务判负制(spec §5.2):会诊≤1,会诊后再败 → 任务标 failed;判负本身不挂工单
+    assert t2.tasks[0]["status"] == "failed"
+    assert t2.consult_count == 1             # consult_count 计判负任务数,非会诊调用次数
+    # 单任务工单:判负后无 ready 且非全 done → 整单 circuit_exhausted
+    assert t2.state == "suspended"
+    codes = [e.get("reason_code") for e in read_events(pool, t.id) if e["event"] == "suspended"]
+    assert codes == ["circuit_exhausted"]
+
+
+def test_single_task_failure_suspends_circuit_exhausted(pool, tmp_path):
+    """单任务工单:会诊后仍失败判负 → 无 ready 可派,整单 circuit_exhausted"""
+    proj = _git_repo(tmp_path)
+    t = new_ticket(pool, project="p", summary="x")
+    t.state = "p3_running"
+    t.tasks = [{"id": "task-1", "title": "a", "acceptance_cmd": "exit 0",
+                "depends_on": [], "status": "pending", "attempts": 3,
+                "consulted": True}]
+    save_ticket(pool, t)
+    cfg = {"budgets": {"k3_week_token_budget": 10**9, "ds_daily_cny": 10**9}}
+    msg = advance_once(pool, t.id, FakeHarness(script=["failed"]), proj,
+                       cfg=cfg, consult_adapter=FakeHarness())
+    assert msg == "suspend: 任务判负"
+    t2 = load_ticket(pool, t.id)
+    assert t2.tasks[0]["status"] == "failed"
+    assert t2.state == "suspended"
+    evts = [e for e in read_events(pool, t.id) if e["event"] == "suspended"]
+    assert [e.get("reason_code") for e in evts] == ["circuit_exhausted"]
+    assert "任务判负" in evts[0]["reason"]
 
 
 def test_k3_quota_blocks_consult(pool, tmp_path):

@@ -213,26 +213,41 @@ def test_ticket_budget_cap_suspends(pool, tmp_path):
     assert load_ticket(pool, t.id).state == "suspended"
 
 
-def test_third_consult_suspends_ticket(pool, tmp_path):
-    """3 次会诊未解决 → 整单挂起(spec §5.2)"""
+def test_three_failed_tasks_suspend_ticket(pool, tmp_path):
+    """3 个任务各自会诊后判负 → 第 3 个判负时整单挂起 consult_exhausted(spec §5.2 工单级)"""
     proj = _git_repo(tmp_path)
     t = new_ticket(pool, project="p", summary="x")
     t.state = "p3_running"
-    t.tasks = [{"id": "task-1", "title": "a", "acceptance_cmd": "exit 0",
-                "depends_on": [], "status": "pending", "attempts": 0}]
+    t.tasks = [
+        {"id": f"task-{i}", "title": "a", "acceptance_cmd": "exit 0",
+         "depends_on": [], "status": "pending", "attempts": 0}
+        for i in (1, 2, 3)
+    ]
     save_ticket(pool, t)
     cfg = {"budgets": {"k3_week_token_budget": 10**9, "ds_daily_cny": 10**9}}
-    h = FakeHarness(script=["failed"] * 20)
+    h = FakeHarness(script=["failed"] * 30)
     consult = FakeHarness()   # 会诊永远 done(给出诊断),但 dev 就是修不好
-    # 每轮:3 次 dev 失败 → 1 次会诊 → dev 再失败(attempts 重置后)
-    for _ in range(12):
+    # 每任务:retry×2 → 会诊 → 再败判负(4 轮);判负≠挂单,还有 ready 任务继续派
+    for _ in range(3):
         advance_once(pool, t.id, h, proj, cfg=cfg, consult_adapter=consult)
-        if load_ticket(pool, t.id).state == "suspended":
-            break
+    r = advance_once(pool, t.id, h, proj, cfg=cfg, consult_adapter=consult)
+    assert r == "task_failed:task-1"
+    t1 = load_ticket(pool, t.id)
+    assert t1.tasks[0]["status"] == "failed"
+    assert t1.consult_count == 1
+    assert t1.state == "p3_running"          # 第 1 个判负,工单不挂
+    for _ in range(4):                        # task-2 同样判负
+        advance_once(pool, t.id, h, proj, cfg=cfg, consult_adapter=consult)
     t2 = load_ticket(pool, t.id)
-    assert t2.state == "suspended"
-    assert t2.consult_count >= 3
-    from orchestrator.daemon.events import read_events
+    assert t2.tasks[1]["status"] == "failed"
+    assert t2.consult_count == 2
+    assert t2.state == "p3_running"          # 第 2 个判负,工单仍不挂
+    for _ in range(4):                        # task-3 判负 → 第 3 个,整单挂起
+        advance_once(pool, t.id, h, proj, cfg=cfg, consult_adapter=consult)
+    t3 = load_ticket(pool, t.id)
+    assert t3.tasks[2]["status"] == "failed"
+    assert t3.consult_count == 3
+    assert t3.state == "suspended"
     codes = [e.get("reason_code") for e in read_events(pool, t.id) if e["event"] == "suspended"]
     assert "consult_exhausted" in codes
 
