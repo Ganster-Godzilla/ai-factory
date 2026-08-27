@@ -1,12 +1,14 @@
 pool: pool
 projects:
-  orc-e2e: d:/workspace/tmp/orc-e2e   # M4 e2e 验收项目(T7 登记;SK-main 待用户决定路径后登记)
+  orc-e2e: d:/workspace/tmp/orc-e2e   # M4 e2e 验收项目(T7 登记)
+  sk-video-studio: d:/workspace/sk-video-studio   # 商K视频工具(2026-08-27 接入;首个全流程测试项目)
 thresholds:
   concurrent_max: 2
 budgets:
   # 比较对象是共享池周总量(网关水位,含人工交互消耗)。2026-08-27 实测单日即 30 万,
   # 暂定 200 万救急(A);M4 dashboard 分行显示"池子水位/编排器消耗"后再定长久语义(B)
-  k3_week_token_budget: 2000000
+  # 2026-08-27:SK 项目启动,P0-P2 为 k3 密集阶段,200→300 万(用户批准)
+  k3_week_token_budget: 3000000
   ds_daily_cny: 30
 gateway:
   url: http://127.0.0.1:8787
