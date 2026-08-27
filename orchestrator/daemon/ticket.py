@@ -31,7 +31,7 @@ class Ticket:
     priority: str = "normal"
     artifacts: dict = field(default_factory=dict)
     tasks: list = field(default_factory=list)
-    budget: dict = field(default_factory=lambda: {"token_cap": 500000})
+    budget: dict = field(default_factory=lambda: {"token_cap": 500000, "token_cap_cny": 10.0})
     created_by: str = "human"
     resume_state: str | None = None
 

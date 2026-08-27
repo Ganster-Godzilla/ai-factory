@@ -13,7 +13,7 @@ from orchestrator.daemon.circuitbreaker import (
 )
 from orchestrator.daemon.events import append_event
 from orchestrator.daemon.gateway import k3_effective_week_tokens
-from orchestrator.daemon.ledger import append_ledger
+from orchestrator.daemon.ledger import append_ledger, ds_daily_exceeded, ds_ticket_cost
 from orchestrator.daemon.slicer import load_task_list, make_packet, ready_tasks
 from orchestrator.daemon.statemachine import suspend, transition
 from orchestrator.daemon.ticket import load_ticket, save_ticket
@@ -99,6 +99,11 @@ def run_dev_tasks(pool: Path, ticket, adapter: HarnessAdapter,
                 suspend(pool, ticket, "system", reason=f"任务清单装载失败: {e}")
                 return f"suspended: 任务清单装载失败: {e}"
             save_ticket(pool, ticket)
+    if cfg and ds_daily_exceeded(pool, cfg):
+        return "blocked: ds 日现金线"
+    if ds_ticket_cost(pool, ticket.id) > ticket.budget.get("token_cap_cny", 10.0):
+        suspend(pool, ticket, actor="system", reason="工单预算帽")
+        return "suspend: 工单预算帽"
     ready = ready_tasks(ticket.tasks)
     if not ready:
         if all(t["status"] == "done" for t in ticket.tasks):
@@ -115,6 +120,9 @@ def run_dev_tasks(pool: Path, ticket, adapter: HarnessAdapter,
         packet.prompt = retry_prompt(task, packet.prompt, task.get("last_error", ""))
     result = adapter.run(packet)
     task["attempts"] += 1
+    if cfg:
+        # DS 现金不分成败:失败/被复检打回的尝试照样烧钱,每次调用都入账
+        _record_cost(pool, ticket, adapter, result, "dev")
     verify = None
     if result.status == "done" and task.get("acceptance_cmd"):
         try:
@@ -135,8 +143,6 @@ def run_dev_tasks(pool: Path, ticket, adapter: HarnessAdapter,
     if result.status == "done":
         task["status"] = "done"
         save_ticket(pool, ticket)
-        if cfg:
-            _record_cost(pool, ticket, adapter, result, "dev")
         return f"task:{task['id']}:done"
 
     task["last_error"] = result.output[:800]

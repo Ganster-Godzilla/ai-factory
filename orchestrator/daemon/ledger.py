@@ -67,4 +67,5 @@ def k3_budget_exceeded(pool: Path, cfg: dict) -> bool:
 
 
 def ds_daily_exceeded(pool: Path, cfg: dict) -> bool:
-    return ds_day_cost(pool) > cfg["budgets"]["ds_daily_cny"]
+    # 旧 cfg 可能缺 budgets/ds_daily_cny 键:.get 兜底,默认 30 对齐 orchestrator.yaml
+    return ds_day_cost(pool) > (cfg.get("budgets") or {}).get("ds_daily_cny", 30)

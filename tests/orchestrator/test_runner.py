@@ -159,3 +159,55 @@ def test_consult_failure_keeps_consult_chance(pool, tmp_path):
     assert t2.tasks[0]["consulted"] is True   # 会诊成功后才置位
     consults = [e for e in read_events(pool, t.id) if e["event"] == "consult"]
     assert [e["status"] for e in consults] == ["failed", "done"]  # 事件如实记
+
+
+def test_dev_failure_records_cost(pool, tmp_path):
+    """DS 失败尝试也烧现金,必须入账"""
+    proj = _git_repo(tmp_path)
+    t = new_ticket(pool, project="p", summary="x")
+    t.state = "p3_running"
+    t.tasks = [{"id": "task-1", "title": "a", "acceptance_cmd": "exit 0",
+                "depends_on": [], "status": "pending", "attempts": 0}]
+    save_ticket(pool, t)
+    cfg = {"budgets": {"k3_week_token_budget": 10**9, "ds_daily_cny": 10**9}}
+
+    class StubDsh(HarnessAdapter):
+        name = "dsh"
+        def run(self, packet):
+            return HarnessResult(status="failed", output="boom", cost_cny=0.5)
+    advance_once(pool, t.id, StubDsh(), proj, cfg=cfg, consult_adapter=FakeHarness())
+    from orchestrator.daemon.ledger import ds_ticket_cost
+    assert ds_ticket_cost(pool, t.id) == 0.5
+
+
+def test_daily_cap_blocks_dispatch(pool, tmp_path):
+    """ds 日线超线 → 不派发新任务"""
+    from orchestrator.daemon.ledger import append_ledger
+    proj = _git_repo(tmp_path)
+    t = new_ticket(pool, project="p", summary="x")
+    t.state = "p3_running"
+    t.tasks = [{"id": "task-1", "title": "a", "acceptance_cmd": "exit 0",
+                "depends_on": [], "status": "pending", "attempts": 0}]
+    save_ticket(pool, t)
+    cfg = {"budgets": {"k3_week_token_budget": 10**9, "ds_daily_cny": 1}}
+    append_ledger(pool, "deepseek", 5.0, "cny", "T-other", "dev", "dsh")
+    h = FakeHarness()
+    msg = advance_once(pool, t.id, h, proj, cfg=cfg, consult_adapter=FakeHarness())
+    assert msg.startswith("blocked:")
+    assert not h.received   # 一个任务都没派
+
+
+def test_ticket_budget_cap_suspends(pool, tmp_path):
+    """工单现金帽超帽即挂"""
+    from orchestrator.daemon.ledger import append_ledger
+    proj = _git_repo(tmp_path)
+    t = new_ticket(pool, project="p", summary="x")
+    t.state = "p3_running"
+    t.budget = {"token_cap": 500000, "token_cap_cny": 1.0}
+    t.tasks = [{"id": "task-1", "title": "a", "acceptance_cmd": "exit 0",
+                "depends_on": [], "status": "pending", "attempts": 0}]
+    save_ticket(pool, t)
+    append_ledger(pool, "deepseek", 2.0, "cny", t.id, "dev", "dsh")
+    cfg = {"budgets": {"k3_week_token_budget": 10**9, "ds_daily_cny": 10**9}}
+    advance_once(pool, t.id, FakeHarness(), proj, cfg=cfg, consult_adapter=FakeHarness())
+    assert load_ticket(pool, t.id).state == "suspended"

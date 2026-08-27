@@ -8,7 +8,7 @@ def test_new_ticket_defaults(pool):
     assert t.owner_role == "pm"
     assert t.type == "feature"
     assert t.priority == "normal"
-    assert t.budget == {"token_cap": 500000}
+    assert t.budget == {"token_cap": 500000, "token_cap_cny": 10.0}
     assert t.id.startswith("T-")
     assert load_ticket(pool, t.id).summary == "补测试"
 
