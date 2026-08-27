@@ -148,6 +148,34 @@ def test_suspend_resume_via_post(pool_client):
     assert load_ticket(pool, t.id).state == "p1_drafting"
 
 
+def test_approvals_groups_p1(pool_client):
+    pool, client = pool_client
+    from orchestrator.daemon.ticket import new_ticket
+    from orchestrator.daemon.statemachine import transition
+    t = new_ticket(pool, project="p", summary="P1 需求单")
+    transition(pool, t, "p0_proposed", actor="pm")
+    transition(pool, t, "p1_drafting", actor="boss")
+    transition(pool, t, "p1_proposed", actor="pm")
+    r = client.get("/approvals")
+    html = r.get_data(as_text=True)
+    assert "P1 需求" in html
+    assert "P1 需求单" in html                     # p1_proposed 工单出现在该组
+
+
+def test_reject_p2_back_to_drafting(pool_client):
+    pool, client = pool_client
+    from orchestrator.daemon.ticket import load_ticket, new_ticket
+    from orchestrator.daemon.statemachine import transition
+    t = new_ticket(pool, project="p", summary="x")
+    transition(pool, t, "p0_proposed", actor="pm")
+    transition(pool, t, "p1_drafting", actor="boss")
+    transition(pool, t, "p1_proposed", actor="pm")
+    transition(pool, t, "p2_designing", actor="boss")
+    r = client.post(f"/reject/{t.id}")
+    assert r.status_code == 302
+    assert load_ticket(pool, t.id).state == "p1_drafting"   # 打回重做,不关闭
+
+
 def test_approve_illegal_transition_not_500(pool_client):
     pool, client = pool_client
     from orchestrator.daemon.ticket import new_ticket

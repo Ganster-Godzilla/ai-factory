@@ -53,7 +53,11 @@ def create_app(pool_dir: Path, cfg: dict) -> Flask:
         pool = app.config["POOL"]
         t = load_ticket(pool, ticket_id)
         try:
-            transition(pool, t, "closed", actor="boss")
+            if t.state == "p2_designing":
+                # P2 设计驳回 = 打回 P1 重做(closed 非法,见状态机)
+                transition(pool, t, "p1_drafting", actor="boss")
+            else:
+                transition(pool, t, "closed", actor="boss")
         except IllegalTransition as e:
             return _error(f"驳回失败({t.id}):{e}")
         return redirect(url_for("approvals"))

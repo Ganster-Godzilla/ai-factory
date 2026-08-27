@@ -63,13 +63,15 @@ def _all_tickets(pool: Path) -> list[Ticket]:
 
 
 def pending_groups(pool: Path) -> dict[str, list[Ticket]]:
-    """审批中心分组:P0 提案 / P2 设计(owner=boss)/ P5 发布 / 探针草稿 / 挂起。"""
+    """审批中心分组:P0 提案 / P1 需求 / P2 设计(owner=boss)/ P5 发布 / 探针草稿 / 挂起。"""
     groups: dict[str, list[Ticket]] = {
-        "p0": [], "p2": [], "p5": [], "probe": [], "suspended": [],
+        "p0": [], "p1": [], "p2": [], "p5": [], "probe": [], "suspended": [],
     }
     for t in _all_tickets(pool):
         if t.state == "p0_proposed":
             groups["p0"].append(t)
+        elif t.state == "p1_proposed":
+            groups["p1"].append(t)
         elif t.state == "p2_designing" and t.owner_role == "boss":
             groups["p2"].append(t)
         elif t.state == "p5_ready":
