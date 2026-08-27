@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from flask import Flask, redirect, render_template, url_for
+from flask import Flask, abort, redirect, render_template, url_for
 
 from orchestrator.dashboard import views
 from orchestrator.daemon.statemachine import (APPROVALS, IllegalTransition,
@@ -31,6 +31,18 @@ def create_app(pool_dir: Path, cfg: dict) -> Flask:
             "approvals.html",
             groups=views.pending_groups(app.config["POOL"]),
             error=msg), 409
+
+    @app.errorhandler(FileNotFoundError)
+    def ticket_not_found(e):
+        # load_ticket 对不存在工单抛 FileNotFoundError → 统一 404(T5 搭车修复)
+        return "工单不存在", 404
+
+    @app.get("/ticket/<ticket_id>")
+    def ticket(ticket_id: str):
+        d = views.ticket_detail(app.config["POOL"], ticket_id)
+        if d is None:
+            abort(404)
+        return render_template("ticket.html", **d)
 
     @app.post("/approve/<ticket_id>")
     def approve(ticket_id: str):

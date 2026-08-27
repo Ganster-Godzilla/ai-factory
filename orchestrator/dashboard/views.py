@@ -5,8 +5,9 @@ import json
 from datetime import datetime, timezone
 from pathlib import Path
 
+from orchestrator.daemon.events import read_events
 from orchestrator.daemon.gateway import k3_effective_week_tokens
-from orchestrator.daemon.ledger import ds_day_cost
+from orchestrator.daemon.ledger import ds_day_cost, ds_ticket_cost
 from orchestrator.daemon.statemachine import APPROVALS
 from orchestrator.daemon.ticket import Ticket
 
@@ -81,6 +82,21 @@ def pending_groups(pool: Path) -> dict[str, list[Ticket]]:
         elif t.state == "suspended":
             groups["suspended"].append(t)
     return groups
+
+
+def ticket_detail(pool: Path, ticket_id: str) -> dict | None:
+    """工单详情:全字段 + 任务列表 + 事件流(倒序)+ DS 成本 + 产物指针。不存在返回 None。"""
+    path = pool / "tickets" / f"{ticket_id}.yaml"
+    if not path.exists():
+        return None
+    t = Ticket.load(path)
+    return {
+        "ticket": t,
+        "tasks": t.tasks,
+        "events": list(reversed(read_events(pool, ticket_id))),
+        "ds_cost": ds_ticket_cost(pool, ticket_id),
+        "artifacts": t.artifacts,
+    }
 
 
 def overview_data(pool: Path, cfg: dict) -> dict:

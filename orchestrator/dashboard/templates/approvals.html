@@ -14,7 +14,7 @@
   <tr><th>工单</th><th>项目</th><th>摘要</th><th>类型</th><th>操作</th></tr>
   {% for t in tickets %}
   <tr>
-    <td>{{ t.id }}</td>
+    <td><a href="/ticket/{{ t.id }}">{{ t.id }}</a></td>
     <td>{{ t.project }}</td>
     <td>{{ t.summary }}</td>
     <td>{{ t.type }}</td>

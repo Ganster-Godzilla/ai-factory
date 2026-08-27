@@ -193,3 +193,69 @@ def test_index_shows_percent_and_currency(client, pool):
     assert "50.0%" in html                     # 1000000 / 2000000
     assert "2.5" in html                       # DS 今日现金
     assert "sk-" not in html                   # 页面不显示任何 key 信息
+
+
+def test_ticket_detail(pool_client):
+    pool, client = pool_client
+    from orchestrator.daemon.ticket import new_ticket
+    from orchestrator.daemon.statemachine import transition
+    t = new_ticket(pool, project="quant-lab", summary="详情页测试")
+    transition(pool, t, "p0_proposed", actor="pm")
+    r = client.get(f"/ticket/{t.id}")
+    assert r.status_code == 200
+    html = r.get_data(as_text=True)
+    assert "详情页测试" in html and "quant-lab" in html
+    assert "state_changed" in html   # 事件流
+
+
+def test_ticket_detail_404(pool_client):
+    pool, client = pool_client
+    r = client.get("/ticket/T-2099-0101-999")
+    assert r.status_code == 404
+
+
+def test_approve_missing_ticket_404(pool_client):
+    pool, client = pool_client
+    r = client.post("/approve/T-2099-0101-999")
+    assert r.status_code == 404
+
+
+def test_reject_missing_ticket_404(pool_client):
+    pool, client = pool_client
+    r = client.post("/reject/T-2099-0101-999")
+    assert r.status_code == 404
+
+
+def test_resume_missing_ticket_404(pool_client):
+    pool, client = pool_client
+    r = client.post("/resume/T-2099-0101-999")
+    assert r.status_code == 404
+
+
+def test_ticket_detail_shows_tasks_cost_artifacts(pool_client):
+    pool, client = pool_client
+    from orchestrator.daemon.ticket import load_ticket, new_ticket, save_ticket
+    t = new_ticket(pool, project="quant-lab", summary="全字段单")
+    t.tasks = [{"id": "task-1", "title": "写测试", "status": "done",
+                "attempts": 2, "worktree": ".orc-worktrees/task-1"}]
+    t.artifacts = {"p0": "docs/p0.md", "design": "docs/design.md"}
+    save_ticket(pool, t)
+    append_ledger(pool, "deepseek", 3.25, "cny", t.id, "dev", "deepseek")
+    r = client.get(f"/ticket/{t.id}")
+    assert r.status_code == 200
+    html = r.get_data(as_text=True)
+    assert "task-1" in html and "done" in html
+    assert ".orc-worktrees/task-1" in html
+    assert "3.25" in html                      # ds_ticket_cost
+    assert "docs/p0.md" in html                # 产物指针
+
+
+def test_approvals_link_to_detail(pool_client):
+    pool, client = pool_client
+    from orchestrator.daemon.ticket import new_ticket
+    from orchestrator.daemon.statemachine import transition
+    t = new_ticket(pool, project="p", summary="带链接的单")
+    transition(pool, t, "p0_proposed", actor="pm")
+    r = client.get("/approvals")
+    html = r.get_data(as_text=True)
+    assert f"/ticket/{t.id}" in html
