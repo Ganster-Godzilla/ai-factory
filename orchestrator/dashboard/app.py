@@ -2,19 +2,35 @@
 from __future__ import annotations
 
 from pathlib import Path
+from urllib.parse import urlparse
 
-from flask import Flask, redirect, render_template, url_for
+from flask import Flask, abort, redirect, render_template, request, url_for
 
 from orchestrator.dashboard import views
 from orchestrator.daemon.statemachine import (APPROVALS, IllegalTransition,
                                               resume, transition)
 from orchestrator.daemon.ticket import load_ticket
 
+# 本地 CSRF 防护(终审 F2):POST 的 Origin/Referer host 只认回环
+_LOOPBACK_HOSTS = {"127.0.0.1", "localhost"}
+
 
 def create_app(pool_dir: Path, cfg: dict) -> Flask:
     app = Flask(__name__)
     app.config["POOL"] = Path(pool_dir)
     app.config["CFG"] = cfg
+
+    @app.before_request
+    def csrf_origin_guard():
+        if request.method != "POST":
+            return None
+        origin = request.headers.get("Origin") or request.headers.get("Referer")
+        if not origin:
+            return None   # curl/CLI 无头场景放行
+        host = urlparse(origin).hostname or ""
+        if host not in _LOOPBACK_HOSTS:
+            abort(403)
+        return None
 
     @app.get("/")
     def index():
@@ -53,6 +69,9 @@ def create_app(pool_dir: Path, cfg: dict) -> Flask:
             if t.state == "draft" and t.created_by == "probe":
                 # 探针草稿"采纳" = 老板直接提交 P0(裁决:actor=boss 真实记录)
                 transition(pool, t, "p0_proposed", actor="boss")
+            elif t.state == "p2_designing" and t.owner_role != "boss":
+                # owner 门禁(终审 F3):设计尚未交还 boss,与审批中心列表过滤口径一致
+                return _error(f"批准失败({t.id}):设计尚未完成(owner={t.owner_role})")
             elif t.state in APPROVALS:
                 transition(pool, t, APPROVALS[t.state], actor="boss")
             else:

@@ -271,3 +271,87 @@ def test_approvals_link_to_detail(pool_client):
     r = client.get("/approvals")
     html = r.get_data(as_text=True)
     assert f"/ticket/{t.id}" in html
+
+
+def _p0_ticket(pool):
+    from orchestrator.daemon.ticket import new_ticket
+    from orchestrator.daemon.statemachine import transition
+    t = new_ticket(pool, project="p", summary="CSRF 测试单")
+    transition(pool, t, "p0_proposed", actor="pm")
+    return t
+
+
+def test_approve_rejects_foreign_origin(pool_client):
+    # 终审 F2:本地 CSRF 防护 —— 恶意 Origin 的 POST 一律 403,工单状态不变
+    pool, client = pool_client
+    from orchestrator.daemon.ticket import load_ticket
+    t = _p0_ticket(pool)
+    r = client.post(f"/approve/{t.id}",
+                    headers={"Origin": "http://evil.com"})
+    assert r.status_code == 403
+    assert load_ticket(pool, t.id).state == "p0_proposed"
+
+
+def test_approve_allows_loopback_origin(pool_client):
+    # 终审 F2:127.0.0.1/localhost(含任意端口)的 Origin 放行
+    pool, client = pool_client
+    from orchestrator.daemon.ticket import load_ticket
+    t = _p0_ticket(pool)
+    r = client.post(f"/approve/{t.id}",
+                    headers={"Origin": "http://127.0.0.1:8321"})
+    assert r.status_code == 302
+    assert load_ticket(pool, t.id).state == "p1_drafting"
+
+
+def test_approve_without_origin_allowed(pool_client):
+    # 终审 F2:curl/CLI 无 Origin/Referer → 放行(既有行为)
+    pool, client = pool_client
+    from orchestrator.daemon.ticket import load_ticket
+    t = _p0_ticket(pool)
+    r = client.post(f"/approve/{t.id}")
+    assert r.status_code == 302
+    assert load_ticket(pool, t.id).state == "p1_drafting"
+
+
+def _p2_designing_ticket(pool, owner_role):
+    from orchestrator.daemon.ticket import new_ticket, save_ticket
+    from orchestrator.daemon.statemachine import transition
+    t = new_ticket(pool, project="p", summary="设计中单")
+    transition(pool, t, "p0_proposed", actor="pm")
+    transition(pool, t, "p1_drafting", actor="boss")
+    transition(pool, t, "p1_proposed", actor="pm")
+    transition(pool, t, "p2_designing", actor="boss")
+    t.owner_role = owner_role           # architect 还在画图,boss 尚未接手
+    save_ticket(pool, t)
+    return t
+
+
+def test_overview_pending_excludes_non_boss_p2(pool):
+    # 终审 F3:待审批口径与审批中心一致 ——
+    # p2_designing 且 owner!=boss(设计未完成)不计入;探针草稿计入
+    from orchestrator.daemon.ticket import new_ticket
+    _p2_designing_ticket(pool, owner_role="architect")
+    p1 = new_ticket(pool, project="p", summary="测试缺口:payments",
+                    created_by="probe")             # draft 探针草稿
+    p2 = new_ticket(pool, project="p", summary="测试缺口:refund",
+                    created_by="probe")             # 第二张探针草稿
+    d = overview_data(pool, _cfg())
+    # 新口径:2 张探针草稿(architect 的 p2_designing 不计)
+    # 旧口径(state in APPROVALS):1(只数了 p2_designing)→ 能区分
+    assert d["pending_approval"] == 2
+    # 对照:审批中心分组口径
+    from orchestrator.dashboard.views import pending_groups
+    groups = pending_groups(pool)
+    assert sum(len(v) for k, v in groups.items() if k != "suspended") == 2
+    assert {t.id for t in groups["probe"]} == {p1.id, p2.id}
+
+
+def test_approve_rejects_p2_not_owned_by_boss(pool_client):
+    # 终审 F3:owner=architect 的 p2_designing 不可批准(与列表过滤口径一致)
+    pool, client = pool_client
+    from orchestrator.daemon.ticket import load_ticket
+    t = _p2_designing_ticket(pool, owner_role="architect")
+    r = client.post(f"/approve/{t.id}")
+    assert r.status_code == 409
+    assert "设计尚未完成" in r.get_data(as_text=True)
+    assert load_ticket(pool, t.id).state == "p2_designing"

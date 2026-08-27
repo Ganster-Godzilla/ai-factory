@@ -8,7 +8,6 @@ from pathlib import Path
 from orchestrator.daemon.events import read_events
 from orchestrator.daemon.gateway import k3_effective_week_tokens
 from orchestrator.daemon.ledger import ds_day_cost, ds_ticket_cost
-from orchestrator.daemon.statemachine import APPROVALS
 from orchestrator.daemon.ticket import Ticket, load_ticket
 
 # 运行中 = 不需要人盯、流水线正在推进的状态(spec §2)
@@ -102,9 +101,14 @@ def overview_data(pool: Path, cfg: dict) -> dict:
     """总览页全部指标。gateway 不可达时 k3 水位自动回退本地台账。"""
     tickets = _all_tickets(pool)
 
-    k3_used = k3_effective_week_tokens(pool, cfg)
+    # GET 高频只读:回退不写 gateway_fallback 事件(终审 F1);留痕留给 runner 配额闸
+    k3_used = k3_effective_week_tokens(pool, cfg, trace=False)
     k3_budget = int((cfg.get("budgets") or {}).get("k3_week_token_budget", 0))
     k3_pct = round(k3_used / k3_budget * 100, 1) if k3_budget else 0.0
+
+    # 待审批口径与审批中心一致:pending_groups 派生,排除 suspended 组(终审 F3)
+    groups = pending_groups(pool)
+    pending = sum(len(v) for k, v in groups.items() if k != "suspended")
 
     return {
         "k3_used": k3_used,
@@ -113,7 +117,7 @@ def overview_data(pool: Path, cfg: dict) -> dict:
         "ds_today": ds_day_cost(pool),
         "ds_month": _ds_month_cost(pool),
         "ds_daily_budget": (cfg.get("budgets") or {}).get("ds_daily_cny", 30),
-        "pending_approval": sum(1 for t in tickets if t.state in APPROVALS),
+        "pending_approval": pending,
         "running": sum(1 for t in tickets if t.state in RUNNING_STATES),
         "suspended": sum(1 for t in tickets if t.state == "suspended"),
         "today_events": _today_events(pool),

@@ -55,3 +55,13 @@ def test_effective_fallback_logs_event(pool):
     evts = read_events(pool, "system")
     assert any(e["event"] == "gateway_fallback" and e["actor"] == "system"
                for e in evts)
+
+
+def test_effective_fallback_no_event_when_trace_false(pool):
+    # 终审 F1:总览页 GET 是高频只读路径,回退留痕须可关(trace=False 不写事件)
+    from orchestrator.daemon.events import read_events
+    cfg = {"gateway": {"url": "http://127.0.0.1:1"}}
+    append_ledger(pool, "k3", 42, "tokens", "T-1", "pm", "k3")
+    assert k3_effective_week_tokens(pool, cfg, timeout=1, trace=False) == 42
+    evts = read_events(pool, "system")
+    assert not any(e["event"] == "gateway_fallback" for e in evts)
