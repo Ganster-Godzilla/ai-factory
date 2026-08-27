@@ -109,6 +109,34 @@ def test_role_run_records_k3_cost(pool, tmp_path):
     assert k3_week_tokens(pool) == 150
 
 
+class CacheReadStubAdapter(HarnessAdapter):
+    name = "claude_code"
+
+    def run(self, packet):
+        return HarnessResult(status="done", tokens={
+            "input_tokens": 100, "output_tokens": 50,
+            "cache_read": 10**6,               # 缓存命中不得计入周水位
+            "detail": {"note": "嵌套字段"},      # 非 int 字段不得炸 TypeError
+        })
+
+
+def test_ledger_counts_only_input_output_tokens(pool, tmp_path):
+    # Finding S1:台账口径只算 input+output;cache_read 虚高与嵌套 dict 都不得入账/报错
+    t = new_ticket(pool, project="p", summary="x")
+    t.state = "p1_drafting"
+    save_ticket(pool, t)
+    cfg = {"budgets": {"k3_week_token_budget": 10**9, "ds_daily_cny": 10**9}}
+    advance_once(pool, t.id, CacheReadStubAdapter(), tmp_path, cfg=cfg)
+    assert k3_week_tokens(pool) == 150
+
+
+def test_model_for_none_models_section():
+    # 复审 round 1:yaml 空 `models:` 段解析为 {"models": None},不得穿透默认值抛 AttributeError
+    from orchestrator.daemon.runner import ROLE_MODEL, _model_for
+    assert _model_for({"models": None}, "dev") == ROLE_MODEL["dev"]
+    assert _model_for(None, "dev") == ROLE_MODEL["dev"]
+
+
 def test_consult_failure_keeps_consult_chance(pool, tmp_path):
     # Finding 2:会诊自身失败不得烧掉唯一会诊机会(consulted 不置位、attempts 不重置)
     proj = _git_repo(tmp_path)

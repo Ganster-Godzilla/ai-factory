@@ -12,7 +12,8 @@ from orchestrator.daemon.circuitbreaker import (
     MAX_RETRY, consult_packet, next_action, retry_prompt,
 )
 from orchestrator.daemon.events import append_event
-from orchestrator.daemon.ledger import append_ledger, k3_budget_exceeded
+from orchestrator.daemon.gateway import k3_effective_week_tokens
+from orchestrator.daemon.ledger import append_ledger
 from orchestrator.daemon.slicer import load_task_list, make_packet, ready_tasks
 from orchestrator.daemon.statemachine import suspend, transition
 from orchestrator.daemon.ticket import load_ticket, save_ticket
@@ -22,6 +23,12 @@ ROLE_ROUTING = {
     "pm": "claude_code", "architect": "claude_code", "test_designer": "claude_code",
     "qa_vision": "claude_code", "dev": "dsh", "qa": "dsh",
     "release": "dsh", "sre": "dsh",
+}
+
+# 角色 → 模型维度(GLM 对照实验时切 glm-5.3-flash)
+ROLE_MODEL = {
+    "dev": "deepseek-v4-flash", "qa": "deepseek-v4-flash",
+    "release": "deepseek-v4-flash", "sre": "deepseek-v4-flash",
 }
 
 WORK_STATES = {
@@ -46,12 +53,23 @@ SYSTEM_NEXT = {"p2_approved": "p3_queued", "p3_queued": "p3_running"}
 ADAPTER_RESOURCE = {"claude_code": ("k3", "tokens"), "dsh": ("deepseek", "cny")}
 
 
+def _model_for(cfg: dict | None, role: str) -> str | None:
+    """cfg["models"][role] 优先,ROLE_MODEL 兜底(无配置的角色为 None)。
+    yaml 空 `models:` 段解析为 None,与 gateway 的 (cfg.get("gateway") or {}) 防御对齐。"""
+    return ((cfg or {}).get("models") or {}).get(role) or ROLE_MODEL.get(role)
+
+
 def _record_cost(pool: Path, ticket, adapter: HarnessAdapter, result, role: str) -> None:
     res = ADAPTER_RESOURCE.get(adapter.name)
     if not res:
         return
     resource, unit = res
-    amount = sum(result.tokens.values()) if unit == "tokens" else result.cost_cny
+    if unit == "tokens":
+        # 口径只算 input+output:cache_read 等会造成水位虚高,
+        # 且 tokens 里混入嵌套 dict 时 sum(values()) 会 TypeError
+        amount = result.tokens.get("input_tokens", 0) + result.tokens.get("output_tokens", 0)
+    else:
+        amount = result.cost_cny
     if amount:
         append_ledger(pool, resource, amount, unit, ticket.id, role, adapter.name)
 
@@ -92,6 +110,7 @@ def run_dev_tasks(pool: Path, ticket, adapter: HarnessAdapter,
     task = ready[0]
     wt = ensure_worktree(project_dir, f"{ticket.id}-{task['id']}")
     packet = make_packet(task, ticket, wt, design_excerpt="")
+    packet.model = _model_for(cfg, "dev")
     if task["attempts"] > 0:
         packet.prompt = retry_prompt(task, packet.prompt, task.get("last_error", ""))
     result = adapter.run(packet)
@@ -126,7 +145,8 @@ def run_dev_tasks(pool: Path, ticket, adapter: HarnessAdapter,
     if action == "retry":
         return f"retry:{task['id']}:{task['attempts']}"
     if action == "consult":
-        if cfg and ticket.type != "incident" and k3_budget_exceeded(pool, cfg):
+        if (cfg and ticket.type != "incident"
+                and k3_effective_week_tokens(pool, cfg) > cfg["budgets"]["k3_week_token_budget"]):
             suspend(pool, ticket, actor="system",
                     reason="k3 配额超线,会诊通道关闭,任务挂起")
             return "suspend: k3 配额超线"
@@ -177,6 +197,7 @@ def advance_once(pool: Path, ticket_id: str, adapter: HarnessAdapter,
         prompt=_role_prompt(role) + f"\n[{role}] 工单 {t.id}: {t.summary}",
         workdir=project_dir,
         budget=t.budget,
+        model=_model_for(cfg, role),
     )
     result = adapter.run(packet)
     append_event(pool, t.id, role, "role_run",

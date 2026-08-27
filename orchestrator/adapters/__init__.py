@@ -11,5 +11,7 @@ _REGISTRY = {
 }
 
 
-def get_adapter(name: str) -> HarnessAdapter:
+def get_adapter(name: str, keys_dir=None) -> HarnessAdapter:
+    if name == "dsh":
+        return DshAdapter(keys_dir=keys_dir)
     return _REGISTRY[name]()

@@ -75,10 +75,13 @@ def main(argv: list[str] | None = None) -> int:
             resume(pool, load_ticket(pool, args.id), actor="boss")
             print(f"{args.id} → resumed")
         elif args.cmd == "advance":
-            adapter = FakeHarness() if args.fake else get_adapter(ROLE_ROUTING.get(
-                WORK_STATES.get(load_ticket(pool, args.id).state, "dev"), "dsh"))
+            cfg = _cfg()
+            adapter = FakeHarness() if args.fake else get_adapter(
+                ROLE_ROUTING.get(
+                    WORK_STATES.get(load_ticket(pool, args.id).state, "dev"), "dsh"),
+                keys_dir=cfg.get("keys_dir"))
             print(advance_once(pool, args.id, adapter, Path(args.project_dir),
-                               cfg=_cfg(), consult_adapter=None))
+                               cfg=cfg, consult_adapter=None))
     except (IllegalTransition, ValueError) as e:
         print(f"error: {e}", file=sys.stderr)
         return 1

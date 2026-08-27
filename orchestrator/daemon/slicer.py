@@ -52,7 +52,8 @@ def ready_tasks(tasks: list[dict]) -> list[dict]:
             if t["status"] == "pending" and set(t.get("depends_on", [])) <= done]
 
 
-def make_packet(task: dict, ticket, workdir: Path, design_excerpt: str) -> TaskPacket:
+def make_packet(task: dict, ticket, workdir: Path, design_excerpt: str,
+                model: str | None = None) -> TaskPacket:
     prompt = (
         f"你是开发角色,在 git worktree 中独立完成任务 {task['id']}: {task['title']}\n"
         f"工单: {ticket.id} — {ticket.summary}\n"
@@ -60,4 +61,5 @@ def make_packet(task: dict, ticket, workdir: Path, design_excerpt: str) -> TaskP
         + TDD_INSTRUCTION.format(cmd=task["acceptance_cmd"])
     )
     return TaskPacket(role="dev", prompt=prompt, workdir=workdir,
-                      acceptance_cmd=task["acceptance_cmd"], budget=ticket.budget)
+                      acceptance_cmd=task["acceptance_cmd"], budget=ticket.budget,
+                      model=model)

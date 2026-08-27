@@ -214,3 +214,44 @@ def test_k3_quota_blocks_consult(pool, tmp_path):
     assert t2.state == "suspended"
     from orchestrator.daemon.events import read_events
     assert any("配额" in str(e.get("reason", "")) for e in read_events(pool, t.id))
+
+
+def _p3_ticket_with_task(pool):
+    t = new_ticket(pool, project="p", summary="x")
+    t.state = "p3_running"
+    t.tasks = [{"id": "task-1", "title": "a", "acceptance_cmd": "exit 0",
+                "depends_on": [], "status": "pending", "attempts": 0}]
+    save_ticket(pool, t)
+    return t
+
+
+def test_cfg_models_override_dev_model(pool, tmp_path):
+    # Finding S4:cfg["models"][role] 优先于 ROLE_MODEL 兜底
+    proj = _git_repo(tmp_path)
+    t = _p3_ticket_with_task(pool)
+    h = FakeHarness()
+    cfg = {"models": {"dev": "glm-5.3-flash"},
+           "budgets": {"k3_week_token_budget": 10**9, "ds_daily_cny": 10**9}}
+    advance_once(pool, t.id, h, proj, cfg=cfg)
+    assert h.received[0].model == "glm-5.3-flash"
+
+
+def test_no_cfg_falls_back_to_role_model(pool, tmp_path):
+    # Finding S4:无 cfg 时维持 ROLE_MODEL 兜底
+    proj = _git_repo(tmp_path)
+    t = _p3_ticket_with_task(pool)
+    h = FakeHarness()
+    advance_once(pool, t.id, h, proj)
+    assert h.received[0].model == "deepseek-v4-flash"
+
+
+def test_cfg_models_override_role_model(pool, tmp_path):
+    # Finding S4:非 p3 角色(advance_once 直发)同样走 cfg["models"]
+    t = new_ticket(pool, project="p", summary="x")
+    t.state = "p4_verifying"
+    save_ticket(pool, t)
+    h = FakeHarness()
+    cfg = {"models": {"qa": "glm-5.3-flash"},
+           "budgets": {"k3_week_token_budget": 10**9, "ds_daily_cny": 10**9}}
+    advance_once(pool, t.id, h, tmp_path, cfg=cfg)
+    assert h.received[0].model == "glm-5.3-flash"
