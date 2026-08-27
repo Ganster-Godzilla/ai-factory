@@ -115,7 +115,7 @@ def run_dev_tasks(pool: Path, ticket, adapter: HarnessAdapter,
     # 成本闸在完工判定之后:全 done 工单优先进 p4,不得被帽挂起(T1 评审观察)
     if cfg and ds_daily_exceeded(pool, cfg):
         return "blocked: ds 日现金线"
-    if ds_ticket_cost(pool, ticket.id) > ticket.budget.get("token_cap_cny", 10.0):
+    if ds_ticket_cost(pool, ticket.id) > (ticket.budget or {}).get("token_cap_cny", 10.0):
         suspend(pool, ticket, actor="system", reason="工单预算帽",
                 reason_code="budget_cap")
         return "suspend: 工单预算帽"
@@ -142,7 +142,12 @@ def run_dev_tasks(pool: Path, ticket, adapter: HarnessAdapter,
             verify = "passed" if r.returncode == 0 else "failed"
             if r.returncode != 0:
                 result.status = "failed"
-                result.output += f"\n[acceptance 复检失败 exit={r.returncode}]\n{(r.stdout + r.stderr)[-1000:]}"
+                # 复检证据在前:事件 [:500] 与 retry_prompt [:800] 切头时证据不丢
+                tail = (r.stdout + r.stderr)[-1000:]
+                result.output = (
+                    f"[acceptance 复检失败 exit={r.returncode}] {tail}\n"
+                    f"--- harness 输出(截断) ---\n{result.output[:500]}"
+                )
     append_event(pool, ticket.id, "dev", "task_run", task=task["id"],
                  attempt=task["attempts"], status=result.status,
                  tokens=result.tokens, cost_cny=result.cost_cny,
@@ -245,8 +250,10 @@ def advance_once(pool: Path, ticket_id: str, adapter: HarnessAdapter,
             suspend(pool, t, actor="system", reason=f"发布失败: {result.status}",
                     reason_code="release_failed")
             from orchestrator.daemon.ticket import new_ticket as _nt
-            _nt(pool, t.project, f"发布失败: {t.id} {t.summary}",
-                created_by="system", type="incident")
+            inc = _nt(pool, t.project, f"发布失败: {t.id} {t.summary}",
+                      created_by="system", type="incident", related_ticket=t.id)
+            # 原单事件流回链:从事故单 related_ticket 与原单 incident_created 双向可查
+            append_event(pool, t.id, "system", "incident_created", incident=inc.id)
         else:
             suspend(pool, t, actor="system", reason=f"{role} 执行失败: {result.status}",
                     reason_code=ROLE_SUSPEND_CODE.get(t.state))

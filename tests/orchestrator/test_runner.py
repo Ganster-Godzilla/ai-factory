@@ -252,6 +252,56 @@ def test_three_failed_tasks_suspend_ticket(pool, tmp_path):
     assert "consult_exhausted" in codes
 
 
+def test_recheck_evidence_kept_at_head(pool, tmp_path):
+    proj = _git_repo(tmp_path)
+    t = new_ticket(pool, project="p", summary="x")
+    t.state = "p3_running"
+    t.tasks = [{"id": "task-1", "title": "a", "acceptance_cmd": "exit 1",
+                "depends_on": [], "status": "pending", "attempts": 0}]
+    save_ticket(pool, t)
+
+    class LoudHarness(FakeHarness):
+        def run(self, packet):
+            from orchestrator.adapters.base import HarnessResult
+            return HarnessResult(status="done", output="x" * 5000)   # 长输出
+    advance_once(pool, t.id, LoudHarness(), proj)
+    from orchestrator.daemon.events import read_events
+    ev = [e for e in read_events(pool, t.id) if e["event"] == "task_run"][-1]
+    assert "acceptance 复检失败" in ev["output"]   # 截断后证据仍在头部
+
+
+def test_incident_links_back(pool, tmp_path):
+    t = new_ticket(pool, project="p", summary="x")
+    t.state = "p5_releasing"
+    save_ticket(pool, t)
+    advance_once(pool, t.id, FakeHarness(script=["failed"]), tmp_path)
+    from orchestrator.daemon.ticket import load_ticket as lt
+    from pathlib import Path as P
+    inc_id = [f.stem for f in (pool / "tickets").glob("*.yaml") if f.stem != t.id][0]
+    assert lt(pool, inc_id).related_ticket == t.id
+    from orchestrator.daemon.events import read_events
+    assert any(e["event"] == "incident_created" and e.get("incident") == inc_id
+               for e in read_events(pool, t.id))
+
+
+def test_none_budget_survives_cap_gate(pool, tmp_path):
+    # 搭车 T1:手改 YAML 把 budget 抹成 None 时,工单帽闸 .get 不得 AttributeError
+    proj = _git_repo(tmp_path)
+    t = new_ticket(pool, project="p", summary="x")
+    t.state = "p3_running"
+    t.tasks = [{"id": "task-1", "title": "a", "acceptance_cmd": "exit 0",
+                "depends_on": [], "status": "pending", "attempts": 0}]
+    save_ticket(pool, t)
+    import yaml
+    path = pool / "tickets" / f"{t.id}.yaml"
+    data = yaml.safe_load(path.read_text(encoding="utf-8"))
+    data["budget"] = None
+    path.write_text(yaml.safe_dump(data, allow_unicode=True, sort_keys=False),
+                    encoding="utf-8", newline="\n")
+    msg = advance_once(pool, t.id, FakeHarness(), proj)
+    assert msg == "task:task-1:done"
+
+
 def test_all_done_goes_p4_even_when_daily_cap_exceeded(pool, tmp_path):
     """完工判定优先于成本闸:任务全 done 且 ds 日线超线 → p4,不得 blocked/suspended(T1 评审观察)"""
     from orchestrator.daemon.ledger import append_ledger

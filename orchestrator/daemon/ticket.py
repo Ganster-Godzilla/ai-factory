@@ -35,6 +35,7 @@ class Ticket:
     created_by: str = "human"
     resume_state: str | None = None
     consult_count: int = 0   # 会诊后判负的任务数(§5.2:3 个任务判负 → 整单挂起)
+    related_ticket: str | None = None   # 事故单回链原单 id(P5 发布失败自动建单时写入)
 
     @classmethod
     def load(cls, path: Path) -> "Ticket":
@@ -86,7 +87,7 @@ def _locked(pool: Path):
 
 
 def new_ticket(pool: Path, project: str, summary: str, created_by: str = "human",
-               type: str = "feature") -> Ticket:
+               type: str = "feature", related_ticket: str | None = None) -> Ticket:
     lock = _locked(pool)
     try:
         t = Ticket(
@@ -94,6 +95,7 @@ def new_ticket(pool: Path, project: str, summary: str, created_by: str = "human"
             state="p1_drafting" if type == "incident" else "draft",
             owner_role="pm", summary=summary, created_by=created_by,
             priority="high" if type == "incident" else "normal",
+            related_ticket=related_ticket,
         )
         save_ticket(pool, t)
         append_event(pool, t.id, created_by, "created", summary=summary)
