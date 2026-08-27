@@ -119,7 +119,7 @@ runner.py 要点:
 
 **Interfaces:**
 - Produces:
-  - 工单级会诊计数:ticket 新字段 `consult_count: int = 0`;每次会诊 +1;**第 3 次会诊仍失败 → 整单 suspend(reason="连续 3 次会诊未解决:疑似设计/切片问题", reason_code="consult_exhausted")**(spec §5.2 工单级规则)
+  - 工单级会诊计数:ticket 新字段 `consult_count: int = 0`;**每任务会诊≤1(任务级),会诊后仍失败=任务判负(不挂单,继续其他 ready);判负任务数达 3 → 整单 suspend(reason="连续 3 个任务走到会诊级:疑似设计/切片问题", reason_code="consult_exhausted")**(spec §5.2 工单级规则;判负后无 ready 且非全 done → suspend circuit_exhausted)
   - `orc advance --consult-fake`:会诊也用 FakeHarness(CLI 失败演练不再误烧 k3)
   - suspend() 增加可选 `reason_code: str | None = None`,写入事件(枚举:budget_cap/daily_cap/circuit_exhausted/consult_exhausted/quota_exceeded/deadlock/load_failed/release_failed/verify_failed/manual)
 

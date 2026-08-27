@@ -36,3 +36,21 @@ def test_new_list_approve(tmp_path, monkeypatch, capsys):
     out = capsys.readouterr().out
     assert "done" in out
     assert "state_changed" in out
+
+
+def test_dashboard_smoke(tmp_path, monkeypatch):
+    """dashboard 命令可导入并创建 app;拦截 Flask.run,不真起服务。"""
+    _cfg(tmp_path, monkeypatch)
+    from flask import Flask
+    calls = {}
+
+    def fake_run(self, **kwargs):
+        calls.update(kwargs)
+
+    monkeypatch.setattr(Flask, "run", fake_run)
+    assert main(["dashboard"]) == 0
+    assert calls == {"host": "127.0.0.1", "port": 8321, "debug": False}
+
+    calls.clear()
+    assert main(["dashboard", "--port", "9000", "--host", "0.0.0.0"]) == 0
+    assert calls["port"] == 9000 and calls["host"] == "0.0.0.0"

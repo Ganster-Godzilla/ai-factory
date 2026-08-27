@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% set active = 'overview' %}
+{% block title %}总览 · Orchestrator Dashboard{% endblock %}
+{% block content %}
+<h1>总览</h1>
+
+<div class="cards">
+  <div class="card">
+    <div class="label">K3 周水位(tokens)</div>
+    <div class="value">{{ "{:,}".format(k3_used) }}</div>
+    <div class="bar{{ ' hot' if k3_pct >= 90 }}">
+      <div style="width: {{ [k3_pct, 100] | min }}%"></div>
+    </div>
+    <div class="sub">{{ k3_pct }}% / 周预算 {{ "{:,}".format(k3_budget) }}</div>
+  </div>
+
+  <div class="card">
+    <div class="label">DeepSeek 今日现金</div>
+    <div class="value">¥{{ "%.2f" | format(ds_today) }}</div>
+    <div class="sub">日预算 ¥{{ "%.2f" | format(ds_daily_budget) }}</div>
+  </div>
+
+  <div class="card">
+    <div class="label">DeepSeek 本月现金</div>
+    <div class="value">¥{{ "%.2f" | format(ds_month) }}</div>
+    <div class="sub">当月 ledger 累计</div>
+  </div>
+
+  <div class="card">
+    <div class="label">待审批</div>
+    <div class="value">{{ pending_approval }}</div>
+    <div class="sub">工单待 boss 决策(详见审批中心)</div>
+  </div>
+
+  <div class="card">
+    <div class="label">运行中</div>
+    <div class="value">{{ running }}</div>
+    <div class="sub">P3 执行 / P4 验证 / P5 发布 / 监控</div>
+  </div>
+
+  <div class="card">
+    <div class="label">已挂起</div>
+    <div class="value">{{ suspended }}</div>
+    <div class="sub">suspended 工单数</div>
+  </div>
+</div>
+
+<h2>今日事件摘要</h2>
+{% if today_events %}
+<table>
+  <tr><th>工单</th><th>事件数</th></tr>
+  {% for tid, n in today_events | dictsort %}
+  <tr><td>{{ tid }}</td><td>{{ n }}</td></tr>
+  {% endfor %}
+</table>
+{% else %}
+<p class="muted">今日暂无事件。</p>
+{% endif %}
+{% endblock %}

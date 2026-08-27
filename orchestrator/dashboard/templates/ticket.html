@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+{% set active = 'approvals' %}
+{% block title %}{{ ticket.id }} · Orchestrator Dashboard{% endblock %}
+{% block content %}
+<h1>{{ ticket.id }} — {{ ticket.summary }}</h1>
+
+<div class="cards">
+  <div class="card"><div class="label">项目</div><div class="value" style="font-size:16px">{{ ticket.project }}</div></div>
+  <div class="card"><div class="label">状态</div><div class="value" style="font-size:16px">{{ ticket.state }}</div></div>
+  <div class="card"><div class="label">类型 / 优先级</div><div class="value" style="font-size:16px">{{ ticket.type }} / {{ ticket.priority }}</div></div>
+  <div class="card"><div class="label">负责人角色</div><div class="value" style="font-size:16px">{{ ticket.owner_role }}</div></div>
+  <div class="card"><div class="label">创建者</div><div class="value" style="font-size:16px">{{ ticket.created_by }}</div></div>
+  <div class="card"><div class="label">DS 成本(现金)</div><div class="value" style="font-size:16px">¥{{ ds_cost }}</div>
+    <div class="sub">token 上限 {{ ticket.budget.get("token_cap", "-") }} / ¥{{ ticket.budget.get("token_cap_cny", "-") }}</div></div>
+  {% if ticket.resume_state %}
+  <div class="card"><div class="label">挂起前状态</div><div class="value" style="font-size:16px">{{ ticket.resume_state }}</div></div>
+  {% endif %}
+  {% if ticket.related_ticket %}
+  <div class="card"><div class="label">关联工单</div><div class="value" style="font-size:16px">
+    <a href="/ticket/{{ ticket.related_ticket }}">{{ ticket.related_ticket }}</a></div></div>
+  {% endif %}
+</div>
+
+<h2>任务列表({{ tasks | length }})</h2>
+{% if tasks %}
+<table>
+  <tr><th>任务</th><th>标题</th><th>状态</th><th>尝试次数</th><th>Worktree</th></tr>
+  {% for task in tasks %}
+  <tr>
+    <td>{{ task.get("id", "-") }}</td>
+    <td>{{ task.get("title", "-") }}</td>
+    <td>{{ task.get("status", "-") }}</td>
+    <td>{{ task.get("attempts", 0) }}</td>
+    <td>{{ task.get("worktree", "-") or "-" }}</td>
+  </tr>
+  {% endfor %}
+</table>
+{% else %}
+<p class="muted">暂无任务。</p>
+{% endif %}
+
+<h2>产物指针({{ artifacts | length }})</h2>
+{% if artifacts %}
+<table>
+  <tr><th>产物</th><th>路径 / 指针</th></tr>
+  {% for name, ptr in artifacts.items() %}
+  <tr><td>{{ name }}</td><td>{{ ptr }}</td></tr>
+  {% endfor %}
+</table>
+{% else %}
+<p class="muted">暂无产物。</p>
+{% endif %}
+
+<h2>事件流(倒序,{{ events | length }} 条)</h2>
+{% if events %}
+<table>
+  <tr><th>时间</th><th>Actor</th><th>事件</th><th>详情</th></tr>
+  {% for e in events %}
+  <tr>
+    <td>{{ e.ts }}</td>
+    <td>{{ e.actor }}</td>
+    <td>{{ e.event }}</td>
+    <td class="muted">
+      {%- for k, v in e.items() -%}
+        {%- if k not in ["ts", "ticket", "actor", "event"] -%}
+          {{ k }}={{ v }}{{ " " }}
+        {%- endif -%}
+      {%- endfor -%}
+    </td>
+  </tr>
+  {% endfor %}
+</table>
+{% else %}
+<p class="muted">暂无事件。</p>
+{% endif %}
+{% endblock %}

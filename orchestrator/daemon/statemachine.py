@@ -7,7 +7,7 @@ from orchestrator.daemon.events import append_event
 from orchestrator.daemon.ticket import Ticket, save_ticket
 
 TRANSITIONS = {
-    "draft":         {"p0_proposed": {"pm"}, "closed": {"boss"}},
+    "draft":         {"p0_proposed": {"pm", "boss"}, "closed": {"boss"}},
     "p0_proposed":   {"p1_drafting": {"boss"}, "closed": {"boss"}},
     "p1_drafting":   {"p1_proposed": {"pm"}, "suspended": {"*"}},
     "p1_proposed":   {"p2_designing": {"boss"}, "closed": {"boss"}},
@@ -31,6 +31,13 @@ APPROVALS = {
     "p5_ready": "p5_releasing",
 }
 
+# suspend 事件 reason_code 词汇表(spec §5.2/§5.3);可选,None 表示无对应枚举
+SUSPEND_REASON_CODES = {
+    "budget_cap", "daily_cap", "circuit_exhausted", "consult_exhausted",
+    "quota_exceeded", "deadlock", "load_failed", "release_failed",
+    "verify_failed", "manual",
+}
+
 
 class IllegalTransition(Exception):
     pass
@@ -49,14 +56,16 @@ def transition(pool: Path, ticket: Ticket, to_state: str, actor: str, **ev) -> T
     return ticket
 
 
-def suspend(pool: Path, ticket: Ticket, actor: str, reason: str) -> Ticket:
+def suspend(pool: Path, ticket: Ticket, actor: str, reason: str,
+            reason_code: str | None = None) -> Ticket:
     if ticket.state in {"done", "closed", "suspended"}:
         raise IllegalTransition(f"{ticket.state} 不可挂起")
     ticket.resume_state = ticket.state
     ticket.state = "suspended"
     save_ticket(pool, ticket)
     append_event(pool, ticket.id, actor, "suspended",
-                 resume_state=ticket.resume_state, reason=reason)
+                 resume_state=ticket.resume_state, reason=reason,
+                 reason_code=reason_code)
     return ticket
 
 

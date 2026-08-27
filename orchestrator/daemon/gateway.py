@@ -19,13 +19,16 @@ def gateway_week_tokens(url: str, timeout: float = 5.0) -> int | None:
         return None
 
 
-def k3_effective_week_tokens(pool: Path, cfg: dict, timeout: float = 5.0) -> int:
+def k3_effective_week_tokens(pool: Path, cfg: dict, timeout: float = 5.0,
+                             trace: bool = True) -> int:
     url = (cfg.get("gateway") or {}).get("url")
     if url:
         remote = gateway_week_tokens(url, timeout=timeout)
         if remote is not None:
             return remote
-        # 网关配置了但不可达:回退本地台账必须留痕,否则配额闸静默降精度
-        append_event(pool, "system", "system", "gateway_fallback",
-                     reason="网关不可达,回退本地台账")
+        # 网关配置了但不可达:回退本地台账必须留痕,否则配额闸静默降精度。
+        # trace=False 用于总览页 GET 等高频只读路径(终审 F1:GET 不写事件)。
+        if trace:
+            append_event(pool, "system", "system", "gateway_fallback",
+                         reason="网关不可达,回退本地台账")
     return k3_week_tokens(pool)

@@ -31,9 +31,11 @@ class Ticket:
     priority: str = "normal"
     artifacts: dict = field(default_factory=dict)
     tasks: list = field(default_factory=list)
-    budget: dict = field(default_factory=lambda: {"token_cap": 500000})
+    budget: dict = field(default_factory=lambda: {"token_cap": 500000, "token_cap_cny": 10.0})
     created_by: str = "human"
     resume_state: str | None = None
+    consult_count: int = 0   # 会诊后判负的任务数(§5.2:3 个任务判负 → 整单挂起)
+    related_ticket: str | None = None   # 事故单回链原单 id(P5 发布失败自动建单时写入)
 
     @classmethod
     def load(cls, path: Path) -> "Ticket":
@@ -60,6 +62,9 @@ class Ticket:
 
 
 def _path(pool: Path, ticket_id: str) -> Path:
+    # 拼路径前校验 id:堵住 %5C 反斜杠路径遍历面(dashboard /ticket/<id> 直达这里)
+    if not ID_RE.match(ticket_id):
+        raise ValueError(f"ticket id 格式非法: {ticket_id!r}")
     return pool / "tickets" / f"{ticket_id}.yaml"
 
 
@@ -85,7 +90,7 @@ def _locked(pool: Path):
 
 
 def new_ticket(pool: Path, project: str, summary: str, created_by: str = "human",
-               type: str = "feature") -> Ticket:
+               type: str = "feature", related_ticket: str | None = None) -> Ticket:
     lock = _locked(pool)
     try:
         t = Ticket(
@@ -93,6 +98,7 @@ def new_ticket(pool: Path, project: str, summary: str, created_by: str = "human"
             state="p1_drafting" if type == "incident" else "draft",
             owner_role="pm", summary=summary, created_by=created_by,
             priority="high" if type == "incident" else "normal",
+            related_ticket=related_ticket,
         )
         save_ticket(pool, t)
         append_event(pool, t.id, created_by, "created", summary=summary)
