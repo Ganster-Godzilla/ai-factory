@@ -12,7 +12,8 @@ from orchestrator.daemon.circuitbreaker import (
     MAX_RETRY, consult_packet, next_action, retry_prompt,
 )
 from orchestrator.daemon.events import append_event
-from orchestrator.daemon.ledger import append_ledger, k3_budget_exceeded
+from orchestrator.daemon.gateway import k3_effective_week_tokens
+from orchestrator.daemon.ledger import append_ledger
 from orchestrator.daemon.slicer import load_task_list, make_packet, ready_tasks
 from orchestrator.daemon.statemachine import suspend, transition
 from orchestrator.daemon.ticket import load_ticket, save_ticket
@@ -126,7 +127,8 @@ def run_dev_tasks(pool: Path, ticket, adapter: HarnessAdapter,
     if action == "retry":
         return f"retry:{task['id']}:{task['attempts']}"
     if action == "consult":
-        if cfg and ticket.type != "incident" and k3_budget_exceeded(pool, cfg):
+        if (cfg and ticket.type != "incident"
+                and k3_effective_week_tokens(pool, cfg) > cfg["budgets"]["k3_week_token_budget"]):
             suspend(pool, ticket, actor="system",
                     reason="k3 配额超线,会诊通道关闭,任务挂起")
             return "suspend: k3 配额超线"
