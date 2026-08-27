@@ -58,3 +58,9 @@ def test_concurrent_new_ticket_unique_ids(pool):
     [t.start() for t in threads]
     [t.join() for t in threads]
     assert len(set(ids)) == 8
+
+
+def test_load_ticket_rejects_traversal_id(pool):
+    # %5C 反斜杠路径遍历面:id 不匹配 ID_RE 直接抛 ValueError,不拼路径
+    with pytest.raises(ValueError):
+        load_ticket(pool, "..\\..\\evil")

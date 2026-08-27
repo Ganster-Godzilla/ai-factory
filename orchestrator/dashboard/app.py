@@ -33,8 +33,10 @@ def create_app(pool_dir: Path, cfg: dict) -> Flask:
             error=msg), 409
 
     @app.errorhandler(FileNotFoundError)
+    @app.errorhandler(ValueError)
     def ticket_not_found(e):
-        # load_ticket 对不存在工单抛 FileNotFoundError → 统一 404(T5 搭车修复)
+        # load_ticket 对不存在工单抛 FileNotFoundError(T5 搭车);
+        # id 格式非法(路径遍历)抛 ValueError(T7 搭车)→ 统一 404
         return "工单不存在", 404
 
     @app.get("/ticket/<ticket_id>")

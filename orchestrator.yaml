@@ -1,5 +1,6 @@
 pool: pool
-projects: {}            # M2 验收时登记:orc-e2e: d:/workspace/tmp/orc-e2e
+projects:
+  orc-e2e: d:/workspace/tmp/orc-e2e   # M4 e2e 验收项目(T7 登记;SK-main 待用户决定路径后登记)
 thresholds:
   concurrent_max: 2
 budgets:

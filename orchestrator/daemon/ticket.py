@@ -62,6 +62,9 @@ class Ticket:
 
 
 def _path(pool: Path, ticket_id: str) -> Path:
+    # 拼路径前校验 id:堵住 %5C 反斜杠路径遍历面(dashboard /ticket/<id> 直达这里)
+    if not ID_RE.match(ticket_id):
+        raise ValueError(f"ticket id 格式非法: {ticket_id!r}")
     return pool / "tickets" / f"{ticket_id}.yaml"
 
 

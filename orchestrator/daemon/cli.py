@@ -38,6 +38,9 @@ def main(argv: list[str] | None = None) -> int:
     c = sub.add_parser("resume"); c.add_argument("id")
     c = sub.add_parser("advance"); c.add_argument("id"); c.add_argument("project_dir"); c.add_argument("--fake", action="store_true")
     c.add_argument("--consult-fake", action="store_true")
+    c = sub.add_parser("dashboard"); c.add_argument("--port", type=int, default=8321)
+    c.add_argument("--host", default="127.0.0.1",
+                   help="默认 127.0.0.1 仅本机;局域网开放(0.0.0.0)+认证属 v2 决策")
     args = p.parse_args(argv)
     pool = _pool()
 
@@ -85,6 +88,9 @@ def main(argv: list[str] | None = None) -> int:
             print(advance_once(pool, args.id, adapter, Path(args.project_dir),
                                cfg=cfg,
                                consult_adapter=FakeHarness() if args.consult_fake else None))
+        elif args.cmd == "dashboard":
+            from orchestrator.dashboard.app import create_app
+            create_app(_pool(), _cfg()).run(host=args.host, port=args.port, debug=False)
     except (IllegalTransition, ValueError) as e:
         print(f"error: {e}", file=sys.stderr)
         return 1
