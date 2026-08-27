@@ -13,6 +13,13 @@ def test_new_ticket_defaults(pool):
     assert load_ticket(pool, t.id).summary == "补测试"
 
 
+def test_incident_ticket_fast_lane(pool):
+    t = new_ticket(pool, project="p", summary="发布失败", created_by="system", type="incident")
+    assert t.state == "p1_drafting"
+    assert t.priority == "high"
+    assert t.type == "incident"
+
+
 def test_validate_catches_bad(pool):
     t = new_ticket(pool, project="quant-lab", summary="x")
     t.state = "not_a_state"
@@ -40,3 +47,14 @@ def test_saved_yaml_is_lf_only(pool):
     save_ticket(pool, t)
     raw = (pool / "tickets" / f"{t.id}.yaml").read_bytes()
     assert b"\r" not in raw
+
+
+def test_concurrent_new_ticket_unique_ids(pool):
+    import threading
+    ids = []
+    def mk(i):
+        ids.append(new_ticket(pool, project="p", summary=f"s{i}").id)
+    threads = [threading.Thread(target=mk, args=(i,)) for i in range(8)]
+    [t.start() for t in threads]
+    [t.join() for t in threads]
+    assert len(set(ids)) == 8

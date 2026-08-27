@@ -17,15 +17,19 @@ from orchestrator.daemon.statemachine import (
 from orchestrator.daemon.ticket import load_ticket, new_ticket
 
 
+def _cfg() -> dict:
+    return yaml.safe_load(Path("orchestrator.yaml").read_text(encoding="utf-8"))
+
+
 def _pool() -> Path:
-    cfg = yaml.safe_load(Path("orchestrator.yaml").read_text(encoding="utf-8"))
-    return Path(cfg["pool"])
+    return Path(_cfg()["pool"])
 
 
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(prog="orc")
     sub = p.add_subparsers(dest="cmd", required=True)
     c = sub.add_parser("new"); c.add_argument("project"); c.add_argument("summary"); c.add_argument("--by", default="human")
+    c.add_argument("--type", choices=["feature", "incident"], default="feature")
     sub.add_parser("list")
     c = sub.add_parser("show"); c.add_argument("id")
     c = sub.add_parser("approve"); c.add_argument("id"); c.add_argument("--as", dest="actor", default="boss")
@@ -38,8 +42,9 @@ def main(argv: list[str] | None = None) -> int:
 
     try:
         if args.cmd == "new":
-            t = new_ticket(pool, args.project, args.summary, created_by=args.by)
-            print(f"created {t.id} (draft)")
+            t = new_ticket(pool, args.project, args.summary, created_by=args.by,
+                           type=args.type)
+            print(f"created {t.id} ({t.state})")
         elif args.cmd == "list":
             for f in sorted((pool / "tickets").glob("*.yaml")):
                 t = load_ticket(pool, f.stem)
@@ -72,7 +77,8 @@ def main(argv: list[str] | None = None) -> int:
         elif args.cmd == "advance":
             adapter = FakeHarness() if args.fake else get_adapter(ROLE_ROUTING.get(
                 WORK_STATES.get(load_ticket(pool, args.id).state, "dev"), "dsh"))
-            print(advance_once(pool, args.id, adapter, Path(args.project_dir)))
+            print(advance_once(pool, args.id, adapter, Path(args.project_dir),
+                               cfg=_cfg(), consult_adapter=None))
     except (IllegalTransition, ValueError) as e:
         print(f"error: {e}", file=sys.stderr)
         return 1

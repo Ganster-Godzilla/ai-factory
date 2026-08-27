@@ -1,6 +1,7 @@
 """工单:pool 中的状态权威对象。YAML 序列化,字段见 spec 第 2 节。"""
 from __future__ import annotations
 
+import os, time
 import re
 from dataclasses import dataclass, field, asdict
 from datetime import date
@@ -70,14 +71,34 @@ def _next_id(pool: Path) -> str:
     return f"T-{today}-{seq + 1:03d}"
 
 
-def new_ticket(pool: Path, project: str, summary: str, created_by: str = "human") -> Ticket:
-    t = Ticket(
-        id=_next_id(pool), type="feature", project=project,
-        state="draft", owner_role="pm", summary=summary, created_by=created_by,
-    )
-    save_ticket(pool, t)
-    append_event(pool, t.id, created_by, "created", summary=summary)
-    return t
+def _locked(pool: Path):
+    pool.mkdir(parents=True, exist_ok=True)  # pool 可能尚未创建(CLI 首次 new)
+    lock = pool / ".lock"
+    for _ in range(50):
+        try:
+            fd = os.open(str(lock), os.O_CREAT | os.O_EXCL | os.O_RDWR)
+            os.close(fd)
+            return lock
+        except FileExistsError:
+            time.sleep(0.1)
+    raise TimeoutError("pool 锁超时")
+
+
+def new_ticket(pool: Path, project: str, summary: str, created_by: str = "human",
+               type: str = "feature") -> Ticket:
+    lock = _locked(pool)
+    try:
+        t = Ticket(
+            id=_next_id(pool), type=type, project=project,
+            state="p1_drafting" if type == "incident" else "draft",
+            owner_role="pm", summary=summary, created_by=created_by,
+            priority="high" if type == "incident" else "normal",
+        )
+        save_ticket(pool, t)
+        append_event(pool, t.id, created_by, "created", summary=summary)
+        return t
+    finally:
+        lock.unlink()
 
 
 def load_ticket(pool: Path, ticket_id: str) -> Ticket:

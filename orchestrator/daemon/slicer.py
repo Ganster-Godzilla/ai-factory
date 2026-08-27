@@ -24,6 +24,25 @@ def load_task_list(path: Path) -> list[dict]:
         for dep in t.get("depends_on", []):
             if dep not in ids:
                 raise ValueError(f"未知依赖: {dep}")
+    # 循环依赖检测(DFS 三色标记)
+    by_id = {t["id"]: t for t in tasks}
+    WHITE, GRAY, BLACK = 0, 1, 2
+    color = {i: WHITE for i in by_id}
+
+    def visit(i, stack):
+        color[i] = GRAY
+        for dep in by_id[i].get("depends_on", []):
+            if dep not in by_id:
+                continue
+            if color[dep] == GRAY:
+                raise ValueError(f"循环依赖: {' -> '.join(stack + [i, dep])}")
+            if color[dep] == WHITE:
+                visit(dep, stack + [i])
+        color[i] = BLACK
+
+    for i in by_id:
+        if color[i] == WHITE:
+            visit(i, [])
     return tasks
 
 
