@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% set active = 'approvals' %}
+{% block title %}审批中心 · Orchestrator Dashboard{% endblock %}
+{% block content %}
+<h1>审批中心</h1>
+
+{% if error %}
+<div class="error-banner">{{ error }}</div>
+{% endif %}
+
+{% macro ticket_rows(tickets, actions) -%}
+{% if tickets %}
+<table>
+  <tr><th>工单</th><th>项目</th><th>摘要</th><th>类型</th><th>操作</th></tr>
+  {% for t in tickets %}
+  <tr>
+    <td>{{ t.id }}</td>
+    <td>{{ t.project }}</td>
+    <td>{{ t.summary }}</td>
+    <td>{{ t.type }}</td>
+    <td class="actions">
+      {% if "approve" in actions %}
+      <form method="post" action="/approve/{{ t.id }}"><button class="ok">批准</button></form>
+      {% endif %}
+      {% if "reject" in actions %}
+      <form method="post" action="/reject/{{ t.id }}"><button class="no">驳回</button></form>
+      {% endif %}
+      {% if "resume" in actions %}
+      <form method="post" action="/resume/{{ t.id }}"><button class="ok">恢复</button></form>
+      {% endif %}
+    </td>
+  </tr>
+  {% endfor %}
+</table>
+{% else %}
+<p class="muted">暂无工单。</p>
+{% endif %}
+{%- endmacro %}
+
+<h2>P0 提案</h2>
+{{ ticket_rows(groups.p0, ["approve", "reject"]) }}
+
+<h2>P2 设计</h2>
+{{ ticket_rows(groups.p2, ["approve", "reject"]) }}
+
+<h2>P5 发布</h2>
+{{ ticket_rows(groups.p5, ["approve", "reject"]) }}
+
+<h2>探针草稿</h2>
+{{ ticket_rows(groups.probe, ["approve", "reject"]) }}
+
+<h2>已挂起</h2>
+{{ ticket_rows(groups.suspended, ["resume", "reject"]) }}
+{% endblock %}

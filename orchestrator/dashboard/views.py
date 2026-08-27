@@ -53,13 +53,37 @@ def _today_events(pool: Path, now: datetime | None = None) -> dict[str, int]:
     return counts
 
 
-def overview_data(pool: Path, cfg: dict) -> dict:
-    """总览页全部指标。gateway 不可达时 k3 水位自动回退本地台账。"""
+def _all_tickets(pool: Path) -> list[Ticket]:
     tickets = []
     tickets_dir = pool / "tickets"
     if tickets_dir.exists():
         for path in sorted(tickets_dir.glob("*.yaml")):
             tickets.append(Ticket.load(path))
+    return tickets
+
+
+def pending_groups(pool: Path) -> dict[str, list[Ticket]]:
+    """审批中心分组:P0 提案 / P2 设计(owner=boss)/ P5 发布 / 探针草稿 / 挂起。"""
+    groups: dict[str, list[Ticket]] = {
+        "p0": [], "p2": [], "p5": [], "probe": [], "suspended": [],
+    }
+    for t in _all_tickets(pool):
+        if t.state == "p0_proposed":
+            groups["p0"].append(t)
+        elif t.state == "p2_designing" and t.owner_role == "boss":
+            groups["p2"].append(t)
+        elif t.state == "p5_ready":
+            groups["p5"].append(t)
+        elif t.state == "draft" and t.created_by == "probe":
+            groups["probe"].append(t)
+        elif t.state == "suspended":
+            groups["suspended"].append(t)
+    return groups
+
+
+def overview_data(pool: Path, cfg: dict) -> dict:
+    """总览页全部指标。gateway 不可达时 k3 水位自动回退本地台账。"""
+    tickets = _all_tickets(pool)
 
     k3_used = k3_effective_week_tokens(pool, cfg)
     k3_budget = int((cfg.get("budgets") or {}).get("k3_week_token_budget", 0))

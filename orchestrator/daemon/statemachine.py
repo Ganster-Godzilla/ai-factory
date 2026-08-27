@@ -7,7 +7,7 @@ from orchestrator.daemon.events import append_event
 from orchestrator.daemon.ticket import Ticket, save_ticket
 
 TRANSITIONS = {
-    "draft":         {"p0_proposed": {"pm"}, "closed": {"boss"}},
+    "draft":         {"p0_proposed": {"pm", "boss"}, "closed": {"boss"}},
     "p0_proposed":   {"p1_drafting": {"boss"}, "closed": {"boss"}},
     "p1_drafting":   {"p1_proposed": {"pm"}, "suspended": {"*"}},
     "p1_proposed":   {"p2_designing": {"boss"}, "closed": {"boss"}},

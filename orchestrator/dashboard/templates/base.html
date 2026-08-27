@@ -30,13 +30,20 @@
              border-bottom: 1px solid #f0f1f3; }
     th { background: #fafbfc; color: #6b7280; font-weight: 500; }
     .muted { color: #9ca3af; font-size: 13px; }
+    .error-banner { background: #fef2f2; border: 1px solid #fecaca; color: #b91c1c;
+                    border-radius: 8px; padding: 10px 14px; margin-bottom: 16px; font-size: 13px; }
+    td.actions form { display: inline-block; margin-right: 6px; }
+    td.actions button { border: 1px solid #d1d5db; background: #fff; border-radius: 6px;
+                        padding: 4px 12px; font-size: 12px; cursor: pointer; }
+    td.actions button.ok { background: #2563eb; border-color: #2563eb; color: #fff; }
+    td.actions button.no { color: #b91c1c; border-color: #fca5a5; }
   </style>
 </head>
 <body>
   <nav>
     <span class="brand">Orchestrator</span>
     <a href="/" class="{{ 'active' if active == 'overview' }}">总览</a>
-    <a href="#" class="disabled" title="审批中心(T5 实现,敬请期待)">审批中心</a>
+    <a href="/approvals" class="{{ 'active' if active == 'approvals' }}">审批中心</a>
   </nav>
   <main>
     {% block content %}{% endblock %}

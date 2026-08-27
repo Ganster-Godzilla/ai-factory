@@ -89,6 +89,74 @@ def test_overview_data_events_grouping(pool):
     assert d["today_events"][t.id] == 3       # created + 2 条 note
 
 
+@pytest.fixture
+def pool_client(pool):
+    app = create_app(pool, _cfg())
+    app.config["TESTING"] = True
+    return pool, app.test_client()
+
+
+def test_approvals_groups(client):
+    r = client.get("/approvals")
+    assert r.status_code == 200
+    assert "P0 提案" in r.get_data(as_text=True)
+
+
+def test_approve_p0_via_post(pool_client):
+    pool, client = pool_client
+    from orchestrator.daemon.ticket import load_ticket, new_ticket
+    from orchestrator.daemon.statemachine import transition
+    t = new_ticket(pool, project="p", summary="x")
+    transition(pool, t, "p0_proposed", actor="pm")
+    r = client.post(f"/approve/{t.id}")
+    assert r.status_code == 302
+    assert load_ticket(pool, t.id).state == "p1_drafting"
+    from orchestrator.daemon.events import read_events
+    assert read_events(pool, t.id)[-1]["actor"] == "boss"
+
+
+def test_probe_draft_adoptable(pool_client):
+    pool, client = pool_client
+    from orchestrator.daemon.ticket import load_ticket, new_ticket
+    t = new_ticket(pool, project="p", summary="测试缺口:payments", created_by="probe")
+    r = client.post(f"/approve/{t.id}")
+    assert r.status_code == 302
+    assert load_ticket(pool, t.id).state == "p0_proposed"
+
+
+def test_reject_p0_via_post(pool_client):
+    pool, client = pool_client
+    from orchestrator.daemon.ticket import load_ticket, new_ticket
+    from orchestrator.daemon.statemachine import transition
+    t = new_ticket(pool, project="p", summary="x")
+    transition(pool, t, "p0_proposed", actor="pm")
+    r = client.post(f"/reject/{t.id}")
+    assert r.status_code == 302
+    assert load_ticket(pool, t.id).state == "closed"
+
+
+def test_suspend_resume_via_post(pool_client):
+    pool, client = pool_client
+    from orchestrator.daemon.ticket import load_ticket, new_ticket
+    from orchestrator.daemon.statemachine import suspend, transition
+    t = new_ticket(pool, project="p", summary="x")
+    transition(pool, t, "p0_proposed", actor="pm")
+    transition(pool, t, "p1_drafting", actor="boss")
+    suspend(pool, t, actor="boss", reason="人工挂起")
+    r = client.post(f"/resume/{t.id}")
+    assert r.status_code == 302
+    assert load_ticket(pool, t.id).state == "p1_drafting"
+
+
+def test_approve_illegal_transition_not_500(pool_client):
+    pool, client = pool_client
+    from orchestrator.daemon.ticket import new_ticket
+    t = new_ticket(pool, project="p", summary="x")   # draft(非探针)不可 approve
+    r = client.post(f"/approve/{t.id}")
+    assert r.status_code == 409
+    assert r.status_code < 500
+
+
 def test_index_shows_percent_and_currency(client, pool):
     append_ledger(pool, "k3", 1000000, "tokens", "T-x", "dev", "k3")
     append_ledger(pool, "deepseek", 2.5, "cny", "T-x", "dev", "deepseek")
