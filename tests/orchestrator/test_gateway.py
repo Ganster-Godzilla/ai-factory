@@ -44,3 +44,14 @@ def test_effective_fallback_local(pool):
     cfg = {"gateway": {"url": "http://127.0.0.1:1"}}
     append_ledger(pool, "k3", 42, "tokens", "T-1", "pm", "k3")
     assert k3_effective_week_tokens(pool, cfg, timeout=1) == 42
+
+
+def test_effective_fallback_logs_event(pool):
+    # Finding S1:网关配置了但不可达,回退本地台账时必须留 gateway_fallback 事件
+    from orchestrator.daemon.events import read_events
+    cfg = {"gateway": {"url": "http://127.0.0.1:1"}}
+    append_ledger(pool, "k3", 42, "tokens", "T-1", "pm", "k3")
+    assert k3_effective_week_tokens(pool, cfg, timeout=1) == 42
+    evts = read_events(pool, "system")
+    assert any(e["event"] == "gateway_fallback" and e["actor"] == "system"
+               for e in evts)

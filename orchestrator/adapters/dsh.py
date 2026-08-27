@@ -18,18 +18,35 @@ class DshAdapter(HarnessAdapter):
         self.keys_dir = Path(keys_dir) if keys_dir else None
         self.profile = profile
 
+    def _file_key(self, provider: str) -> str | None:
+        """keys_dir/<provider>.env 里的有效 key;文件缺失/空值/TODO 占位 → None。"""
+        if not self.keys_dir:
+            return None
+        f = self.keys_dir / f"{provider}.env"
+        if not f.exists():
+            return None
+        for line in f.read_text(encoding="utf-8").splitlines():
+            if line.startswith("KEY=") and not line.startswith("#"):
+                v = line[4:].strip()
+                return v if v and not v.startswith("TODO") else None
+        return None
+
     def _env(self) -> dict:
         env = dict(os.environ)
-        if self.keys_dir:
-            for provider, env_name in PROVIDER_ENV.items():
-                f = self.keys_dir / f"{provider}.env"
-                if f.exists():
-                    for line in f.read_text(encoding="utf-8").splitlines():
-                        if line.startswith("KEY=") and not line.startswith("#"):
-                            env[env_name] = line[4:].strip()
+        for provider, env_name in PROVIDER_ENV.items():
+            v = self._file_key(provider)
+            if v is not None:  # 占位/空值不注入,不覆盖 os.environ 已有真 key
+                env[env_name] = v
         return env
 
     def run(self, packet: TaskPacket) -> HarnessResult:
+        # fail-fast:目标 provider 的 env 文件存在但只有占位 key,且环境也没有真 key,
+        # 直接失败,不把必然 401 的调用打进 subprocess
+        if self.keys_dir:
+            f = self.keys_dir / "deepseek.env"
+            if (f.exists() and self._file_key("deepseek") is None
+                    and not os.environ.get(PROVIDER_ENV["deepseek"])):
+                return HarnessResult(status="failed", output=f"key 未填: {f.name}")
         exe = shutil.which("dsh") or "dsh"
         profile = f"headless-{packet.model}" if packet.model else self.profile
         cmd = [exe, "--profile", profile, packet.prompt]

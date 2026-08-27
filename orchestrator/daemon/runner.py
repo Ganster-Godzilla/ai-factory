@@ -53,12 +53,22 @@ SYSTEM_NEXT = {"p2_approved": "p3_queued", "p3_queued": "p3_running"}
 ADAPTER_RESOURCE = {"claude_code": ("k3", "tokens"), "dsh": ("deepseek", "cny")}
 
 
+def _model_for(cfg: dict | None, role: str) -> str | None:
+    """cfg["models"][role] 优先,ROLE_MODEL 兜底(无配置的角色为 None)。"""
+    return (cfg or {}).get("models", {}).get(role) or ROLE_MODEL.get(role)
+
+
 def _record_cost(pool: Path, ticket, adapter: HarnessAdapter, result, role: str) -> None:
     res = ADAPTER_RESOURCE.get(adapter.name)
     if not res:
         return
     resource, unit = res
-    amount = sum(result.tokens.values()) if unit == "tokens" else result.cost_cny
+    if unit == "tokens":
+        # 口径只算 input+output:cache_read 等会造成水位虚高,
+        # 且 tokens 里混入嵌套 dict 时 sum(values()) 会 TypeError
+        amount = result.tokens.get("input_tokens", 0) + result.tokens.get("output_tokens", 0)
+    else:
+        amount = result.cost_cny
     if amount:
         append_ledger(pool, resource, amount, unit, ticket.id, role, adapter.name)
 
@@ -99,7 +109,7 @@ def run_dev_tasks(pool: Path, ticket, adapter: HarnessAdapter,
     task = ready[0]
     wt = ensure_worktree(project_dir, f"{ticket.id}-{task['id']}")
     packet = make_packet(task, ticket, wt, design_excerpt="")
-    packet.model = ROLE_MODEL.get("dev")
+    packet.model = _model_for(cfg, "dev")
     if task["attempts"] > 0:
         packet.prompt = retry_prompt(task, packet.prompt, task.get("last_error", ""))
     result = adapter.run(packet)
@@ -186,7 +196,7 @@ def advance_once(pool: Path, ticket_id: str, adapter: HarnessAdapter,
         prompt=_role_prompt(role) + f"\n[{role}] 工单 {t.id}: {t.summary}",
         workdir=project_dir,
         budget=t.budget,
-        model=ROLE_MODEL.get(role),
+        model=_model_for(cfg, role),
     )
     result = adapter.run(packet)
     append_event(pool, t.id, role, "role_run",

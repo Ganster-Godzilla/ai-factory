@@ -5,6 +5,7 @@ import json
 import urllib.request
 from pathlib import Path
 
+from orchestrator.daemon.events import append_event
 from orchestrator.daemon.ledger import k3_week_tokens
 
 
@@ -24,4 +25,7 @@ def k3_effective_week_tokens(pool: Path, cfg: dict, timeout: float = 5.0) -> int
         remote = gateway_week_tokens(url, timeout=timeout)
         if remote is not None:
             return remote
+        # 网关配置了但不可达:回退本地台账必须留痕,否则配额闸静默降精度
+        append_event(pool, "system", "system", "gateway_fallback",
+                     reason="网关不可达,回退本地台账")
     return k3_week_tokens(pool)
