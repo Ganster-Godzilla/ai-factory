@@ -8,7 +8,7 @@ from pathlib import Path
 
 from orchestrator.adapters.base import HarnessAdapter, HarnessResult, TaskPacket
 
-PROVIDER_ENV = {"deepseek": "DEEPSEEK_API_KEY", "zhipu": "ZHIPU_API_KEY"}
+PROVIDER_ENV = {"deepseek": "DEEPSEEK_API_KEY", "glm": "ZHIPU_API_KEY"}
 
 
 class DshAdapter(HarnessAdapter):

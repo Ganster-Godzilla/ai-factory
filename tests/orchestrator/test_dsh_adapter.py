@@ -16,7 +16,9 @@ def test_exit_zero_is_done(tmp_path):
     with patch("subprocess.run", return_value=fake) as m:
         r = DshAdapter().run(_packet(tmp_path))
     assert r.status == "done"
-    assert m.call_args[0][0][:3] == ["dsh", "--profile", "headless"]
+    cmd = m.call_args[0][0]
+    assert Path(cmd[0]).name.lower().startswith("dsh")  # shim 可能解析为全路径
+    assert cmd[1:3] == ["--profile", "headless"]
 
 
 def test_nonzero_is_failed(tmp_path):
@@ -86,3 +88,16 @@ def test_settings_yaml_has_both_providers():
     assert "deepseek" in txt and "zhipu" in txt
     assert "DEEPSEEK_API_KEY" in txt and "ZHIPU_API_KEY" in txt
     assert "sk-" not in txt   # 不含任何 key 值
+
+
+def test_glm_env_injected(tmp_path):
+    """key 文件名约定为 glm.env(dsh settings 里 provider id 仍为 zhipu)"""
+    import subprocess
+    from unittest.mock import patch
+    from orchestrator.adapters.base import TaskPacket
+    (tmp_path / "glm.env").write_text("KEY=glm-test-999\n", encoding="utf-8")
+    fake = subprocess.CompletedProcess(args=[], returncode=0, stdout="ok", stderr="")
+    with patch("subprocess.run", return_value=fake) as m:
+        DshAdapter(keys_dir=tmp_path).run(
+            TaskPacket(role="dev", prompt="p", workdir=tmp_path, budget={}))
+    assert m.call_args.kwargs["env"]["ZHIPU_API_KEY"] == "glm-test-999"
