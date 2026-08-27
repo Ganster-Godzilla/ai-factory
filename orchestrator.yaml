@@ -3,7 +3,9 @@ projects: {}            # M2 验收时登记:orc-e2e: d:/workspace/tmp/orc-e2e
 thresholds:
   concurrent_max: 2
 budgets:
-  k3_week_token_budget: 200000   # 编排器周 token 额度(静态代理,真实配额接口后续)
+  # 比较对象是共享池周总量(网关水位,含人工交互消耗)。2026-08-27 实测单日即 30 万,
+  # 暂定 200 万救急(A);M4 dashboard 分行显示"池子水位/编排器消耗"后再定长久语义(B)
+  k3_week_token_budget: 2000000
   ds_daily_cny: 30
 gateway:
   url: http://127.0.0.1:8787
