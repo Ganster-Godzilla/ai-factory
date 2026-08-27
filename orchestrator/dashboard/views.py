@@ -9,7 +9,7 @@ from orchestrator.daemon.events import read_events
 from orchestrator.daemon.gateway import k3_effective_week_tokens
 from orchestrator.daemon.ledger import ds_day_cost, ds_ticket_cost
 from orchestrator.daemon.statemachine import APPROVALS
-from orchestrator.daemon.ticket import Ticket
+from orchestrator.daemon.ticket import Ticket, load_ticket
 
 # 运行中 = 不需要人盯、流水线正在推进的状态(spec §2)
 RUNNING_STATES = {"p3_running", "p4_verifying", "p5_releasing", "monitoring"}
@@ -84,12 +84,11 @@ def pending_groups(pool: Path) -> dict[str, list[Ticket]]:
     return groups
 
 
-def ticket_detail(pool: Path, ticket_id: str) -> dict | None:
-    """工单详情:全字段 + 任务列表 + 事件流(倒序)+ DS 成本 + 产物指针。不存在返回 None。"""
-    path = pool / "tickets" / f"{ticket_id}.yaml"
-    if not path.exists():
-        return None
-    t = Ticket.load(path)
+def ticket_detail(pool: Path, ticket_id: str) -> dict:
+    """工单详情:全字段 + 任务列表 + 事件流(倒序)+ DS 成本 + 产物指针。
+    走 load_ticket:id 非法抛 ValueError、工单不存在抛 FileNotFoundError,
+    由 app 层 errorhandler 统一 404(闭合 %5C 遍历:池外同名 yaml 不会被加载)。"""
+    t = load_ticket(pool, ticket_id)
     return {
         "ticket": t,
         "tasks": t.tasks,

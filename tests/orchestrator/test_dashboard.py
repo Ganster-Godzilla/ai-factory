@@ -214,6 +214,18 @@ def test_ticket_detail_404(pool_client):
     assert r.status_code == 404
 
 
+def test_ticket_detail_traversal_id_404(pool_client, tmp_path):
+    pool, client = pool_client
+    # 池外同名 yaml 存在时,旧实现会拼路径加载渲染(遍历洞);
+    # 现 ticket_detail 走 load_ticket,id 校验显式拦截 → 404
+    outside = tmp_path / "evil.yaml"
+    outside.write_text(
+        "id: T-2099-0101-001\ntype: feature\nproject: x\nstate: draft\nowner_role: pm\n",
+        encoding="utf-8", newline="\n")
+    r = client.get("/ticket/..%5C..%5Cevil")
+    assert r.status_code == 404
+
+
 def test_approve_missing_ticket_404(pool_client):
     pool, client = pool_client
     r = client.post("/approve/T-2099-0101-999")
