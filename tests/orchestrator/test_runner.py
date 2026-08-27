@@ -130,6 +130,13 @@ def test_ledger_counts_only_input_output_tokens(pool, tmp_path):
     assert k3_week_tokens(pool) == 150
 
 
+def test_model_for_none_models_section():
+    # 复审 round 1:yaml 空 `models:` 段解析为 {"models": None},不得穿透默认值抛 AttributeError
+    from orchestrator.daemon.runner import ROLE_MODEL, _model_for
+    assert _model_for({"models": None}, "dev") == ROLE_MODEL["dev"]
+    assert _model_for(None, "dev") == ROLE_MODEL["dev"]
+
+
 def test_consult_failure_keeps_consult_chance(pool, tmp_path):
     # Finding 2:会诊自身失败不得烧掉唯一会诊机会(consulted 不置位、attempts 不重置)
     proj = _git_repo(tmp_path)

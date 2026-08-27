@@ -54,8 +54,9 @@ ADAPTER_RESOURCE = {"claude_code": ("k3", "tokens"), "dsh": ("deepseek", "cny")}
 
 
 def _model_for(cfg: dict | None, role: str) -> str | None:
-    """cfg["models"][role] 优先,ROLE_MODEL 兜底(无配置的角色为 None)。"""
-    return (cfg or {}).get("models", {}).get(role) or ROLE_MODEL.get(role)
+    """cfg["models"][role] 优先,ROLE_MODEL 兜底(无配置的角色为 None)。
+    yaml 空 `models:` 段解析为 None,与 gateway 的 (cfg.get("gateway") or {}) 防御对齐。"""
+    return ((cfg or {}).get("models") or {}).get(role) or ROLE_MODEL.get(role)
 
 
 def _record_cost(pool: Path, ticket, adapter: HarnessAdapter, result, role: str) -> None:
