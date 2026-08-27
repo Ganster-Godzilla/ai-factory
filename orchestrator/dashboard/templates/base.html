@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Orchestrator Dashboard{% endblock %}</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: "Microsoft YaHei", "PingFang SC", sans-serif;
+           background: #f5f6f8; color: #222; }
+    nav { background: #1f2937; padding: 0 24px; display: flex; align-items: center; gap: 4px; }
+    nav .brand { color: #fff; font-weight: 600; padding: 14px 20px 14px 0; }
+    nav a { color: #cbd5e1; text-decoration: none; padding: 14px 16px; font-size: 14px; }
+    nav a.active, nav a:hover { color: #fff; background: #374151; }
+    nav a.disabled { color: #6b7280; pointer-events: none; }
+    main { max-width: 1080px; margin: 24px auto; padding: 0 16px; }
+    h1 { font-size: 20px; margin: 0 0 16px; }
+    h2 { font-size: 15px; margin: 24px 0 10px; color: #374151; }
+    .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; }
+    .card { background: #fff; border: 1px solid #e5e7eb; border-radius: 8px; padding: 14px 16px; }
+    .card .label { font-size: 12px; color: #6b7280; margin-bottom: 6px; }
+    .card .value { font-size: 24px; font-weight: 600; }
+    .card .sub { font-size: 12px; color: #9ca3af; margin-top: 6px; }
+    .bar { height: 8px; background: #e5e7eb; border-radius: 4px; margin-top: 10px; overflow: hidden; }
+    .bar > div { height: 100%; background: #2563eb; border-radius: 4px; }
+    .bar.hot > div { background: #dc2626; }
+    table { width: 100%; border-collapse: collapse; background: #fff;
+            border: 1px solid #e5e7eb; border-radius: 8px; overflow: hidden; }
+    th, td { text-align: left; padding: 8px 14px; font-size: 13px;
+             border-bottom: 1px solid #f0f1f3; }
+    th { background: #fafbfc; color: #6b7280; font-weight: 500; }
+    .muted { color: #9ca3af; font-size: 13px; }
+  </style>
+</head>
+<body>
+  <nav>
+    <span class="brand">Orchestrator</span>
+    <a href="/" class="{{ 'active' if active == 'overview' }}">总览</a>
+    <a href="#" class="disabled" title="审批中心(T5 实现,敬请期待)">审批中心</a>
+  </nav>
+  <main>
+    {% block content %}{% endblock %}
+  </main>
+</body>
+</html>
