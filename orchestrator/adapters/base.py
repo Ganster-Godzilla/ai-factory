@@ -16,6 +16,7 @@ class TaskPacket:
     acceptance_cmd: str | None = None
     budget: dict = field(default_factory=dict)
     timeout: int = 1800
+    model: str | None = None
 
 
 @dataclass

@@ -25,6 +25,12 @@ ROLE_ROUTING = {
     "release": "dsh", "sre": "dsh",
 }
 
+# 角色 → 模型维度(GLM 对照实验时切 glm-5.3-flash)
+ROLE_MODEL = {
+    "dev": "deepseek-v4-flash", "qa": "deepseek-v4-flash",
+    "release": "deepseek-v4-flash", "sre": "deepseek-v4-flash",
+}
+
 WORK_STATES = {
     "p1_drafting": "pm",
     "p2_designing": "architect",
@@ -93,6 +99,7 @@ def run_dev_tasks(pool: Path, ticket, adapter: HarnessAdapter,
     task = ready[0]
     wt = ensure_worktree(project_dir, f"{ticket.id}-{task['id']}")
     packet = make_packet(task, ticket, wt, design_excerpt="")
+    packet.model = ROLE_MODEL.get("dev")
     if task["attempts"] > 0:
         packet.prompt = retry_prompt(task, packet.prompt, task.get("last_error", ""))
     result = adapter.run(packet)
@@ -179,6 +186,7 @@ def advance_once(pool: Path, ticket_id: str, adapter: HarnessAdapter,
         prompt=_role_prompt(role) + f"\n[{role}] 工单 {t.id}: {t.summary}",
         workdir=project_dir,
         budget=t.budget,
+        model=ROLE_MODEL.get(role),
     )
     result = adapter.run(packet)
     append_event(pool, t.id, role, "role_run",

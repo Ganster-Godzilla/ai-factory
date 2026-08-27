@@ -7,3 +7,7 @@ budgets:
   ds_daily_cny: 30
 gateway:
   url: http://127.0.0.1:8787
+keys_dir: D:/Tool/keys
+models:
+  dev: deepseek-v4-flash
+  qa: deepseek-v4-flash
