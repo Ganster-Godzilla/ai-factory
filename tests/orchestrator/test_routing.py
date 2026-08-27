@@ -195,6 +195,14 @@ def test_consult_then_retry_once_then_suspend(pool, tmp_path):
     assert r.startswith("consult:")
     assert consult.received and consult.received[0].role == "architect"
     advance_once(pool, t.id, h, proj, cfg=cfg, consult_adapter=consult)      # 会诊后再失败(attempts 回到 3)
+    # M4-T2 工单级规则:consult_count=2 < 3,不挂起,升级为再会诊
+    t2 = load_ticket(pool, t.id)
+    assert t2.state == "p3_running"
+    assert t2.consult_count == 2
+    for _ in range(6):  # 第 3 次会诊后仍失败 → 整单挂起
+        advance_once(pool, t.id, h, proj, cfg=cfg, consult_adapter=consult)
+        if load_ticket(pool, t.id).state == "suspended":
+            break
     assert load_ticket(pool, t.id).state == "suspended"
 
 

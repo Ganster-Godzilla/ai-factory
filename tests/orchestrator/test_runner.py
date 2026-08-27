@@ -211,3 +211,45 @@ def test_ticket_budget_cap_suspends(pool, tmp_path):
     cfg = {"budgets": {"k3_week_token_budget": 10**9, "ds_daily_cny": 10**9}}
     advance_once(pool, t.id, FakeHarness(), proj, cfg=cfg, consult_adapter=FakeHarness())
     assert load_ticket(pool, t.id).state == "suspended"
+
+
+def test_third_consult_suspends_ticket(pool, tmp_path):
+    """3 次会诊未解决 → 整单挂起(spec §5.2)"""
+    proj = _git_repo(tmp_path)
+    t = new_ticket(pool, project="p", summary="x")
+    t.state = "p3_running"
+    t.tasks = [{"id": "task-1", "title": "a", "acceptance_cmd": "exit 0",
+                "depends_on": [], "status": "pending", "attempts": 0}]
+    save_ticket(pool, t)
+    cfg = {"budgets": {"k3_week_token_budget": 10**9, "ds_daily_cny": 10**9}}
+    h = FakeHarness(script=["failed"] * 20)
+    consult = FakeHarness()   # 会诊永远 done(给出诊断),但 dev 就是修不好
+    # 每轮:3 次 dev 失败 → 1 次会诊 → dev 再失败(attempts 重置后)
+    for _ in range(12):
+        advance_once(pool, t.id, h, proj, cfg=cfg, consult_adapter=consult)
+        if load_ticket(pool, t.id).state == "suspended":
+            break
+    t2 = load_ticket(pool, t.id)
+    assert t2.state == "suspended"
+    assert t2.consult_count >= 3
+    from orchestrator.daemon.events import read_events
+    codes = [e.get("reason_code") for e in read_events(pool, t.id) if e["event"] == "suspended"]
+    assert "consult_exhausted" in codes
+
+
+def test_all_done_goes_p4_even_when_daily_cap_exceeded(pool, tmp_path):
+    """完工判定优先于成本闸:任务全 done 且 ds 日线超线 → p4,不得 blocked/suspended(T1 评审观察)"""
+    from orchestrator.daemon.ledger import append_ledger
+    proj = _git_repo(tmp_path)
+    t = new_ticket(pool, project="p", summary="x")
+    t.state = "p3_running"
+    t.tasks = [{"id": "task-1", "title": "a", "acceptance_cmd": "exit 0",
+                "depends_on": [], "status": "done", "attempts": 1}]
+    save_ticket(pool, t)
+    cfg = {"budgets": {"k3_week_token_budget": 10**9, "ds_daily_cny": 1}}
+    append_ledger(pool, "deepseek", 5.0, "cny", "T-other", "dev", "dsh")
+    h = FakeHarness()
+    msg = advance_once(pool, t.id, h, proj, cfg=cfg)
+    assert msg == "auto: p4_verifying"
+    assert load_ticket(pool, t.id).state == "p4_verifying"
+    assert not h.received

@@ -37,6 +37,7 @@ def main(argv: list[str] | None = None) -> int:
     c = sub.add_parser("suspend"); c.add_argument("id"); c.add_argument("reason")
     c = sub.add_parser("resume"); c.add_argument("id")
     c = sub.add_parser("advance"); c.add_argument("id"); c.add_argument("project_dir"); c.add_argument("--fake", action="store_true")
+    c.add_argument("--consult-fake", action="store_true")
     args = p.parse_args(argv)
     pool = _pool()
 
@@ -69,7 +70,8 @@ def main(argv: list[str] | None = None) -> int:
             transition(pool, load_ticket(pool, args.id), "closed", actor="boss")
             print(f"{args.id} → closed")
         elif args.cmd == "suspend":
-            suspend(pool, load_ticket(pool, args.id), actor="boss", reason=args.reason)
+            suspend(pool, load_ticket(pool, args.id), actor="boss", reason=args.reason,
+                    reason_code="manual")
             print(f"{args.id} → suspended")
         elif args.cmd == "resume":
             resume(pool, load_ticket(pool, args.id), actor="boss")
@@ -81,7 +83,8 @@ def main(argv: list[str] | None = None) -> int:
                     WORK_STATES.get(load_ticket(pool, args.id).state, "dev"), "dsh"),
                 keys_dir=cfg.get("keys_dir"))
             print(advance_once(pool, args.id, adapter, Path(args.project_dir),
-                               cfg=cfg, consult_adapter=None))
+                               cfg=cfg,
+                               consult_adapter=FakeHarness() if args.consult_fake else None))
     except (IllegalTransition, ValueError) as e:
         print(f"error: {e}", file=sys.stderr)
         return 1

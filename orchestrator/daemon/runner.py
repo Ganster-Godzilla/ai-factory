@@ -52,6 +52,9 @@ SYSTEM_NEXT = {"p2_approved": "p3_queued", "p3_queued": "p3_running"}
 
 ADAPTER_RESOURCE = {"claude_code": ("k3", "tokens"), "dsh": ("deepseek", "cny")}
 
+# role 执行失败挂起时的 reason_code;无对应枚举的态给 None(suspend 形参可选)
+ROLE_SUSPEND_CODE = {"p4_verifying": "verify_failed", "p5_releasing": "release_failed"}
+
 
 def _model_for(cfg: dict | None, role: str) -> str | None:
     """cfg["models"][role] 优先,ROLE_MODEL 兜底(无配置的角色为 None)。
@@ -96,22 +99,26 @@ def run_dev_tasks(pool: Path, ticket, adapter: HarnessAdapter,
             try:
                 ticket.tasks = load_task_list(spec)
             except Exception as e:
-                suspend(pool, ticket, "system", reason=f"任务清单装载失败: {e}")
+                suspend(pool, ticket, "system", reason=f"任务清单装载失败: {e}",
+                        reason_code="load_failed")
                 return f"suspended: 任务清单装载失败: {e}"
             save_ticket(pool, ticket)
-    if cfg and ds_daily_exceeded(pool, cfg):
-        return "blocked: ds 日现金线"
-    if ds_ticket_cost(pool, ticket.id) > ticket.budget.get("token_cap_cny", 10.0):
-        suspend(pool, ticket, actor="system", reason="工单预算帽")
-        return "suspend: 工单预算帽"
     ready = ready_tasks(ticket.tasks)
     if not ready:
         if all(t["status"] == "done" for t in ticket.tasks):
             transition(pool, ticket, "p4_verifying", actor="system")
             return "auto: p4_verifying"
         suspend(pool, ticket, actor="system",
-                reason="无可派发任务且未完成:依赖死锁或依赖缺失")
+                reason="无可派发任务且未完成:依赖死锁或依赖缺失",
+                reason_code="deadlock")
         return "suspend: 依赖死锁"
+    # 成本闸在完工判定之后:全 done 工单优先进 p4,不得被帽挂起(T1 评审观察)
+    if cfg and ds_daily_exceeded(pool, cfg):
+        return "blocked: ds 日现金线"
+    if ds_ticket_cost(pool, ticket.id) > ticket.budget.get("token_cap_cny", 10.0):
+        suspend(pool, ticket, actor="system", reason="工单预算帽",
+                reason_code="budget_cap")
+        return "suspend: 工单预算帽"
     task = ready[0]
     wt = ensure_worktree(project_dir, f"{ticket.id}-{task['id']}")
     packet = make_packet(task, ticket, wt, design_excerpt="")
@@ -150,15 +157,20 @@ def run_dev_tasks(pool: Path, ticket, adapter: HarnessAdapter,
     action = next_action(task)
     if action == "retry":
         return f"retry:{task['id']}:{task['attempts']}"
+    if action == "suspend" and ticket.consult_count < 3:
+        # 工单级会诊额度未尽:任务级挂起升级为再会诊(spec §5.2 工单级规则)
+        action = "consult"
     if action == "consult":
         if (cfg and ticket.type != "incident"
                 and k3_effective_week_tokens(pool, cfg) > cfg["budgets"]["k3_week_token_budget"]):
             suspend(pool, ticket, actor="system",
-                    reason="k3 配额超线,会诊通道关闭,任务挂起")
+                    reason="k3 配额超线,会诊通道关闭,任务挂起",
+                    reason_code="quota_exceeded")
             return "suspend: k3 配额超线"
         ca = consult_adapter or get_adapter("claude_code")
         cp = consult_packet(task, ticket, result.output, wt)
         cr = ca.run(cp)
+        ticket.consult_count += 1
         if cr.status == "done":
             task["consulted"] = True
             task["attempts"] = MAX_RETRY - 1   # 会诊后只再给 1 次
@@ -171,7 +183,8 @@ def run_dev_tasks(pool: Path, ticket, adapter: HarnessAdapter,
             _record_cost(pool, ticket, ca, cr, "architect")
         return f"consult:{task['id']}:{cr.status}"
     suspend(pool, ticket, actor="system",
-            reason=f"任务 {task['id']} 会诊后仍失败")
+            reason="连续 3 次会诊未解决:疑似设计/切片问题",
+            reason_code="consult_exhausted")
     return f"suspend:{task['id']}"
 
 
@@ -221,10 +234,12 @@ def advance_once(pool: Path, ticket_id: str, adapter: HarnessAdapter,
             transition(pool, t, SUCCESS_NEXT[t.state], actor="system" if t.state == "p3_running" else role)
     else:
         if t.state == "p5_releasing":
-            suspend(pool, t, actor="system", reason=f"发布失败: {result.status}")
+            suspend(pool, t, actor="system", reason=f"发布失败: {result.status}",
+                    reason_code="release_failed")
             from orchestrator.daemon.ticket import new_ticket as _nt
             _nt(pool, t.project, f"发布失败: {t.id} {t.summary}",
                 created_by="system", type="incident")
         else:
-            suspend(pool, t, actor="system", reason=f"{role} 执行失败: {result.status}")
+            suspend(pool, t, actor="system", reason=f"{role} 执行失败: {result.status}",
+                    reason_code=ROLE_SUSPEND_CODE.get(t.state))
     return f"role:{role}:{result.status}"
