@@ -78,11 +78,20 @@ _STATE_TO_COL = {s: key for key, _, states in SWIMLANE_COLUMNS for s in states}
 _VALID_SORTS = {"id_desc", "id_asc", "mtime_desc"}
 
 
+def _ticket_mtimes(pool: Path) -> dict[str, float]:
+    """按 glob 真实文件名取 mtime(键=文件 stem),不用工单内容里的 id 拼路径:
+    手改 id/文件名不一致时 stat 不会炸掉整页(评审 A3)。"""
+    tickets_dir = pool / "tickets"
+    if not tickets_dir.exists():
+        return {}
+    return {p.stem: p.stat().st_mtime for p in tickets_dir.glob("*.yaml")}
+
+
 def ticket_list(pool: Path, project: str | None = None, state: str | None = None,
                 q: str | None = None, sort: str = "id_desc") -> dict:
     """工单中心装配:过滤(项目/状态/关键词)+排序。非法参数忽略回默认。"""
     tickets = _all_tickets(pool)
-    projects = sorted({t.project for t in tickets})
+    projects = sorted({t.project for t in tickets if t.project})
     states = sorted(VALID_STATES)
 
     if project in projects:
@@ -93,17 +102,17 @@ def ticket_list(pool: Path, project: str | None = None, state: str | None = None
         tickets = [t for t in tickets if t.state == state]
     else:
         state = None
-    if q:
-        q = q.strip().lower()
-        tickets = [t for t in tickets
-                   if q in t.id.lower() or q in t.summary.lower()]
+    # 匹配用规范化副本;cur.q 回显用户原输入(评审:搜索框不应被改写)
+    needle = (q or "").strip().lower()
+    if needle:
+        tickets = [t for t in tickets if needle in t.id.lower()
+                   or needle in (t.summary or "").lower()]   # summary 可为 None(A2)
     if sort not in _VALID_SORTS:
         sort = "id_desc"
 
+    mtimes = _ticket_mtimes(pool)   # 一次 stat,排序与展示共用
     if sort == "mtime_desc":
-        tickets.sort(
-            key=lambda t: (pool / "tickets" / f"{t.id}.yaml").stat().st_mtime,
-            reverse=True)
+        tickets.sort(key=lambda t: mtimes.get(t.id, 0), reverse=True)
     else:
         tickets.sort(key=lambda t: t.id, reverse=(sort == "id_desc"))
 
@@ -111,23 +120,24 @@ def ticket_list(pool: Path, project: str | None = None, state: str | None = None
         "tickets": tickets,
         "projects": projects,
         "states": states,
-        "mtimes": {t.id: datetime.fromtimestamp(
-            (pool / "tickets" / f"{t.id}.yaml").stat().st_mtime
-        ).strftime("%m-%d %H:%M") for t in tickets},
+        "mtimes": {t.id: datetime.fromtimestamp(mtimes.get(t.id, 0))
+                   .strftime("%m-%d %H:%M") for t in tickets},
         "cur": {"project": project, "state": state, "q": q or "", "sort": sort},
     }
 
 
 def swimlanes(pool: Path) -> dict:
-    """项目中心泳道图:行=项目,列=阶段。closed/done 不落任何列。"""
+    """项目中心泳道图:行=项目(含工单全部已完结的项目,对齐 PRD 验收#3),
+    列=阶段。closed/done 不落任何列(歧义澄清 #5)。"""
     rows: dict[str, dict[str, list[Ticket]]] = {}
     for t in _all_tickets(pool):
-        col = _STATE_TO_COL.get(t.state)
-        if col is None:
+        if not t.project:
             continue
         cells = rows.setdefault(t.project,
                                 {key: [] for key, _, _ in SWIMLANE_COLUMNS})
-        cells[col].append(t)
+        col = _STATE_TO_COL.get(t.state)
+        if col is not None:
+            cells[col].append(t)
     return {
         "columns": [{"key": key, "title": title}
                     for key, title, _ in SWIMLANE_COLUMNS],
@@ -135,22 +145,33 @@ def swimlanes(pool: Path) -> dict:
     }
 
 
-def project_strips(pool: Path) -> list[dict]:
+def project_strips(pool: Path, tickets: list[Ticket] | None = None,
+                   groups: dict | None = None) -> list[dict]:
     """总览项目迷你条:每项目 running/pending/suspended 计数。
-    pending 口径与审批中心一致(排除 suspended 组)。"""
-    groups = pending_groups(pool)
-    pending_ids = {t.id for k, v in groups.items() if k != "suspended"
-                   for t in v}
+    pending 口径与审批中心一致(排除 suspended 组)。
+    调用方已加载 tickets/groups 时传入,避免重复扫池(评审 A6)。"""
+    tickets = tickets if tickets is not None else _all_tickets(pool)
+    groups = groups if groups is not None else pending_groups(pool)
     strips: dict[str, dict] = {}
-    for t in _all_tickets(pool):
-        s = strips.setdefault(t.project, {"project": t.project, "running": 0,
-                                          "pending": 0, "suspended": 0})
+
+    def slot(project: str) -> dict:
+        return strips.setdefault(project, {"project": project, "running": 0,
+                                           "pending": 0, "suspended": 0})
+
+    for t in tickets:
+        if not t.project:
+            continue
+        s = slot(t.project)
         if t.state in RUNNING_STATES:
             s["running"] += 1
-        if t.id in pending_ids:
-            s["pending"] += 1
         if t.state == "suspended":
             s["suspended"] += 1
+    for k, v in groups.items():
+        if k == "suspended":
+            continue
+        for t in v:
+            if t.project:
+                slot(t.project)["pending"] += 1
     return [strips[p] for p in sorted(strips)]
 
 
@@ -213,5 +234,5 @@ def overview_data(pool: Path, cfg: dict) -> dict:
         "running": sum(1 for t in tickets if t.state in RUNNING_STATES),
         "suspended": sum(1 for t in tickets if t.state == "suspended"),
         "today_events": _today_events(pool),
-        "project_strips": project_strips(pool),
+        "project_strips": project_strips(pool, tickets, groups),
     }

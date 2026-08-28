@@ -26,12 +26,10 @@
     <div class="sub">当月 ledger 累计</div>
   </div>
 
-  <a class="card-link" href="/approvals">
-  <div class="card">
+  <a class="card card-link" href="/approvals">
     <div class="label">待审批</div>
     <div class="value">{{ pending_approval }}</div>
     <div class="sub">工单待 boss 决策(详见审批中心)</div>
-  </div>
   </a>
 
   <div class="card">
@@ -51,7 +49,7 @@
 {% if project_strips %}
 <div class="strips">
   {% for s in project_strips %}
-  <a class="strip" href="/tickets?project={{ s.project }}">
+  <a class="strip" href="{{ url_for('tickets', project=s.project) }}">
     <div class="name">{{ s.project }}</div>
     <div class="counts">
       <span><b>{{ s.running }}</b>运行中</span>
@@ -70,7 +68,7 @@
 <table>
   <tr><th>工单</th><th>事件数</th></tr>
   {% for tid, n in today_events | dictsort %}
-  <tr><td><a href="/ticket/{{ tid }}">{{ tid }}</a></td><td>{{ n }}</td></tr>
+  <tr><td>{% if tid[:2] == 'T-' %}<a href="/ticket/{{ tid }}">{{ tid }}</a>{% else %}{{ tid }}{% endif %}</td><td>{{ n }}</td></tr>
   {% endfor %}
 </table>
 {% else %}

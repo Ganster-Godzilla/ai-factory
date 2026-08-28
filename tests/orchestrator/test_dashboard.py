@@ -399,10 +399,12 @@ def test_tickets_filter_project_state(pool_client):
     r = client.get("/tickets?project=alpha&state=p3_running")
     html = r.get_data(as_text=True)
     assert a.id in html and b.id not in html and c.id not in html
-    # 非法值忽略回默认(全量)
-    r2 = client.get("/tickets?state=not_a_state")
-    html2 = r2.get_data(as_text=True)
-    assert a.id in html2 and b.id in html2 and c.id in html2
+    # 非法值忽略回默认(全量):state / project / sort 三类都验
+    for url in ("/tickets?state=not_a_state",
+                "/tickets?project=no_such_proj",
+                "/tickets?sort=bogus"):
+        html2 = client.get(url).get_data(as_text=True)
+        assert a.id in html2 and b.id in html2 and c.id in html2, url
 
 
 def test_tickets_search_q(pool_client):
@@ -417,10 +419,9 @@ def test_tickets_search_q(pool_client):
     assert a.id not in html and "无匹配工单" in html
 
 
-def test_tickets_sort_mtime(pool_client, tmp_path):
+def test_tickets_sort_mtime(pool_client):
     import os
     pool, client = pool_client
-    from orchestrator.daemon.ticket import save_ticket
     t1 = _mk(pool, "alpha", "旧单")
     t2 = _mk(pool, "alpha", "新单")
     # 显式造 mtime:t1 更新更晚(模拟 t1 最近有状态迁移)
@@ -483,15 +484,9 @@ def test_index_events_linked(pool_client):
     assert f'<a href="/ticket/{t.id}">{t.id}</a>' in html
 
 
-def test_index_pending_card_links_approvals(pool_client):
-    pool, client = pool_client
-    html = client.get("/").get_data(as_text=True)
-    assert 'href="/approvals"' in html
-
-
 def test_project_strips_counts(pool):
     from orchestrator.dashboard.views import project_strips
-    from orchestrator.daemon.statemachine import transition, suspend
+    from orchestrator.daemon.statemachine import transition
     run = _mk(pool, "alpha", "运行单", state="p3_running")
     pend = _mk(pool, "alpha", "待审单")
     transition(pool, pend, "p0_proposed", actor="pm")
@@ -521,3 +516,60 @@ def test_nav_active(pool_client):
     t = _mk(pool, "p", "详情归属")
     html = client.get(f"/ticket/{t.id}").get_data(as_text=True)
     assert 'class="active">工单中心' in html   # 详情页导航归工单中心
+
+
+def test_swimlane_columns_cover_valid_states():
+    # 评审加固:VALID_STATES 扩列时映射漏配会静默丢单,这里显式锁全集
+    from orchestrator.dashboard.views import SWIMLANE_COLUMNS
+    from orchestrator.daemon.ticket import VALID_STATES
+    mapped = {s for _, _, states in SWIMLANE_COLUMNS for s in states}
+    assert set(VALID_STATES) - mapped == {"closed", "done"}
+
+
+def test_swimlanes_closed_only_project_keeps_row(pool_client):
+    # 评审 A5:工单全部已完结的项目仍保留行(PRD 验收#3:每个有工单的项目一行)
+    pool, client = pool_client
+    _mk(pool, "closed-proj", "已完结单", state="closed")
+    html = client.get("/projects").get_data(as_text=True)
+    assert "closed-proj" in html
+    assert "已完结单" not in html        # closed 工单本身不进 chip
+
+
+def test_project_links_urlencoded(pool_client):
+    # 评审 A1:项目名含 & 等特殊字符时,泳道行头/总览条带链接必须编码
+    pool, client = pool_client
+    _mk(pool, "R&D", "特殊项目名单", state="p3_running")
+    assert "project=R%26D" in client.get("/projects").get_data(as_text=True)
+    assert "project=R%26D" in client.get("/").get_data(as_text=True)
+    # 编码链接真的可达:R&D 的过滤结果只含该项目
+    html = client.get("/tickets?project=R%26D").get_data(as_text=True)
+    assert "特殊项目名单" in html
+
+
+def test_null_summary_no_500(pool_client):
+    # 评审 A2:yaml 手改 summary 留空(None)时,搜索/泳道不 500
+    pool, client = pool_client
+    t = _mk(pool, "alpha", "", state="p3_running")
+    import yaml as _yaml
+    p = pool / "tickets" / f"{t.id}.yaml"
+    d = _yaml.safe_load(p.read_text(encoding="utf-8"))
+    d["summary"] = None
+    p.write_text(_yaml.safe_dump(d, allow_unicode=True), encoding="utf-8")
+    assert client.get("/tickets?q=x").status_code == 200
+    assert client.get("/projects").status_code == 200
+
+
+def test_index_pending_card_links_approvals(pool_client):
+    # 评审:断言必须区分卡片链接与导航链接(nav 每页都有 /approvals)
+    pool, client = pool_client
+    html = client.get("/").get_data(as_text=True)
+    assert '<a class="card card-link" href="/approvals">' in html
+
+
+def test_index_events_system_not_linked(pool_client):
+    # 评审 A4:gateway 回退写入的 system 伪工单不链接化(否则点了必 404)
+    pool, client = pool_client
+    append_event(pool, "system", "system", "gateway_fallback")
+    html = client.get("/").get_data(as_text=True)
+    assert "/ticket/system" not in html
+    assert "system" in html              # 计数仍可见,纯文本

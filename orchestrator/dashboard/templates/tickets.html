@@ -24,13 +24,13 @@
 </form>
 
 {% macro sort_url(field) -%}
-/tickets?project={{ cur.project or '' }}&state={{ cur.state or '' }}&q={{ cur.q }}&sort={{ field }}
+{{ url_for('tickets', project=cur.project, state=cur.state, q=cur.q, sort=field) }}
 {%- endmacro %}
 
 {% if tickets %}
 <table>
   <tr>
-    <th><a href="{{ sort_url('id_desc' if cur.sort == 'id_asc' else 'id_asc') }}">工单号{{ ' ↓' if cur.sort == 'id_desc' else ' ↑' if cur.sort == 'id_asc' }}</a></th>
+    <th><a href="{{ sort_url('id_desc' if cur.sort == 'id_asc' else 'id_asc') }}">工单号{{ {'id_desc': ' ↓', 'id_asc': ' ↑'}.get(cur.sort, '') }}</a></th>
     <th>项目</th><th>状态</th><th>负责人</th><th>优先级</th><th>摘要</th>
     <th><a href="{{ sort_url('mtime_desc') }}">最近更新{{ ' ↓' if cur.sort == 'mtime_desc' }}</a></th>
   </tr>

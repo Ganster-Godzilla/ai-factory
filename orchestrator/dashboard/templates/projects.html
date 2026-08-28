@@ -12,12 +12,12 @@
   </tr>
   {% for row in rows %}
   <tr>
-    <td class="proj"><a href="/tickets?project={{ row.project }}">{{ row.project }}</a></td>
+    <td class="proj"><a href="{{ url_for('tickets', project=row.project) }}">{{ row.project }}</a></td>
     {% for c in columns %}
     <td>
       {% for t in row.cells[c.key] %}
-      <a class="chip" href="/ticket/{{ t.id }}" title="{{ t.summary }}">
-        {{ t.id }}<br><span class="sum">{{ t.summary[:12] }}{{ '…' if t.summary | length > 12 }}</span>
+      <a class="chip" href="/ticket/{{ t.id }}" title="{{ t.summary or '' }}">
+        {{ t.id }}<br><span class="sum">{{ (t.summary or '')[:12] }}{{ '…' if (t.summary or '') | length > 12 }}</span>
       </a>
       {% endfor %}
     </td>
