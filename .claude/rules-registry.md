@@ -11,3 +11,4 @@
 | R5 | 分组/聚合展示必须与验收标准逐条对照(本次漏"纯已完结项目也要有一行") | E1 | 自觉 | 2026-08-29 | 源于评审 A5 |
 | R6 | 页面断言必须锚定该页独有特征,导航栏全站都有的字符串不能当断言 | E1 | 自觉 | 2026-08-29 | 源于评审:空转断言 |
 | R7 | ai-init 后必须验证根 stack-profile.yaml 已实例化,否则 lint/test 闸空转 | E1 | 自觉 | 2026-08-29 | 本周期实测空转,已补建 |
+| R8 | 任何分支合 main 前,必须用 main 线代码加载真实 pool 全部工单(数据-代码 schema 偏斜会让全站 500,cherry-pick 干净基线也躲不掉) | E2 | scripts/check-pool-load.py | 2026-08-29 | 源于 2026-08-29 p1_round 事故:integration 线写的字段 main 线 Ticket 没有,load 即 TypeError |
