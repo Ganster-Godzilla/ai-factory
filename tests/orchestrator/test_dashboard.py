@@ -246,7 +246,7 @@ def test_resume_missing_ticket_404(pool_client):
 
 def test_ticket_detail_shows_tasks_cost_artifacts(pool_client):
     pool, client = pool_client
-    from orchestrator.daemon.ticket import load_ticket, new_ticket, save_ticket
+    from orchestrator.daemon.ticket import new_ticket, save_ticket
     t = new_ticket(pool, project="quant-lab", summary="全字段单")
     t.tasks = [{"id": "task-1", "title": "写测试", "status": "done",
                 "attempts": 2, "worktree": ".orc-worktrees/task-1"}]
@@ -487,10 +487,10 @@ def test_index_events_linked(pool_client):
 def test_project_strips_counts(pool):
     from orchestrator.dashboard.views import project_strips
     from orchestrator.daemon.statemachine import transition
-    run = _mk(pool, "alpha", "运行单", state="p3_running")
+    _mk(pool, "alpha", "运行单", state="p3_running")
     pend = _mk(pool, "alpha", "待审单")
     transition(pool, pend, "p0_proposed", actor="pm")
-    susp = _mk(pool, "alpha", "挂起单", state="suspended")
+    _mk(pool, "alpha", "挂起单", state="suspended")
     _mk(pool, "beta", "B项目单")
     strips = {s["project"]: s for s in project_strips(pool)}
     assert strips["alpha"]["running"] == 1
