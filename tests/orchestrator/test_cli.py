@@ -1,6 +1,7 @@
 import yaml
 from pathlib import Path
 from orchestrator.daemon.cli import main
+from orchestrator.daemon.ticket import load_ticket
 
 
 def _cfg(tmp_path, monkeypatch):
@@ -8,6 +9,22 @@ def _cfg(tmp_path, monkeypatch):
         yaml.safe_dump({"pool": "pool", "projects": {}, "thresholds": {"concurrent_max": 2}}),
         encoding="utf-8", newline="\n")
     monkeypatch.chdir(tmp_path)
+
+
+def _new_ticket(tmp_path, capsys, summary="加缓存"):
+    assert main(["new", "quant-lab", summary]) == 0
+    out = capsys.readouterr().out
+    return [w for w in out.split() if w.startswith("T-")][0]
+
+
+def _ticket_at_p1_proposed(tmp_path, monkeypatch, capsys, summary="redo-me"):
+    """CLI 走完 draft→p0→p1_drafting→pm 交 PRD(p1_proposed)的审批链。"""
+    _cfg(tmp_path, monkeypatch)
+    tid = _new_ticket(tmp_path, capsys, summary)
+    assert main(["approve", tid, "--as", "pm"]) == 0   # pm 提交 draft→p0_proposed
+    assert main(["approve", tid]) == 0                 # boss:p0→p1_drafting
+    assert main(["advance", tid, ".", "--fake"]) == 0  # pm 写 PRD→p1_proposed
+    return tid
 
 
 def test_new_list_approve(tmp_path, monkeypatch, capsys):
@@ -54,3 +71,32 @@ def test_dashboard_smoke(tmp_path, monkeypatch):
     calls.clear()
     assert main(["dashboard", "--port", "9000", "--host", "0.0.0.0"]) == 0
     assert calls["port"] == 9000 and calls["host"] == "0.0.0.0"
+
+
+# ---- D2:orc reject --redo 驳回回炉 ----
+
+def test_reject_redo_returns_to_p1_drafting(tmp_path, monkeypatch, capsys):
+    tid = _ticket_at_p1_proposed(tmp_path, monkeypatch, capsys)
+    assert main(["reject", tid, "--redo"]) == 0
+    out = capsys.readouterr().out
+    assert "p1_drafting" in out and "round=1" in out
+    assert load_ticket(tmp_path / "pool", tid).state == "p1_drafting"
+    # 回炉后再走一轮:PM 重交 → 二次驳回,轮次累加
+    assert main(["advance", tid, ".", "--fake"]) == 0
+    assert main(["reject", tid, "--redo"]) == 0
+    assert "round=2" in capsys.readouterr().out
+
+
+def test_reject_redo_only_from_p1_proposed(tmp_path, monkeypatch, capsys):
+    _cfg(tmp_path, monkeypatch)
+    tid = _new_ticket(tmp_path, capsys, "fresh")
+    assert main(["reject", tid, "--redo"]) == 1          # draft 态 --redo 非法
+    assert "error" in capsys.readouterr().err
+    assert load_ticket(tmp_path / "pool", tid).state == "draft"  # 工单未被误动
+
+
+def test_reject_default_still_closes(tmp_path, monkeypatch, capsys):
+    tid = _ticket_at_p1_proposed(tmp_path, monkeypatch, capsys)
+    assert main(["reject", tid]) == 0                    # 缺省行为不变:关单
+    assert "closed" in capsys.readouterr().out
+    assert load_ticket(tmp_path / "pool", tid).state == "closed"

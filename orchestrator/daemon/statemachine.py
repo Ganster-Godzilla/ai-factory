@@ -10,7 +10,7 @@ TRANSITIONS = {
     "draft":         {"p0_proposed": {"pm", "boss"}, "closed": {"boss"}},
     "p0_proposed":   {"p1_drafting": {"boss"}, "closed": {"boss"}},
     "p1_drafting":   {"p1_proposed": {"pm"}, "suspended": {"*"}},
-    "p1_proposed":   {"p2_designing": {"boss"}, "closed": {"boss"}},
+    "p1_proposed":   {"p2_designing": {"boss"}, "p1_drafting": {"boss"}, "closed": {"boss"}},
     "p2_designing":  {"p2_approved": {"boss"}, "p1_drafting": {"boss"}, "suspended": {"*"}},
     "p2_approved":   {"p3_queued": {"system"}},
     "p3_queued":     {"p3_running": {"system"}},
@@ -38,6 +38,10 @@ SUSPEND_REASON_CODES = {
     "verify_failed", "manual",
 }
 
+# P1 重做边(D2):PRD 驳回回炉,actor 限 boss。轮次计数在 transition 内统一记,
+# CLI/dashboard 等任何入口都经此走,不会漏计
+P1_REDO_EDGE = ("p1_proposed", "p1_drafting")
+
 
 class IllegalTransition(Exception):
     pass
@@ -51,6 +55,11 @@ def transition(pool: Path, ticket: Ticket, to_state: str, actor: str, **ev) -> T
         raise IllegalTransition(f"{ticket.state} → {to_state} 不允许 actor={actor}")
     frm = ticket.state
     ticket.state = to_state
+    if (frm, to_state) == P1_REDO_EDGE:
+        # 轮次追踪(D2):+1 不重置,历史轮次经事件流可追;
+        # getattr 兜底:内存中的旧工单对象可能没有 p1_round 字段
+        ticket.p1_round = getattr(ticket, "p1_round", 0) + 1
+        ev.setdefault("round", ticket.p1_round)
     save_ticket(pool, ticket)
     append_event(pool, ticket.id, actor, "state_changed", frm=frm, to=to_state, **ev)
     return ticket
