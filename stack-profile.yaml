@@ -1,0 +1,21 @@
+project:
+  name: "ai-factory"
+  type: "AI 工厂编排器与插件体系"
+stack:
+  language: python
+  lint_cmd: "python -m pyflakes {changed_files}"
+  test_cmd: "pytest tests/"
+  typecheck_cmd: null
+vcs:
+  branch_model: "feature→main"
+  protected_branches: [main]
+ci:
+  type: none
+  trigger_ref: ""
+paths:
+  requirements: "document/business"
+  specs: "docs/superpowers/specs"
+security:
+  protected_paths: [".env", "pool/"]
+budget:
+  concurrent_max: 2

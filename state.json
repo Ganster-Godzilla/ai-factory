@@ -1,0 +1,27 @@
+{
+  "project": "ai-factory",
+  "version": "1.0",
+  "last_updated": "2026-08-29",
+  "overview": {
+    "description": "AI Factory 编排器与插件体系;当前推进 Dashboard v2",
+    "status": "active",
+    "active_modules": ["dashboard"]
+  },
+  "modules": {
+    "dashboard": {
+      "phase": "phase5_release",
+      "proposal": ".claude/proposals/PROJ-20260829-001.md",
+      "requirements_dir": "document/business/dashboard/01_需求分析",
+      "milestones": {
+        "phase0_proposal": "completed",
+        "phase1_requirements": "completed",
+        "phase2_design": "completed",
+        "phase3_implement": "completed",
+        "phase4_verify": "completed",
+        "phase5_release": "in_progress"
+      }
+    }
+  },
+  "budget": { "concurrent_max": 2, "currently_executing": 0 },
+  "pending_notifications": []
+}
