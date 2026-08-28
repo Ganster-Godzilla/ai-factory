@@ -1,9 +1,12 @@
+import json
 import os
 import subprocess
 from pathlib import Path
-from unittest.mock import patch, call
+from unittest.mock import patch
 from orchestrator.adapters.base import TaskPacket
-from orchestrator.adapters.dsh import DshAdapter
+from orchestrator.adapters.dsh import (
+    DshAdapter, USAGE_MISSING_MSG, USAGE_TRAILER, parse_usage_trailer,
+)
 from orchestrator.adapters.dsh_profiles import settings_yaml
 
 
@@ -11,9 +14,20 @@ def _packet(tmp_path):
     return TaskPacket(role="dev", prompt="实现 task-1", workdir=tmp_path, budget={})
 
 
+def _trailer(i=120, o=340, cost=0.05) -> str:
+    """按 D3 契约拼 usage trailer 末行"""
+    payload = json.dumps({"input_tokens": i, "output_tokens": o, "cost_cny": cost})
+    return f"{USAGE_TRAILER} {payload}"
+
+
+def _fake(stdout="ok", stderr="", returncode=0, trailer=True):
+    out = f"{stdout}\n{_trailer()}" if trailer else stdout
+    return subprocess.CompletedProcess(args=[], returncode=returncode,
+                                       stdout=out, stderr=stderr)
+
+
 def test_exit_zero_is_done(tmp_path):
-    fake = subprocess.CompletedProcess(args=[], returncode=0, stdout="ok", stderr="")
-    with patch("subprocess.run", return_value=fake) as m:
+    with patch("subprocess.run", return_value=_fake()) as m:
         r = DshAdapter().run(_packet(tmp_path))
     assert r.status == "done"
     cmd = m.call_args[0][0]
@@ -22,8 +36,8 @@ def test_exit_zero_is_done(tmp_path):
 
 
 def test_nonzero_is_failed(tmp_path):
-    fake = subprocess.CompletedProcess(args=[], returncode=1, stdout="", stderr="err")
-    with patch("subprocess.run", return_value=fake):
+    with patch("subprocess.run", return_value=_fake(stdout="out", stderr="err",
+                                                    returncode=1)):
         r = DshAdapter().run(_packet(tmp_path))
     assert r.status == "failed" and "err" in r.output
 
@@ -33,10 +47,69 @@ def test_timeout(tmp_path):
         assert DshAdapter().run(_packet(tmp_path)).status == "timeout"
 
 
+# ---- usage trailer 契约消费(T-2026-0828-003 设计 D3) ----
+
+def test_trailer_parsed_tokens_cost_filled_and_stripped(tmp_path):
+    fake = _fake(stdout="实现完成\n详见 foo.py")
+    with patch("subprocess.run", return_value=fake):
+        r = DshAdapter().run(_packet(tmp_path))
+    assert r.status == "done"
+    assert r.tokens == {"input_tokens": 120, "output_tokens": 340}
+    assert r.cost_cny == 0.05
+    assert "实现完成" in r.output and "foo.py" in r.output
+    assert USAGE_TRAILER not in r.output          # trailer 剥离,不污染正文
+
+
+def test_no_trailer_is_failed_usage_missing(tmp_path):
+    # 旧版 dsh 无 trailer:rc=0 也视同失败(无账不推进)
+    with patch("subprocess.run", return_value=_fake(stdout="ok", trailer=False)):
+        r = DshAdapter().run(_packet(tmp_path))
+    assert r.status == "failed"
+    assert r.usage_missing is True
+    assert USAGE_MISSING_MSG in r.output
+    assert r.tokens == {} and r.cost_cny == 0.0   # 无账,不得凭空记账
+
+
+def test_trailer_must_be_last_line(tmp_path):
+    # trailer 之后还有正文 = 输出流不完整/非契约版本,一律视同缺失
+    with patch("subprocess.run",
+               return_value=_fake(stdout=f"{_trailer()}\n后续还有输出", trailer=False)):
+        r = DshAdapter().run(_packet(tmp_path))
+    assert r.status == "failed" and r.usage_missing is True
+
+
+def test_malformed_trailer_treated_as_missing(tmp_path):
+    bads = [f"{USAGE_TRAILER} {{broken json",
+            f"{USAGE_TRAILER} [1, 2, 3]",
+            f'{USAGE_TRAILER} {{"input_tokens": 1}}']   # 缺 output_tokens/cost_cny 键
+    for bad in bads:
+        with patch("subprocess.run", return_value=_fake(stdout=bad, trailer=False)):
+            r = DshAdapter().run(_packet(tmp_path))
+        assert r.status == "failed" and r.usage_missing is True, bad
+
+
+def test_failed_run_with_trailer_still_reports_usage(tmp_path):
+    # 烧了钱就是烧了:非零退出但 trailer 在 → tokens/cost 照常回传供入账
+    with patch("subprocess.run", return_value=_fake(stdout="", stderr="boom",
+                                                    returncode=1)):
+        r = DshAdapter().run(_packet(tmp_path))
+    assert r.status == "failed"
+    assert r.tokens == {"input_tokens": 120, "output_tokens": 340}
+    assert r.cost_cny == 0.05 and r.usage_missing is False
+    assert "boom" in r.output
+
+
+def test_parse_usage_trailer_tolerates_trailing_blank_lines():
+    body, tokens, cost = parse_usage_trailer(f"hello\n{_trailer(i=1, o=2, cost=0.5)}\n\n")
+    assert body == "hello"
+    assert tokens == {"input_tokens": 1, "output_tokens": 2} and cost == 0.5
+    assert parse_usage_trailer("") is None
+    assert parse_usage_trailer("no trailer at all") is None
+
+
 def test_env_injected_from_keys_dir(tmp_path):
     (tmp_path / "deepseek.env").write_text("KEY=sk-test-123\n", encoding="utf-8")
-    fake = subprocess.CompletedProcess(args=[], returncode=0, stdout="ok", stderr="")
-    with patch("subprocess.run", return_value=fake) as m:
+    with patch("subprocess.run", return_value=_fake()) as m:
         DshAdapter(keys_dir=tmp_path).run(
             TaskPacket(role="dev", prompt="p", workdir=tmp_path, budget={}))
     env = m.call_args.kwargs["env"]
@@ -75,10 +148,10 @@ def test_empty_key_fail_fast(tmp_path):
 def test_placeholder_does_not_override_real_env_key(tmp_path):
     # Finding S2:os.environ 已有真 key 时,文件里的 TODO 占位不得覆盖
     (tmp_path / "deepseek.env").write_text("KEY=TODO-FILL\n", encoding="utf-8")
-    fake = subprocess.CompletedProcess(args=[], returncode=0, stdout="ok", stderr="")
     with patch.dict(os.environ, {"DEEPSEEK_API_KEY": "sk-real-456"}), \
-         patch("subprocess.run", return_value=fake) as m:
-        r = DshAdapter(keys_dir=tmp_path).run(_packet(tmp_path))
+         patch("subprocess.run", return_value=_fake()) as m:
+        r = DshAdapter(keys_dir=tmp_path).run(
+            TaskPacket(role="dev", prompt="p", workdir=tmp_path, budget={}))
     assert r.status == "done"
     assert m.call_args.kwargs["env"]["DEEPSEEK_API_KEY"] == "sk-real-456"
 
@@ -91,13 +164,9 @@ def test_settings_yaml_has_both_providers():
 
 
 def test_glm_env_injected(tmp_path):
-    """key 文件名约定为 glm.env(dsh settings 里 provider id 仍为 zhipu)"""
-    import subprocess
-    from unittest.mock import patch
-    from orchestrator.adapters.base import TaskPacket
+    # key 文件名约定为 glm.env(dsh settings 里 provider id 仍为 zhipu)
     (tmp_path / "glm.env").write_text("KEY=glm-test-999\n", encoding="utf-8")
-    fake = subprocess.CompletedProcess(args=[], returncode=0, stdout="ok", stderr="")
-    with patch("subprocess.run", return_value=fake) as m:
+    with patch("subprocess.run", return_value=_fake()) as m:
         DshAdapter(keys_dir=tmp_path).run(
             TaskPacket(role="dev", prompt="p", workdir=tmp_path, budget={}))
     assert m.call_args.kwargs["env"]["ZHIPU_API_KEY"] == "glm-test-999"

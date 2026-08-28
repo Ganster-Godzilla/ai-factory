@@ -26,6 +26,8 @@ class HarnessResult:
     tokens: dict = field(default_factory=dict)
     cost_cny: float = 0.0
     log_path: str | None = None
+    # dsh usage trailer 缺失标记(D3 无账不推进);其他 harness 恒为 False
+    usage_missing: bool = False
 
 
 class HarnessAdapter(ABC):

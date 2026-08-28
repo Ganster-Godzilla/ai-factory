@@ -67,14 +67,20 @@ def _record_cost(pool: Path, ticket, adapter: HarnessAdapter, result, role: str)
     if not res:
         return
     resource, unit = res
+    # 台账统一口径 D3:tokens 只留 {"input","output"} 两键(k3 侧来自 claude JSON usage,
+    # dsh 侧来自 usage trailer,键名归一);amount 不变:k3=input+output,ds=cost_cny
+    tokens = {"input": int(result.tokens.get("input_tokens") or 0),
+              "output": int(result.tokens.get("output_tokens") or 0)}
     if unit == "tokens":
         # 口径只算 input+output:cache_read 等会造成水位虚高,
         # 且 tokens 里混入嵌套 dict 时 sum(values()) 会 TypeError
-        amount = result.tokens.get("input_tokens", 0) + result.tokens.get("output_tokens", 0)
+        amount = tokens["input"] + tokens["output"]
     else:
         amount = result.cost_cny
-    if amount:
-        append_ledger(pool, resource, amount, unit, ticket.id, role, adapter.name)
+    # 三字段齐全才是一条完整账:0 元调用(GLM 体验卡)也留 calls 证据
+    if amount or tokens["input"] or tokens["output"]:
+        append_ledger(pool, resource, amount, unit, ticket.id, role, adapter.name,
+                      tokens=tokens, calls=1)
 
 
 def _run_acceptance(cmd: str, cwd: Path, timeout: int = 600) -> subprocess.CompletedProcess:
@@ -127,6 +133,10 @@ def run_dev_tasks(pool: Path, ticket, adapter: HarnessAdapter,
         packet.prompt = retry_prompt(task, packet.prompt, task.get("last_error", ""))
     result = adapter.run(packet)
     task["attempts"] += 1
+    if result.usage_missing:
+        # D3:旧版 dsh 无 usage trailer,无账不推进——事件留痕供审计
+        append_event(pool, ticket.id, "dev", "usage_missing", task=task["id"],
+                     output=result.output[:500])
     if cfg:
         # DS 现金不分成败:失败/被复检打回的尝试照样烧钱,每次调用都入账
         _record_cost(pool, ticket, adapter, result, "dev")
@@ -232,6 +242,9 @@ def advance_once(pool: Path, ticket_id: str, adapter: HarnessAdapter,
         model=_model_for(cfg, role),
     )
     result = adapter.run(packet)
+    if result.usage_missing:
+        # dsh 角色路径(qa/release/sre)同样受无账不推进约束
+        append_event(pool, t.id, role, "usage_missing", output=result.output[:500])
     append_event(pool, t.id, role, "role_run",
                  status=result.status, tokens=result.tokens,
                  cost_cny=result.cost_cny, output=result.output[:500])
