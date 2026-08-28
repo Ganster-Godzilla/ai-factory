@@ -8,7 +8,7 @@ from pathlib import Path
 from orchestrator.daemon.events import read_events
 from orchestrator.daemon.gateway import k3_effective_week_tokens
 from orchestrator.daemon.ledger import ds_day_cost, ds_ticket_cost
-from orchestrator.daemon.ticket import Ticket, load_ticket
+from orchestrator.daemon.ticket import Ticket, VALID_STATES, load_ticket
 
 # 运行中 = 不需要人盯、流水线正在推进的状态(spec §2)
 RUNNING_STATES = {"p3_running", "p4_verifying", "p5_releasing", "monitoring"}
@@ -60,6 +60,98 @@ def _all_tickets(pool: Path) -> list[Ticket]:
         for path in sorted(tickets_dir.glob("*.yaml")):
             tickets.append(Ticket.load(path))
     return tickets
+
+
+# 泳道图列定义:顺序即流水线顺序;closed/done 不进泳道(歧义澄清 #5)
+SWIMLANE_COLUMNS = [
+    ("p0", "P0 提案", {"draft", "p0_proposed"}),
+    ("p1", "P1 需求", {"p1_drafting", "p1_proposed"}),
+    ("p2", "P2 设计", {"p2_designing", "p2_approved"}),
+    ("p3", "P3 执行", {"p3_queued", "p3_running"}),
+    ("p4", "P4 验证", {"p4_verifying"}),
+    ("p5", "P5 发布", {"p5_ready", "p5_releasing"}),
+    ("mon", "监控", {"monitoring"}),
+    ("susp", "挂起", {"suspended"}),
+]
+_STATE_TO_COL = {s: key for key, _, states in SWIMLANE_COLUMNS for s in states}
+
+_VALID_SORTS = {"id_desc", "id_asc", "mtime_desc"}
+
+
+def ticket_list(pool: Path, project: str | None = None, state: str | None = None,
+                q: str | None = None, sort: str = "id_desc") -> dict:
+    """工单中心装配:过滤(项目/状态/关键词)+排序。非法参数忽略回默认。"""
+    tickets = _all_tickets(pool)
+    projects = sorted({t.project for t in tickets})
+    states = sorted(VALID_STATES)
+
+    if project in projects:
+        tickets = [t for t in tickets if t.project == project]
+    else:
+        project = None
+    if state in VALID_STATES:
+        tickets = [t for t in tickets if t.state == state]
+    else:
+        state = None
+    if q:
+        q = q.strip().lower()
+        tickets = [t for t in tickets
+                   if q in t.id.lower() or q in t.summary.lower()]
+    if sort not in _VALID_SORTS:
+        sort = "id_desc"
+
+    if sort == "mtime_desc":
+        tickets.sort(
+            key=lambda t: (pool / "tickets" / f"{t.id}.yaml").stat().st_mtime,
+            reverse=True)
+    else:
+        tickets.sort(key=lambda t: t.id, reverse=(sort == "id_desc"))
+
+    return {
+        "tickets": tickets,
+        "projects": projects,
+        "states": states,
+        "mtimes": {t.id: datetime.fromtimestamp(
+            (pool / "tickets" / f"{t.id}.yaml").stat().st_mtime
+        ).strftime("%m-%d %H:%M") for t in tickets},
+        "cur": {"project": project, "state": state, "q": q or "", "sort": sort},
+    }
+
+
+def swimlanes(pool: Path) -> dict:
+    """项目中心泳道图:行=项目,列=阶段。closed/done 不落任何列。"""
+    rows: dict[str, dict[str, list[Ticket]]] = {}
+    for t in _all_tickets(pool):
+        col = _STATE_TO_COL.get(t.state)
+        if col is None:
+            continue
+        cells = rows.setdefault(t.project,
+                                {key: [] for key, _, _ in SWIMLANE_COLUMNS})
+        cells[col].append(t)
+    return {
+        "columns": [{"key": key, "title": title}
+                    for key, title, _ in SWIMLANE_COLUMNS],
+        "rows": [{"project": p, "cells": rows[p]} for p in sorted(rows)],
+    }
+
+
+def project_strips(pool: Path) -> list[dict]:
+    """总览项目迷你条:每项目 running/pending/suspended 计数。
+    pending 口径与审批中心一致(排除 suspended 组)。"""
+    groups = pending_groups(pool)
+    pending_ids = {t.id for k, v in groups.items() if k != "suspended"
+                   for t in v}
+    strips: dict[str, dict] = {}
+    for t in _all_tickets(pool):
+        s = strips.setdefault(t.project, {"project": t.project, "running": 0,
+                                          "pending": 0, "suspended": 0})
+        if t.state in RUNNING_STATES:
+            s["running"] += 1
+        if t.id in pending_ids:
+            s["pending"] += 1
+        if t.state == "suspended":
+            s["suspended"] += 1
+    return [strips[p] for p in sorted(strips)]
 
 
 def pending_groups(pool: Path) -> dict[str, list[Ticket]]:
@@ -121,4 +213,5 @@ def overview_data(pool: Path, cfg: dict) -> dict:
         "running": sum(1 for t in tickets if t.state in RUNNING_STATES),
         "suspended": sum(1 for t in tickets if t.state == "suspended"),
         "today_events": _today_events(pool),
+        "project_strips": project_strips(pool),
     }

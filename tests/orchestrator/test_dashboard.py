@@ -355,3 +355,169 @@ def test_approve_rejects_p2_not_owned_by_boss(pool_client):
     assert r.status_code == 409
     assert "设计尚未完成" in r.get_data(as_text=True)
     assert load_ticket(pool, t.id).state == "p2_designing"
+
+
+# ============ Dashboard v2:工单中心 / 项目中心 / 总览可导航化 ============
+
+def _mk(pool, project, summary, state=None, created_by="human"):
+    from orchestrator.daemon.ticket import new_ticket, save_ticket
+    t = new_ticket(pool, project=project, summary=summary, created_by=created_by)
+    if state:
+        t.state = state
+        save_ticket(pool, t)
+    return t
+
+
+def test_tickets_list_renders(pool_client):
+    pool, client = pool_client
+    from orchestrator.daemon.statemachine import transition
+    t1 = _mk(pool, "alpha", "网关改造")
+    transition(pool, t1, "p0_proposed", actor="pm")
+    t2 = _mk(pool, "beta", "报表导出")
+    r = client.get("/tickets")
+    assert r.status_code == 200
+    html = r.get_data(as_text=True)
+    assert "网关改造" in html and "报表导出" in html
+    assert f"/ticket/{t1.id}" in html and f"/ticket/{t2.id}" in html
+    assert t1.id in html and "alpha" in html and "beta" in html
+
+
+def test_tickets_default_sort_id_desc(pool_client):
+    pool, client = pool_client
+    t1 = _mk(pool, "alpha", "先建的")
+    t2 = _mk(pool, "alpha", "后建的")
+    r = client.get("/tickets")
+    html = r.get_data(as_text=True)
+    assert html.index(t2.id) < html.index(t1.id)   # 默认 id 倒序,后建在前
+
+
+def test_tickets_filter_project_state(pool_client):
+    pool, client = pool_client
+    a = _mk(pool, "alpha", "A单", state="p3_running")
+    b = _mk(pool, "beta", "B单", state="p3_running")
+    c = _mk(pool, "alpha", "C单", state="suspended")
+    r = client.get("/tickets?project=alpha&state=p3_running")
+    html = r.get_data(as_text=True)
+    assert a.id in html and b.id not in html and c.id not in html
+    # 非法值忽略回默认(全量)
+    r2 = client.get("/tickets?state=not_a_state")
+    html2 = r2.get_data(as_text=True)
+    assert a.id in html2 and b.id in html2 and c.id in html2
+
+
+def test_tickets_search_q(pool_client):
+    pool, client = pool_client
+    a = _mk(pool, "alpha", "Gateway 熔断")
+    b = _mk(pool, "beta", "报表导出")
+    html = client.get("/tickets?q=gateway").get_data(as_text=True)   # 大小写不敏感
+    assert a.id in html and b.id not in html
+    html = client.get(f"/tickets?q={b.id.lower()}").get_data(as_text=True)
+    assert b.id in html and a.id not in html
+    html = client.get("/tickets?q=不存在的词").get_data(as_text=True)
+    assert a.id not in html and "无匹配工单" in html
+
+
+def test_tickets_sort_mtime(pool_client, tmp_path):
+    import os
+    pool, client = pool_client
+    from orchestrator.daemon.ticket import save_ticket
+    t1 = _mk(pool, "alpha", "旧单")
+    t2 = _mk(pool, "alpha", "新单")
+    # 显式造 mtime:t1 更新更晚(模拟 t1 最近有状态迁移)
+    p1 = pool / "tickets" / f"{t1.id}.yaml"
+    p2 = pool / "tickets" / f"{t2.id}.yaml"
+    os.utime(p2, (1000000, 1000000))
+    os.utime(p1, (2000000, 2000000))
+    html = client.get("/tickets?sort=mtime_desc").get_data(as_text=True)
+    assert html.index(t1.id) < html.index(t2.id)
+    html = client.get("/tickets?sort=id_asc").get_data(as_text=True)
+    assert html.index(t1.id) < html.index(t2.id)
+
+
+def test_swimlanes_grouping_all_states(pool):
+    from orchestrator.dashboard.views import swimlanes
+    from orchestrator.daemon.ticket import VALID_STATES
+    tickets = {s: _mk(pool, "proj", f"单-{s}", state=s) for s in VALID_STATES}
+    _mk(pool, "proj", "探针草稿", created_by="probe")   # draft
+    d = swimlanes(pool)
+    keys = [c["key"] for c in d["columns"]]
+    assert keys == ["p0", "p1", "p2", "p3", "p4", "p5", "mon", "susp"]
+    row = next(r for r in d["rows"] if r["project"] == "proj")
+    placed = [t.id for cell in row["cells"].values() for t in cell]
+    expected_col = {
+        "draft": "p0", "p0_proposed": "p0", "p1_drafting": "p1",
+        "p1_proposed": "p1", "p2_designing": "p2", "p2_approved": "p2",
+        "p3_queued": "p3", "p3_running": "p3", "p4_verifying": "p4",
+        "p5_ready": "p5", "p5_releasing": "p5", "monitoring": "mon",
+        "suspended": "susp",
+    }
+    for s, col in expected_col.items():
+        assert tickets[s].id in [t.id for t in row["cells"][col]], s
+    # closed/done 不进泳道;探针草稿入 p0;每单恰出现一次
+    assert tickets["closed"].id not in placed and tickets["done"].id not in placed
+    assert len(placed) == len(set(placed))
+
+
+def test_projects_page_and_row_links(pool_client):
+    pool, client = pool_client
+    t = _mk(pool, "sk-video-studio", "泳道单", state="p3_running")
+    r = client.get("/projects")
+    assert r.status_code == 200
+    html = r.get_data(as_text=True)
+    assert "sk-video-studio" in html and t.id in html
+    assert f"/ticket/{t.id}" in html                          # chip 进详情
+    assert "/tickets?project=sk-video-studio" in html         # 行头联动
+    assert "P3 执行" in html and "挂起" in html
+
+
+def test_projects_empty(pool_client):
+    pool, client = pool_client
+    html = client.get("/projects").get_data(as_text=True)
+    assert "暂无" in html
+
+
+def test_index_events_linked(pool_client):
+    pool, client = pool_client
+    t = _mk(pool, "alpha", "事件摘要单")
+    html = client.get("/").get_data(as_text=True)
+    assert f'<a href="/ticket/{t.id}">{t.id}</a>' in html
+
+
+def test_index_pending_card_links_approvals(pool_client):
+    pool, client = pool_client
+    html = client.get("/").get_data(as_text=True)
+    assert 'href="/approvals"' in html
+
+
+def test_project_strips_counts(pool):
+    from orchestrator.dashboard.views import project_strips
+    from orchestrator.daemon.statemachine import transition, suspend
+    run = _mk(pool, "alpha", "运行单", state="p3_running")
+    pend = _mk(pool, "alpha", "待审单")
+    transition(pool, pend, "p0_proposed", actor="pm")
+    susp = _mk(pool, "alpha", "挂起单", state="suspended")
+    _mk(pool, "beta", "B项目单")
+    strips = {s["project"]: s for s in project_strips(pool)}
+    assert strips["alpha"]["running"] == 1
+    assert strips["alpha"]["pending"] == 1     # suspended 组不计 pending
+    assert strips["alpha"]["suspended"] == 1
+    assert strips["beta"]["running"] == 0
+
+
+def test_index_shows_strips(pool_client):
+    pool, client = pool_client
+    _mk(pool, "quant-lab", "条带单", state="p3_running")
+    html = client.get("/").get_data(as_text=True)
+    assert "quant-lab" in html and "/tickets?project=quant-lab" in html
+
+
+def test_nav_active(pool_client):
+    pool, client = pool_client
+    cases = {"/": "总览", "/tickets": "工单中心",
+             "/projects": "项目中心", "/approvals": "审批中心"}
+    for path, label in cases.items():
+        html = client.get(path).get_data(as_text=True)
+        assert f'class="active">{label}' in html, path
+    t = _mk(pool, "p", "详情归属")
+    html = client.get(f"/ticket/{t.id}").get_data(as_text=True)
+    assert 'class="active">工单中心' in html   # 详情页导航归工单中心

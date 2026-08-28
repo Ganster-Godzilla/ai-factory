@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% set active = 'projects' %}
+{% block title %}项目中心 · Orchestrator Dashboard{% endblock %}
+{% block content %}
+<h1>项目中心</h1>
+
+{% if rows %}
+<table class="swim">
+  <tr>
+    <th class="proj">项目</th>
+    {% for c in columns %}<th>{{ c.title }}</th>{% endfor %}
+  </tr>
+  {% for row in rows %}
+  <tr>
+    <td class="proj"><a href="/tickets?project={{ row.project }}">{{ row.project }}</a></td>
+    {% for c in columns %}
+    <td>
+      {% for t in row.cells[c.key] %}
+      <a class="chip" href="/ticket/{{ t.id }}" title="{{ t.summary }}">
+        {{ t.id }}<br><span class="sum">{{ t.summary[:12] }}{{ '…' if t.summary | length > 12 }}</span>
+      </a>
+      {% endfor %}
+    </td>
+    {% endfor %}
+  </tr>
+  {% endfor %}
+</table>
+{% else %}
+<p class="muted">暂无进行中工单。</p>
+{% endif %}
+{% endblock %}

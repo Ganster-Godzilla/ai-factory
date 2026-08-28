@@ -42,6 +42,21 @@ def create_app(pool_dir: Path, cfg: dict) -> Flask:
         return render_template("approvals.html",
                                groups=views.pending_groups(app.config["POOL"]))
 
+    @app.get("/tickets")
+    def tickets():
+        d = views.ticket_list(
+            app.config["POOL"],
+            project=request.args.get("project"),
+            state=request.args.get("state"),
+            q=request.args.get("q"),
+            sort=request.args.get("sort", "id_desc"))
+        return render_template("tickets.html", **d)
+
+    @app.get("/projects")
+    def projects():
+        return render_template("projects.html",
+                               **views.swimlanes(app.config["POOL"]))
+
     def _error(msg: str):
         return render_template(
             "approvals.html",

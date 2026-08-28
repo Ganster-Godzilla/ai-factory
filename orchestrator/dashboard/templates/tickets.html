@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% set active = 'tickets' %}
+{% block title %}工单中心 · Orchestrator Dashboard{% endblock %}
+{% block content %}
+<h1>工单中心</h1>
+
+<form class="filter-bar" method="get" action="/tickets">
+  <select name="project">
+    <option value="">全部项目</option>
+    {% for p in projects %}
+    <option value="{{ p }}" {{ 'selected' if cur.project == p }}>{{ p }}</option>
+    {% endfor %}
+  </select>
+  <select name="state">
+    <option value="">全部状态</option>
+    {% for s in states %}
+    <option value="{{ s }}" {{ 'selected' if cur.state == s }}>{{ s }}</option>
+    {% endfor %}
+  </select>
+  <input type="text" name="q" value="{{ cur.q }}" placeholder="搜索工单号 / 摘要">
+  <input type="hidden" name="sort" value="{{ cur.sort }}">
+  <button type="submit">筛选</button>
+  <a class="reset" href="/tickets">重置</a>
+</form>
+
+{% macro sort_url(field) -%}
+/tickets?project={{ cur.project or '' }}&state={{ cur.state or '' }}&q={{ cur.q }}&sort={{ field }}
+{%- endmacro %}
+
+{% if tickets %}
+<table>
+  <tr>
+    <th><a href="{{ sort_url('id_desc' if cur.sort == 'id_asc' else 'id_asc') }}">工单号{{ ' ↓' if cur.sort == 'id_desc' else ' ↑' if cur.sort == 'id_asc' }}</a></th>
+    <th>项目</th><th>状态</th><th>负责人</th><th>优先级</th><th>摘要</th>
+    <th><a href="{{ sort_url('mtime_desc') }}">最近更新{{ ' ↓' if cur.sort == 'mtime_desc' }}</a></th>
+  </tr>
+  {% for t in tickets %}
+  <tr>
+    <td><a href="/ticket/{{ t.id }}">{{ t.id }}</a></td>
+    <td>{{ t.project }}</td>
+    <td>{{ t.state }}</td>
+    <td>{{ t.owner_role }}</td>
+    <td>{{ t.priority }}</td>
+    <td>{{ t.summary }}</td>
+    <td class="muted">{{ mtimes[t.id] }}</td>
+  </tr>
+  {% endfor %}
+</table>
+{% else %}
+<p class="muted">无匹配工单。</p>
+{% endif %}
+{% endblock %}
