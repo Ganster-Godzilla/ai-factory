@@ -19,6 +19,11 @@ def ensure_worktree(project: Path, name: str, base: str = "main") -> Path:
         return wt
     wt.parent.mkdir(parents=True, exist_ok=True)
     _git(project, "worktree", "add", str(wt), "-b", f"orc/{name}", base)
+    # R7 scope 越界检查:创建时把当前 HEAD 落盘为 .orc-base,
+    # runner 事后用 `git diff --name-only <base>` 找出已提交的越界改动。
+    # 该文件是编排器记号而非 dev 产物,收集改动清单时会排除。
+    head = _git(wt, "rev-parse", "HEAD").strip()
+    (wt / ".orc-base").write_text(head + "\n", encoding="utf-8")
     return wt
 
 

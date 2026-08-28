@@ -430,3 +430,109 @@ def test_role_path_usage_missing_event(pool, tmp_path):
                  StubDshAdapter(status="failed", cost=0.0, usage_missing=True),
                  tmp_path)
     assert any(e["event"] == "usage_missing" for e in read_events(pool, t.id))
+# ---------- R7 scope 越界强制检查 ----------
+
+def _p3_scoped_task(pool, proj_path, scope, acceptance="exit 0"):
+    """建 p3 工单 + 预建该任务的 worktree(模拟 dev 已领工位)。"""
+    from orchestrator.daemon.worktree import ensure_worktree
+    t = new_ticket(pool, project="p", summary="x")
+    t.state = "p3_running"
+    task = {"id": "task-1", "title": "a", "acceptance_cmd": acceptance,
+            "depends_on": [], "status": "pending", "attempts": 0}
+    if scope is not None:
+        task["scope"] = scope
+    t.tasks = [task]
+    save_ticket(pool, t)
+    wt = ensure_worktree(proj_path, f"{t.id}-task-1")
+    return t, wt
+
+
+def _last_task_run_event(pool, tid):
+    return [e for e in read_events(pool, tid) if e["event"] == "task_run"][-1]
+
+
+def test_changed_files_enumerates_untracked_nested_files(tmp_path):
+    # -uall:未跟踪目录不折叠成 `?? docs/`,否则精确 glob(如 docs/note.md)会误判越界
+    from orchestrator.daemon.runner import _changed_files
+    from orchestrator.daemon.worktree import ensure_worktree
+    proj = _git_repo(tmp_path)
+    wt = ensure_worktree(proj, "uall-check")
+    (wt / "docs").mkdir()
+    (wt / "docs" / "note.md").write_text("x", encoding="utf-8")
+    (wt / "sneaky.py").write_text("y", encoding="utf-8")
+    assert _changed_files(wt) == ["docs/note.md", "sneaky.py"]
+
+
+def test_scope_violation_fails_before_acceptance(pool, tmp_path):
+    """R7:harness 谎报 done 且改动越出 scope → 验收前拦下,FAIL 行置顶走重试阶梯"""
+    proj = _git_repo(tmp_path)
+    t, wt = _p3_scoped_task(pool, proj, ["docs/**"])
+    (wt / "sneaky.py").write_text("越界改动", encoding="utf-8")   # 未跟踪,越出 docs/**
+    advance_once(pool, t.id, FakeHarness(), proj)   # acceptance_cmd=exit 0 本可通过
+    t2 = load_ticket(pool, t.id)
+    assert t2.tasks[0]["status"] == "pending"        # 不许 done
+    assert t2.tasks[0]["attempts"] == 1
+    assert "FAIL: scope 越界: sneaky.py" in t2.tasks[0]["last_error"]
+    ev = _last_task_run_event(pool, t.id)
+    assert ev["verify"] == "failed"
+    assert ev["output"].startswith("FAIL: scope 越界: sneaky.py")
+    assert "acceptance 复检失败" not in ev["output"]   # 验收未烧:越界属致命,验收前先拦
+
+
+def _stub_acceptance_ok(monkeypatch):
+    """复检桩:返回 exit=0(与 test_acceptance_timeout 同一 monkeypatch 先例),
+    让完工路径不依赖宿主 bash(msys 段被占时 bash.exe 无法启动,见 QA 备注)。"""
+    import subprocess as sp
+    from orchestrator.daemon import runner
+    monkeypatch.setattr(runner, "_run_acceptance",
+                        lambda cmd, cwd, timeout=600: sp.CompletedProcess(cmd, 0, "", ""))
+
+
+def test_scope_clean_change_passes(pool, tmp_path, monkeypatch):
+    """改动都在 scope 内 → 正常走验收与完工"""
+    _stub_acceptance_ok(monkeypatch)
+    proj = _git_repo(tmp_path)
+    t, wt = _p3_scoped_task(pool, proj, ["docs/**"])
+    (wt / "docs").mkdir()
+    (wt / "docs" / "note.md").write_text("界内", encoding="utf-8")
+    advance_once(pool, t.id, FakeHarness(), proj)
+    t2 = load_ticket(pool, t.id)
+    assert t2.tasks[0]["status"] == "done"
+    assert _last_task_run_event(pool, t.id)["verify"] == "passed"
+
+
+def test_scope_catches_committed_change_via_orc_base(pool, tmp_path):
+    """已提交的越界改动 status 看不到,靠 .orc-base 的 git diff 兜住;.orc-base 自身不算改动"""
+    import subprocess as sp
+    proj = _git_repo(tmp_path)
+    t, wt = _p3_scoped_task(pool, proj, ["docs/**"])
+    (wt / "sneaky.py").write_text("先改后提交", encoding="utf-8")
+    sp.run(["git", "add", "-A"], cwd=wt, check=True, capture_output=True)   # 连 .orc-base 一起提交
+    sp.run(["git", "commit", "-m", "x"], cwd=wt, check=True, capture_output=True)
+    advance_once(pool, t.id, FakeHarness(), proj)
+    t2 = load_ticket(pool, t.id)
+    assert t2.tasks[0]["status"] == "pending"
+    assert "FAIL: scope 越界: sneaky.py" in t2.tasks[0]["last_error"]
+    assert ".orc-base" not in t2.tasks[0]["last_error"]   # 编排器记号不是 dev 产物
+
+
+def test_scope_without_base_file_degrades_to_status(pool, tmp_path):
+    """无 .orc-base(旧 worktree)→ 退化为仅 git status,未跟踪越界改动仍被拦"""
+    proj = _git_repo(tmp_path)
+    t, wt = _p3_scoped_task(pool, proj, ["docs/**"])
+    (wt / ".orc-base").unlink()
+    (wt / "sneaky.py").write_text("越界", encoding="utf-8")
+    advance_once(pool, t.id, FakeHarness(), proj)
+    t2 = load_ticket(pool, t.id)
+    assert t2.tasks[0]["status"] == "pending"
+    assert "FAIL: scope 越界: sneaky.py" in t2.tasks[0]["last_error"]
+
+
+def test_no_scope_keeps_old_behavior(pool, tmp_path, monkeypatch):
+    """scope 缺省不检查:旧清单不设 scope,散件不拦,行为不变"""
+    _stub_acceptance_ok(monkeypatch)
+    proj = _git_repo(tmp_path)
+    t, wt = _p3_scoped_task(pool, proj, None)
+    (wt / "sneaky.py").write_text("无 scope 不查", encoding="utf-8")
+    advance_once(pool, t.id, FakeHarness(), proj)
+    assert load_ticket(pool, t.id).tasks[0]["status"] == "done"

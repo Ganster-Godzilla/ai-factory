@@ -1,0 +1,36 @@
+feat(G7): R7 scope 越界强制检查 —— tasks.yaml scope 字段 + worktree base 落盘 + 越界判负
+
+实现(对应 docs/specs/T-2026-0828-003-design.md D7):
+- slicer.py:任务可选字段 scope: [glob](fnmatch 语义,相对项目根,`**` 递归);
+  新增 scope_violations(files, scope) 返回越界清单;scope 缺省/为空/误写字符串均容住,
+  缺省不检查(旧清单完全兼容)。make_packet 派单时把改动边界写进 dev prompt。
+- worktree.py:ensure_worktree 创建时把当前 HEAD 落盘为 <worktree>/.orc-base
+  (只新增这一个动作,复用既有 worktree 不重写,创建逻辑未改)。
+- runner.py:新增 _changed_files(wt) = git status --porcelain -uall(未跟踪+已修改,
+  -uall 防未跟踪目录折叠成 `?? docs/` 致精确 glob 误判)+ git diff --name-only <.orc-base>
+  (已提交改动;无 base 文件时退化为仅 status);排除编排器记号 .orc-base。
+  run_dev_tasks 在 dev done 之后、验收命令之前做越界检查:越界 → verify=failed、
+  result.output 头部 "FAIL: scope 越界: <文件清单>"(遵守 D5 约定),走既有重试阶梯
+  (retry→consult→判负),dev 下一轮直接看到越界文件列表;越界不再烧验收。
+- architect.md:约定改代码的任务必须写 scope;全仓放开须显式写 ["**/*"];
+  纯文档/分析任务可不写。
+
+测试(tests/orchestrator/{test_runner,test_slicer,test_worktree}.py,共 +14 个用例):
+- .orc-base 落盘值=HEAD、复用不重写、回收即删;scope 装载透传/缺省不检查;
+  fnmatch 匹配(含 **、多 glob、单文件、字符串容错);make_packet 告知边界;
+  未跟踪越界验收前拦截(断言 "acceptance 复检失败" 不在输出,证明验收未烧);
+  已提交越界经 .orc-base diff 拦截且 .orc-base 自身不算改动;无 base 退化仍拦未跟踪;
+  界内改动正常完工;无 scope 行为不变;-uall 逐文件枚举嵌套新文件。
+
+QA 备注(重要):
+验收命令 pytest tests/orchestrator/test_runner.py tests/orchestrator/test_worktree.py
+tests/orchestrator/test_slicer.py -q 当前为 33 passed / 1 failed。唯一失败
+test_none_budget_survives_cap_gate 是既有用例,其验收 "exit 0" 需真实 bash;本机
+msys2 共享内存段(S-1-5-...-1001.1)被并发会话占用,bash.exe 启动即崩
+(CreateFileMapping Win32 error 5),30 分钟 54 次直接探测全崩,git clone/sh/tar 同崩。
+已用 git archive 导出 HEAD 原始基线复证:该用例在无本改动的基线上以完全相同签名失败
+(retry:task-1:1)。R7 新增用例全部不依赖 bash(复检走既有 monkeypatch 先例),
+33/34 环境恢复后应 34/34。
+
+应用方式(若需补丁形式合入):
+git apply G7-T-2026-0828-003.patch && git commit -F G7-commit-message.txt
