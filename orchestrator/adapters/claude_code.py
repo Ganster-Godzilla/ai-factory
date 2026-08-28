@@ -15,7 +15,11 @@ class ClaudeCodeAdapter(HarnessAdapter):
         # Windows 上 npm 安装的 claude 是 .cmd shim,CreateProcess 只自动补 .exe;
         # shutil.which 解析出带扩展名的全路径(POSIX 同样返回真实路径),缺失时回退裸名。
         exe = shutil.which("claude") or "claude"
-        cmd = [exe, "-p", packet.prompt, "--output-format", "json"]
+        # -p 无头模式无人应答权限弹窗,写文件会被静默拒绝(2026-08-28 T-001 冒烟实测:
+        # PM 返回"需要授权"文本、产物缺失,但 status=done 照常推进)。
+        # acceptEdits 放行项目目录内的写/编辑(PM/架构师只写文档),其余工具仍受限。
+        cmd = [exe, "-p", packet.prompt, "--output-format", "json",
+               "--permission-mode", "acceptEdits"]
         try:
             r = subprocess.run(cmd, cwd=packet.workdir, capture_output=True,
                                text=True, encoding="utf-8", errors="replace",
