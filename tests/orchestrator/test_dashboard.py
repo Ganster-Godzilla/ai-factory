@@ -573,3 +573,14 @@ def test_index_events_system_not_linked(pool_client):
     html = client.get("/").get_data(as_text=True)
     assert "/ticket/system" not in html
     assert "system" in html              # 计数仍可见,纯文本
+
+
+def test_ticket_load_ignores_unknown_keys(tmp_path):
+    # 热修:integration 线写的 yaml 带 p1_round 等新键,main 的 Ticket 不应崩
+    from orchestrator.daemon.ticket import Ticket
+    p = tmp_path / "T-2026-0901-001.yaml"
+    p.write_text("id: T-2026-0901-001\ntype: feature\nproject: x\n"
+                 "state: draft\nowner_role: pm\np1_round: 2\nfuture_field: z\n",
+                 encoding="utf-8")
+    t = Ticket.load(p)
+    assert t.id == "T-2026-0901-001" and not hasattr(t, "p1_round")

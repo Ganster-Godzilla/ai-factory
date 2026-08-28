@@ -40,7 +40,10 @@ class Ticket:
     @classmethod
     def load(cls, path: Path) -> "Ticket":
         data = yaml.safe_load(path.read_text(encoding="utf-8"))
-        return cls(**data)
+        # 忽略未知键:integration 线可能写入更新的字段(如 p1_round),
+        # main 线加载不应崩——否则整个 dashboard 对真实 pool 全 500(2026-08-29 事故)
+        known = {k: v for k, v in data.items() if k in cls.__dataclass_fields__}
+        return cls(**known)
 
     def save(self, path: Path) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
