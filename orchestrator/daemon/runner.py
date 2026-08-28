@@ -14,7 +14,7 @@ from orchestrator.daemon.circuitbreaker import (
 from orchestrator.daemon.events import append_event
 from orchestrator.daemon.gateway import k3_effective_week_tokens
 from orchestrator.daemon.ledger import append_ledger, ds_daily_exceeded, ds_ticket_cost
-from orchestrator.daemon.slicer import load_task_list, make_packet, ready_tasks
+from orchestrator.daemon.slicer import load_task_list, make_packet, ready_tasks, scope_violations
 from orchestrator.daemon.statemachine import suspend, transition
 from orchestrator.daemon.ticket import load_ticket, save_ticket
 from orchestrator.daemon.worktree import ensure_worktree
@@ -89,6 +89,43 @@ def _run_acceptance(cmd: str, cwd: Path, timeout: int = 600) -> subprocess.Compl
                           encoding="utf-8", errors="replace", timeout=timeout)
 
 
+def _changed_files(wt: Path) -> list[str]:
+    """R7:worktree 内 dev 的改动文件清单(相对项目根,/ 分隔)。
+    来源 = `git status --porcelain`(未跟踪+已修改)+ `git diff --name-only <base>`
+    (已提交;base 由 ensure_worktree 落盘的 .orc-base 提供,无该文件则退化为仅 status)。
+    .orc-base 是编排器记号而非 dev 产物,不计入。"""
+    files: list[str] = []
+    r = subprocess.run(
+        # -uall:未跟踪目录不折叠(否则嵌套新文件以 `?? docs/` 出现,精确 glob 会误判)
+        ["git", "-c", "core.quotepath=false", "status", "--porcelain", "-uall"],
+        cwd=wt, capture_output=True, text=True, encoding="utf-8", errors="replace")
+    if r.returncode == 0:
+        for line in r.stdout.splitlines():
+            if len(line) < 4:
+                continue
+            path = line[3:].strip()
+            if " -> " in path:          # rename 取新路径
+                path = path.split(" -> ", 1)[1]
+            if path:
+                files.append(path.strip('"'))
+    base_file = wt / ".orc-base"
+    if base_file.exists():
+        base_ref = base_file.read_text(encoding="utf-8").strip()
+        if base_ref:
+            r = subprocess.run(
+                ["git", "-c", "core.quotepath=false", "diff", "--name-only", base_ref],
+                cwd=wt, capture_output=True, text=True, encoding="utf-8", errors="replace")
+            if r.returncode == 0:
+                files.extend(p for p in (s.strip() for s in r.stdout.splitlines()) if p)
+    seen: set[str] = set()
+    out: list[str] = []
+    for f in files:
+        if f != ".orc-base" and f not in seen:
+            seen.add(f)
+            out.append(f)
+    return out
+
+
 def run_dev_tasks(pool: Path, ticket, adapter: HarnessAdapter,
                   project_dir: Path, cfg: dict | None = None,
                   consult_adapter: HarnessAdapter | None = None) -> str:
@@ -131,6 +168,17 @@ def run_dev_tasks(pool: Path, ticket, adapter: HarnessAdapter,
         # DS 现金不分成败:失败/被复检打回的尝试照样烧钱,每次调用都入账
         _record_cost(pool, ticket, adapter, result, "dev")
     verify = None
+    if result.status == "done" and task.get("scope"):
+        # R7 scope 越界强制检查:dev done 后、验收前先拦——越界属致命,不必再烧验收
+        violations = scope_violations(_changed_files(wt), task["scope"])
+        if violations:
+            verify = "failed"
+            result.status = "failed"
+            # FAIL: 行置顶(D5 约定),走既有重试阶梯,dev 下一轮直接看到越界文件列表
+            result.output = (
+                f"FAIL: scope 越界: {', '.join(violations)}\n"
+                f"--- harness 输出(截断) ---\n{result.output[:500]}"
+            )
     if result.status == "done" and task.get("acceptance_cmd"):
         try:
             r = _run_acceptance(task["acceptance_cmd"], wt)
