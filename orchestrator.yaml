@@ -18,5 +18,8 @@ gateway:
   url: http://127.0.0.1:8787
 keys_dir: D:/Tool/keys
 models:
-  dev: deepseek-v4-flash
-  qa: deepseek-v4-flash
+  # 2026-08-28:GLM Coding 7 天体验卡(至 2026-09-03,周/5h 额度 2000 积分,几乎未用),
+  # dev/qa 从 deepseek-v4-flash 切 glm-5.3-flash 吃免费额度(用户批准);
+  # 同时作为 GLM 对照实验(T-003 真实工单);体验卡到期或额度耗尽后切回 deepseek
+  dev: glm-5.3-flash
+  qa: glm-5.3-flash
