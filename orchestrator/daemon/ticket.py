@@ -36,6 +36,7 @@ class Ticket:
     resume_state: str | None = None
     consult_count: int = 0   # 会诊后判负的任务数(§5.2:3 个任务判负 → 整单挂起)
     related_ticket: str | None = None   # 事故单回链原单 id(P5 发布失败自动建单时写入)
+    p1_round: int = 0   # P1 重做轮次(D2):驳回回炉次数,只增不清;旧 yaml 缺字段时默认 0 兜底
 
     @classmethod
     def load(cls, path: Path) -> "Ticket":
