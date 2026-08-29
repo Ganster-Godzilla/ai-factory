@@ -7,7 +7,10 @@ from __future__ import annotations
 
 ARTIFACT_MANIFEST: dict[str, dict] = {
     "P0": {
-        "gate_edge": ("draft", "p0_proposed"),
+        # 门禁挂审批边界(p0_proposed→p1_drafting)而非提交边(draft→p0_proposed):
+        # 提交时产物由提交人负责,审批时 boss 必须见到提案文档才放行(评审 R3 裁决——
+        # 挂提交边会让探针采纳/cli 提交永远 409,draft 态无角色能产出提案)
+        "gate_edge": ("p0_proposed", "p1_drafting"),
         "artifacts": [{
             "path": "document/business/{tid}-提案.md",
             "role": "pm",
@@ -83,8 +86,8 @@ ARTIFACT_MANIFEST: dict[str, dict] = {
             "require_sections": ["观察窗", "健康检查", "结论"],
             "require_content": [],
         }],
-        "human_checklist": ["观察时长达标(默认 24h,orchestrator.yaml "
-                            "monitoring.window_hours 可配)"],
+        "human_checklist": ["观察时长达标(默认 24h;orchestrator.yaml "
+                            "monitoring.window_hours 预留未接线,暂不可配)"],
     },
 }
 

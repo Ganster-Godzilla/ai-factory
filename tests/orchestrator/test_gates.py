@@ -38,21 +38,24 @@ def test_legacy_ticket_loads_created_at_none(tmp_path):
 
 def test_gate_missing_artifact_fails(pool, tmp_path):
     t = _new(pool)
-    fails = check_gate(tmp_path, t, "p0_proposed")
+    t.state = "p0_proposed"
+    fails = check_gate(tmp_path, t, "p1_drafting")
     assert any("提案.md" in f and "不存在" in f for f in fails)
 
 
 def test_gate_empty_file_fails(pool, tmp_path):
     t = _new(pool)
     _write(tmp_path, f"document/business/{t.id}-提案.md", "")
-    fails = check_gate(tmp_path, t, "p0_proposed")
+    t.state = "p0_proposed"
+    fails = check_gate(tmp_path, t, "p1_drafting")
     assert any("空" in f for f in fails)
 
 
 def test_gate_missing_sections_and_content(pool, tmp_path):
     t = _new(pool)
     _write(tmp_path, f"document/business/{t.id}-提案.md", "# 只有问题\n")
-    fails = check_gate(tmp_path, t, "p0_proposed")
+    t.state = "p0_proposed"
+    fails = check_gate(tmp_path, t, "p1_drafting")
     assert any('缺少章节 "方向"' in f for f in fails)
     assert any('缺少章节 "不做"' in f for f in fails)
 
@@ -61,7 +64,7 @@ def test_gate_complete_p0_passes(pool, tmp_path):
     t = _new(pool)
     _write(tmp_path, f"document/business/{t.id}-提案.md",
            "# 提案\n## 问题\nx\n## 方向\nx\n## 范围\nx\n## 不做\nx\n")
-    assert check_gate(tmp_path, t, "p0_proposed") == []
+    assert check_gate(tmp_path, t, "p1_drafting") == []
 
 
 def test_gate_p1_requires_content_keyword(pool, tmp_path):
@@ -108,9 +111,31 @@ def test_gate_p3_undone_task_fails(pool, tmp_path):
 
 def test_legacy_ticket_bypasses_gate(pool, tmp_path):
     t = _legacy(pool)   # created_at=None:存量不追溯(设计 D3/AC-5)
-    assert check_gate(tmp_path, t, "p0_proposed") == []
+    assert check_gate(tmp_path, t, "p1_drafting") == []
 
 
 def test_non_gated_edge_no_check(pool, tmp_path):
     t = _new(pool)
     assert check_gate(tmp_path, t, "p1_drafting") == []   # 非门禁边直接放行
+
+
+def test_empty_tasks_yaml_fails(pool, tmp_path):
+    # 评审 R3-1:空 tasks.yaml 不许滑过 P2(曾 continue 跳过空文件检查)
+    t = _new(pool)
+    t.state = "p2_designing"
+    _write(tmp_path, f"docs/specs/{t.id}-design.md",
+           "# D\n## Architecture\nx\n## How\nx\n## Checkpoints\nx\n## Rollback\nx\n")
+    _write(tmp_path, f"docs/specs/{t.id}-tasks.yaml", "")
+    fails = check_gate(tmp_path, t, "p2_approved")
+    assert any("tasks.yaml" in f and "空" in f for f in fails)
+    _write(tmp_path, f"docs/specs/{t.id}-tasks.yaml", "# 只有注释\n")
+    fails = check_gate(tmp_path, t, "p2_approved")
+    assert any("空" in f for f in fails)
+
+
+def test_incident_bypasses_gate(pool, tmp_path):
+    # 评审 R3-6:incident 事故单快速通道,全礼仪豁免
+    t = _new(pool)
+    t.type = "incident"
+    t.state = "p1_drafting"
+    assert check_gate(tmp_path, t, "p1_proposed") == []

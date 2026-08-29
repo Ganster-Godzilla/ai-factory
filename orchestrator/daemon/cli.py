@@ -26,10 +26,9 @@ def _pool() -> Path:
 
 
 def _project_dir(cfg: dict, ticket) -> Path | None:
-    """工单项目名 → cfg projects 登记目录(门禁校验的工作根);未登记 → None
-    (legacy 单无 created_at 不需要;新单未登记会在 transition 报开发错误)。"""
-    p = (cfg.get("projects") or {}).get(ticket.project)
-    return Path(p) if p else None
+    """工单项目名 → cfg projects 登记目录(共置 gates.project_dir_for,评审 R3-10)。"""
+    from orchestrator.daemon.gates import project_dir_for
+    return project_dir_for(cfg, ticket.project)
 
 
 def main(argv: list[str] | None = None) -> int:

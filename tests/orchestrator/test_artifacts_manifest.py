@@ -11,7 +11,7 @@ def test_manifest_covers_all_stages():
 def test_gate_edges_match_statemachine():
     edges = {s["gate_edge"] for s in ARTIFACT_MANIFEST.values()}
     assert edges == {
-        ("draft", "p0_proposed"),
+        ("p0_proposed", "p1_drafting"),
         ("p1_drafting", "p1_proposed"),
         ("p2_designing", "p2_approved"),
         ("p3_running", "p4_verifying"),
@@ -22,9 +22,9 @@ def test_gate_edges_match_statemachine():
 
 
 def test_manifest_for_edge_reverse_lookup():
-    assert manifest_for_edge("draft", "p0_proposed") == "P0"
+    assert manifest_for_edge("p0_proposed", "p1_drafting") == "P0"
     assert manifest_for_edge("monitoring", "done") == "P5_MONITOR"
-    assert manifest_for_edge("p0_proposed", "p1_drafting") is None   # 非门禁边
+    assert manifest_for_edge("draft", "p0_proposed") is None   # 提交边非门禁(挂审批边界)
     assert manifest_for_edge("p1_drafting", "p1_proposed") == "P1"
 
 

@@ -41,33 +41,33 @@ def test_layout_variants_pass():
 
 
 def test_missing_section_reports_fail():
-    assert check("", ["Why"], []) == ['FAIL: 缺少章节 "Why"']
-    assert check(GOOD_PRD, ["Why", "非功能需求"], []) == ['FAIL: 缺少章节 "非功能需求"']
+    assert check("", ["Why"], []) == ['缺少章节 "Why"']
+    assert check(GOOD_PRD, ["Why", "非功能需求"], []) == ['缺少章节 "非功能需求"']
 
 
 def test_body_mention_is_not_a_section():
     """章点名只认标题行,正文提到同名文字不算数(防口径漂移)。"""
     doc = "正文里提到验收标准三个字,但没有标题。\n"
-    assert check(doc, ["验收标准"], []) == ['FAIL: 缺少章节 "验收标准"']
+    assert check(doc, ["验收标准"], []) == ['缺少章节 "验收标准"']
 
 
 def test_forbidden_word_reports_fail():
     doc = "# 设计\n\n## How\n\nTODO: 待补。\n"
-    assert check(doc, ["How"], ["TODO"]) == ['FAIL: 命中禁用词 "TODO"']
+    assert check(doc, ["How"], ["TODO"]) == ['命中禁用词 "TODO"']
     assert check(doc, ["How"], ["FIXME"]) == []
 
 
 def test_forbidden_word_case_insensitive():
-    assert check("正文中出现 todo 字样\n", [], ["TODO"]) == ['FAIL: 命中禁用词 "TODO"']
+    assert check("正文中出现 todo 字样\n", [], ["TODO"]) == ['命中禁用词 "TODO"']
 
 
 def test_fail_lines_ordered_sections_then_forbidden():
     fails = check("TODO 和 FIXME 都在正文\n", ["Why", "验收标准"], ["TODO", "FIXME"])
     assert fails == [
-        'FAIL: 缺少章节 "Why"',
-        'FAIL: 缺少章节 "验收标准"',
-        'FAIL: 命中禁用词 "TODO"',
-        'FAIL: 命中禁用词 "FIXME"',
+        '缺少章节 "Why"',
+        '缺少章节 "验收标准"',
+        '命中禁用词 "TODO"',
+        '命中禁用词 "FIXME"',
     ]
 
 
@@ -81,8 +81,8 @@ def test_prefix_without_boundary_does_not_match():
     """后缀不隔断(WhyNot)或名字嵌在中间(我的验收标准笔记)不算命中。"""
     doc = "## WhyNot一类标题\n\n## 我的验收标准笔记\n"
     assert check(doc, ["Why", "验收标准"], []) == [
-        'FAIL: 缺少章节 "Why"',
-        'FAIL: 缺少章节 "验收标准"',
+        '缺少章节 "Why"',
+        '缺少章节 "验收标准"',
     ]
 
 
@@ -102,7 +102,7 @@ def test_numbered_headings_match():
 def test_bare_word_heading_not_swallowed_by_number_rule():
     """非编号标题不受去编号影响(`WhyNot`/`我的验收标准笔记` 仍不误命中)。"""
     doc = "## WhyNot一类标题\n\n## 2024 计划\n"
-    assert check(doc, ["Why"], []) == ['FAIL: 缺少章节 "Why"']
+    assert check(doc, ["Why"], []) == ['缺少章节 "Why"']
     assert check(doc, ["2024 计划"], []) == []
     assert check(doc, ["计划"], []) == []
 
@@ -127,7 +127,7 @@ def test_cli_fail_exit1_prints_fail_lines(capsys, tmp_path):
     rc = main([str(f), "--require-section", "验收标准", "--forbid", "TODO"])
     out = capsys.readouterr().out
     assert rc == 1
-    assert 'FAIL: 缺少章节 "验收标准"' in out
+    assert '缺少章节 "验收标准"' in out
 
 
 def test_cli_missing_file_fails(capsys, tmp_path):
@@ -151,7 +151,7 @@ def test_cli_module_entry(tmp_path):
         capture_output=True, text=True, encoding="utf-8", env=env,
         cwd=str(REPO_ROOT), timeout=60)
     assert r.returncode == 1
-    assert 'FAIL: 缺少章节 "Why"' in r.stdout
+    assert '缺少章节 "Why"' in r.stdout
 
 
 # ---- G2:--require-content(T-2026-0829-001 设计 D5) ----
@@ -161,7 +161,7 @@ def test_require_content_hit_and_miss(tmp_path):
     text = "# 功能清单\n\n| # | 功能 | 优先级 |\n|---|---|---|\n| F1 | x | P0 |\n"
     assert check(text, require_content=["优先级"]) == []
     fails = check(text, require_content=["优先级", "验收标准"])
-    assert fails == ['FAIL: 缺少内容 "验收标准"']
+    assert fails == ['缺少内容 "验收标准"']
 
 
 def test_require_content_normalization(tmp_path):
@@ -180,3 +180,10 @@ def test_require_content_cli(tmp_path):
     f.write_text("# X\n含优先级\n", encoding="utf-8")
     assert main([str(f), "--require-content", "优先级"]) == 0
     assert main([str(f), "--require-content", "不存在词"]) == 1
+
+
+def test_require_content_needle_normalized(tmp_path):
+    from orchestrator.daemon.doccheck import check
+    # 双侧规范化:needle 带双空格/全角空格也命中(评审 sweep)
+    assert check("功能 清单 带优先级\n", require_content=["功能  清单"]) == []
+    assert check("功能 清单\n", require_content=["功能　清单"]) == []

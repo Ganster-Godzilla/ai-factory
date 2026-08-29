@@ -61,19 +61,21 @@ def _title_matches(title: str, name: str) -> bool:
 
 
 def check(text: str, require_sections=(), forbid=(), require_content=()) -> list[str]:
-    """返回 FAIL 子句列表(缺章节→缺内容→禁用词);空列表=通过。"""
+    """返回裸原因列表(缺章节→缺内容→禁用词);空列表=通过。
+    "FAIL: " 前缀是 CLI 展示层职责(main 打印时加),调用方(如 gates)自行包装。"""
     norm = normalize(text)
     titles = _headings(norm)
     fails = []
     for name in require_sections:
         k = name.casefold()
         if not any(_title_matches(f, k) or _title_matches(s, k) for f, s in titles):
-            fails.append(f'FAIL: 缺少章节 "{name}"')
+            fails.append(f'缺少章节 "{name}"')
     folded = norm.casefold()
-    # --require-content(T-2026-0829-001 D5):规范化后子串判定,支撑非标题类必含要素
-    fails += [f'FAIL: 缺少内容 "{c}"' for c in require_content
-              if c and c.casefold() not in folded]
-    fails += [f'FAIL: 命中禁用词 "{w}"' for w in forbid
+    # --require-content(T-2026-0829-001 D5):规范化后子串判定,支撑非标题类必含要素;
+    # needle 同套规范化(双侧空白/全角空格容忍,评审 sweep)
+    fails += [f'缺少内容 "{c}"' for c in require_content
+              if c and _INLINE_WS.sub(" ", c).casefold() not in folded]
+    fails += [f'命中禁用词 "{w}"' for w in forbid
               if w and w.casefold() in folded]
     return fails
 
@@ -98,7 +100,7 @@ def main(argv: list[str] | None = None) -> int:
     fails = check(path.read_text(encoding="utf-8", errors="replace"),
                   args.require_sections, args.forbid, args.require_content)
     for line in fails:
-        print(line)
+        print(f"FAIL: {line}")
     if fails:
         return 1
     print(f"OK: {args.file}")

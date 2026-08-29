@@ -15,8 +15,7 @@ from orchestrator.daemon.events import append_event
 from orchestrator.daemon.gateway import k3_effective_week_tokens
 from orchestrator.daemon.ledger import append_ledger, ds_day_cost, ds_ticket_cost
 from orchestrator.daemon.slicer import load_task_list, make_packet, ready_tasks, scope_violations
-from orchestrator.daemon.statemachine import (IllegalTransition, suspend,
-                                              transition)
+from orchestrator.daemon.statemachine import suspend, transition
 from orchestrator.daemon.ticket import load_ticket, save_ticket
 from orchestrator.daemon.worktree import ensure_worktree
 
@@ -145,21 +144,18 @@ def _changed_files(wt: Path) -> list[str]:
 def _transition_gated(pool: Path, t, to_state: str, actor: str,
                       project_dir: Path) -> str | None:
     """runner 自动边的门禁接线(T-2026-0829-001 M4):
-    门禁未过 → gate_failed 事件(missing 清单)+ suspend(artifact_missing);
-    非门禁 IllegalTransition 照常抛。返回 None=迁移成功,否则挂起消息。"""
+    GateFailed(结构化,评审 R3-3)→ gate_failed 事件(missing 清单)+
+    suspend(artifact_missing);project_dir 缺失等其他 IllegalTransition 照常抛。"""
+    from orchestrator.daemon.statemachine import GateFailed
     try:
         transition(pool, t, to_state, actor=actor, project_dir=project_dir)
         return None
-    except IllegalTransition as e:
-        msg = str(e)
-        if "门禁校验未过" not in msg and "project_dir" not in msg:
-            raise
-        missing = [ln for ln in msg.splitlines() if ln.startswith("FAIL:")]
+    except GateFailed as e:
         append_event(pool, t.id, "system", "gate_failed", to=to_state,
-                     missing=missing)
+                     missing=e.fails)
         suspend(pool, t, actor="system",
                 reason=f"产物门禁未过({to_state}): "
-                       f"{missing[0] if missing else msg}",
+                       f"{e.fails[0] if e.fails else e}",
                 reason_code="artifact_missing")
         return f"suspend: 产物门禁未过({to_state})"
 

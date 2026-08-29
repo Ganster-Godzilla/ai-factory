@@ -48,9 +48,19 @@ class IllegalTransition(Exception):
     pass
 
 
+class GateFailed(IllegalTransition):
+    """产物门禁未过(结构化,评审 R3-3:不再靠字符串嗅探分类)。
+    .fails = 全部 FAIL 行;调用方(runner)据此转 suspend+gate_failed 事件。"""
+
+    def __init__(self, fails: list[str]):
+        self.fails = list(fails)
+        super().__init__("门禁校验未过:\n" + "\n".join(self.fails))
+
+
 def _enforce_gate(project_dir, ticket: Ticket, to_state: str) -> None:
     """产物门禁(T-2026-0829-001 M4):门禁边+新单强制校验。
-    project_dir 缺失=开发错误;check_gate 非空=IllegalTransition 含全部 FAIL 行。
+    project_dir 缺失=开发错误(普通 IllegalTransition,响亮抛出,消息指到登记处);
+    check_gate 非空=GateFailed(结构化 FAIL 行)。
     注:测试默认经 conftest 旁路本函数(隔离既有用例),真闸门见 test_gate_enforcement。"""
     from orchestrator.daemon.artifacts import manifest_for_edge
     from orchestrator.daemon.gates import check_gate, gate_required
@@ -60,10 +70,11 @@ def _enforce_gate(project_dir, ticket: Ticket, to_state: str) -> None:
         return
     if project_dir is None:
         raise IllegalTransition(
-            f"门禁边({ticket.state}→{to_state})需要 project_dir(开发错误)")
+            f"门禁边({ticket.state}→{to_state})需要 project_dir:"
+            f"项目 {ticket.project!r} 未在 orchestrator.yaml projects 登记(开发/配置错误)")
     fails = check_gate(project_dir, ticket, to_state)
     if fails:
-        raise IllegalTransition("门禁校验未过:\n" + "\n".join(fails))
+        raise GateFailed(fails)
 
 
 def transition(pool: Path, ticket: Ticket, to_state: str, actor: str,

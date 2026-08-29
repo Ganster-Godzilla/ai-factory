@@ -77,9 +77,9 @@ def create_app(pool_dir: Path, cfg: dict) -> Flask:
         return render_template("ticket.html", **d)
 
     def _project_dir(t) -> Path | None:
-        """工单项目名 → cfg projects 登记目录(产物门禁工作根,T-2026-0829-001 M4)。"""
-        p = (app.config["CFG"].get("projects") or {}).get(t.project)
-        return Path(p) if p else None
+        """工单项目名 → cfg projects 登记目录(共置 gates.project_dir_for)。"""
+        from orchestrator.daemon.gates import project_dir_for
+        return project_dir_for(app.config["CFG"], t.project)
 
     @app.post("/approve/<ticket_id>")
     def approve(ticket_id: str):

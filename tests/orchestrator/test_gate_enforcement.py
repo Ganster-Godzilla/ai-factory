@@ -18,14 +18,18 @@ def _write(proj, rel, text):
 
 def test_gated_edge_requires_project_dir(pool):
     t = _new(pool)
+    t.state = "p0_proposed"
+    save_ticket(pool, t)
     with pytest.raises(IllegalTransition, match="project_dir"):
-        transition(pool, t, "p0_proposed", actor="pm")   # 新单+门禁边+缺 project_dir
+        transition(pool, t, "p1_drafting", actor="boss")   # 新单+门禁边+缺 project_dir
 
 
 def test_gated_edge_missing_artifact_blocks(pool, tmp_path):
     t = _new(pool)
+    t.state = "p0_proposed"
+    save_ticket(pool, t)
     with pytest.raises(IllegalTransition) as e:
-        transition(pool, t, "p0_proposed", actor="pm", project_dir=tmp_path)
+        transition(pool, t, "p1_drafting", actor="boss", project_dir=tmp_path)
     assert "提案.md" in str(e.value)
 
 
@@ -40,17 +44,16 @@ def test_gated_edge_complete_passes(pool, tmp_path):
 def test_legacy_ticket_no_project_dir_needed(pool):
     t = _new(pool)
     t.created_at = None          # 存量单:不要求 project_dir,不校验
+    t.state = "p0_proposed"
     save_ticket(pool, t)
-    transition(pool, t, "p0_proposed", actor="pm")
-    assert t.state == "p0_proposed"
+    transition(pool, t, "p1_drafting", actor="boss")
+    assert t.state == "p1_drafting"
 
 
 def test_non_gated_edge_no_enforcement(pool):
     t2 = _new(pool)
-    t2.state = "p0_proposed"
-    save_ticket(pool, t2)
-    transition(pool, t2, "p1_drafting", actor="boss")   # 非门禁边,无需 project_dir
-    assert t2.state == "p1_drafting"
+    transition(pool, t2, "p0_proposed", actor="pm")   # 提交边非门禁(挂审批边界)
+    assert t2.state == "p0_proposed"
 
 
 # ---------- runner 自动边:gate 失败转 suspend(artifact_missing) ----------
@@ -115,3 +118,14 @@ def test_verify_persisted_on_task(pool, tmp_path):
                                    "ds_daily_cny": 10**9}})
     task = load_ticket(pool, t.id).tasks[0]
     assert task.get("verify") == "failed"
+
+
+def test_gate_failed_structured_fails(pool, tmp_path):
+    # 评审 R3-3:GateFailed 结构化携带 fails,不靠字符串嗅探
+    from orchestrator.daemon.statemachine import GateFailed
+    t = _new(pool)
+    t.state = "p0_proposed"
+    save_ticket(pool, t)
+    with pytest.raises(GateFailed) as e:
+        transition(pool, t, "p1_drafting", actor="boss", project_dir=tmp_path)
+    assert e.value.fails and any("提案.md" in f for f in e.value.fails)
