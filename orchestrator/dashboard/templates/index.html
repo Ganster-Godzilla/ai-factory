@@ -4,6 +4,13 @@
 {% block content %}
 <h1>总览</h1>
 
+{% if mingfang_mode %}
+<div class="{{ 'error-banner' if mingfang_overdue else 'info-banner' }}">
+  明放模式(mingfang):DS 现金闸 warn-only,按次估算入账。
+  复审日 {{ mingfang_review_after }}{{ ' —— 已到期,请复审!' if mingfang_overdue }}
+</div>
+{% endif %}
+
 <div class="cards">
   <div class="card">
     <div class="label">K3 周水位(tokens)</div>

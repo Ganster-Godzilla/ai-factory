@@ -1,0 +1,76 @@
+# T-2026-0828-003 任务切片。契约:[{id,title,acceptance_cmd,depends_on}]
+# 每任务独立可验收;验收失败须打印 FAIL: <子句> 行(设计 D5 约定)。
+# 依赖仅表达同文件改动串行(G5/G7/G8 都动 runner.py,排在 G2 后),跨文件任务全部并行。
+
+- id: G1
+  title: "R2 状态机 P1 重做边 + CLI reject --redo + p1_round 轮次追踪"
+  # 上下文:statemachine.py TRANSITIONS["p1_proposed"] 增 "p1_drafting": {"boss"};
+  # ticket.py Ticket 增 p1_round=0(load 兜底);cli.py reject 加 --redo(仅 p1_proposed 可用);
+  # redo 迁移时 p1_round+1 且事件带 round=N。测试:test_statemachine.py + test_cli.py。
+  acceptance_cmd: "pytest tests/orchestrator/test_statemachine.py tests/orchestrator/test_cli.py -q"
+  depends_on: []
+
+- id: G2
+  title: "R1 runner 产物验收闸门(EXPECTED_ARTIFACTS + artifact_missing)"
+  # 上下文:runner.py 增 EXPECTED_ARTIFACTS(p1_drafting→document/business/{tid}-prd.md;
+  # p2_designing→docs/specs/{tid}-design.md+-tasks.yaml);done 后 transition 前校验存在且非空,
+  # 缺失→事件 artifact_missing+挂起(reason_code 入 SUSPEND_REASON_CODES),不推进;
+  # role_run 事件带 artifacts_checked。测试:PM done 但未写 PRD→停 p1_drafting;产物齐→正常推进。
+  acceptance_cmd: "pytest tests/orchestrator/test_runner.py -q"
+  depends_on: []
+
+- id: G3
+  title: "R3 dsh usage trailer 契约消费 + ledger 三字段(tokens/calls)对齐"
+  # 上下文:dsh.py 解析末行 __DSH_USAGE__ {input_tokens,output_tokens,cost_cny} 填入
+  # HarnessResult,剥离正文;无 trailer→failed+事件 usage_missing(无账不推进)。
+  # ledger.py entry 增 tokens/calls 字段,查询端 .get 兜底;新增 ds_day_calls()。
+  # _record_cost k3 侧同步写 tokens/calls。测试:test_dsh_adapter.py + test_ledger.py,
+  # 含「录账后 ds_daily_exceeded/ds_ticket_cost 闸触发」用例。
+  acceptance_cmd: "pytest tests/orchestrator/test_dsh_adapter.py tests/orchestrator/test_ledger.py tests/orchestrator/test_runner.py -q"
+  depends_on: []
+
+- id: G4
+  title: "R4 relay 周计数剔除 cache_read(D:/Tool/kimi-relay.js,跨仓特例)"
+  # 上下文:改动面在 D:/Tool(独立 git 仓),worktree 机制不适用,dev 直接在 D:/Tool 工作。
+  # kimi-relay.js 周累计只算非缓存 input+output;/__stats 增 weekCacheReadTokens 展示字段。
+  # 新增 D:/Tool/test/relay-stats.test.js:含大量 cache_read 的 usage fixture,断言周计数不膨胀。
+  # 编排器侧 gateway.py 零改动。orchestrator.yaml 注释更新(30M 提额→口径已修,回归值待老板定)。
+  acceptance_cmd: "cd /d/Tool && node --test test/relay-stats.test.js"
+  depends_on: []
+
+- id: G5
+  title: "R5 验收失败子句回传(FAIL: 行提取置顶 + last_error/retry_prompt 扩至 2000)"
+  # 上下文:runner.py 验收失败反馈格式定型(见设计 D5):命令本体+FAIL: 行置顶+输出尾部 2000;
+  # task['last_error'] 截断 800→2000;circuitbreaker.retry_prompt 的 [:800] 同步放宽 [:2000]。
+  # 测试:构造 exit=1 且 stdout 含 'FAIL: 缺少章节 X' 的验收命令,断言 task.last_error 头部
+  # 含命令文本与 'FAIL: 缺少章节 X';无 FAIL 行时 tail 证据仍在。
+  acceptance_cmd: "pytest tests/orchestrator/test_runner.py tests/orchestrator/test_circuitbreaker.py -q"
+  depends_on: [G2]
+
+- id: G6
+  title: "R6 doccheck 规范化文档验收器 + architect.md 验收命令约定"
+  # 上下文:新增 orchestrator/daemon/doccheck.py,CLI:python -m orchestrator.daemon.doccheck
+  # <md> --require-section X [--forbid Y];规范化=CRLF/LF 统一、连续空白压缩、标题层级不敏感、
+  # 行内空格忽略;失败打印 FAIL: <子句> exit=1。architect.md 增约定:文档类验收一律 doccheck。
+  # 测试:排版变体(换行/空白/标题层级)一致通过;缺节/禁用词判失败且输出 FAIL: 行。
+  acceptance_cmd: "pytest tests/orchestrator/test_doccheck.py -q"
+  depends_on: []
+
+- id: G7
+  title: "R7 scope 越界强制检查(tasks.yaml scope 字段 + worktree base 落盘 + 越界判负)"
+  # 上下文:任务可选 scope:[glob](fnmatch,相对项目根);ensure_worktree 创建时把当前 HEAD
+  # 写入 worktree/.orc-base;runner 在 dev done 后、验收前收集 git status --porcelain +
+  # git diff --name-only <base> 的变更文件,越出 scope→verify=failed,反馈头部
+  # 'FAIL: scope 越界: <文件清单>'(走 G5 格式);scope 缺省不检查。architect.md 约定改代码必写 scope。
+  acceptance_cmd: "pytest tests/orchestrator/test_runner.py tests/orchestrator/test_worktree.py tests/orchestrator/test_slicer.py -q"
+  depends_on: [G5]
+
+- id: G8
+  title: "R8 超时分级(task.timeout 默认 1800 上限 7200 + acceptance_timeout 独立档)"
+  # 上下文:任务可选 timeout(默认 1800)与 acceptance_timeout(默认 600),装载校验
+  # ≤MAX_TASK_TIMEOUT=7200(slicer 常量,超限 load_task_list 报错);make_packet 传 timeout;
+  # _run_acceptance 改读 task acceptance_timeout;TaskPacket 默认 1800 不变。
+  # architect.md 增档位约定:normal=1800/env=3600/上限 7200。
+  # 测试:env 任务 timeout=3600 传入 packet;超限装载报错;缺省行为不变。
+  acceptance_cmd: "pytest tests/orchestrator/test_slicer.py tests/orchestrator/test_runner.py -q"
+  depends_on: [G5]

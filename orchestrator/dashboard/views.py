@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from pathlib import Path
 
 from orchestrator.daemon.events import read_events
@@ -223,6 +223,21 @@ def overview_data(pool: Path, cfg: dict) -> dict:
     groups = pending_groups(pool)
     pending = sum(len(v) for k, v in groups.items() if k != "suspended")
 
+    # 明放复审提醒(T-2026-0829-004):mingfang_mode 开启时总览挂提示条;过 review_after 变红。
+    # is True:yaml 写 "false"(带引号)不许误判(评审 F3);缺复审日=配置残缺,按过期逼修(评审 F8)
+    budgets = cfg.get("budgets") or {}
+    mingfang = budgets.get("mingfang_mode") is True
+    review_after = str(budgets.get("review_after") or "")
+    overdue = False
+    if mingfang:
+        if not review_after:
+            overdue = True
+        else:
+            try:
+                overdue = date.today() > date.fromisoformat(review_after)
+            except ValueError:
+                overdue = True   # 日期配置损坏:按过期处理,逼人去修配置
+
     return {
         "k3_used": k3_used,
         "k3_budget": k3_budget,
@@ -235,4 +250,7 @@ def overview_data(pool: Path, cfg: dict) -> dict:
         "suspended": sum(1 for t in tickets if t.state == "suspended"),
         "today_events": _today_events(pool),
         "project_strips": project_strips(pool, tickets, groups),
+        "mingfang_mode": mingfang,
+        "mingfang_review_after": review_after if mingfang else "",
+        "mingfang_overdue": overdue,
     }

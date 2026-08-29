@@ -1,0 +1,31 @@
+# 任务切片-T-2026-0829-001: 阶段产物与门禁口径统一
+# 设计依据:docs/specs/T-2026-0829-001-design.md
+- id: G1
+  title: "产物清单单一事实源 orchestrator/daemon/artifacts.py:ARTIFACT_MANIFEST 覆盖 P0–P5(门禁边/产物路径/角色/require_sections/require_content/human_checklist),含 manifest_for_edge() 反查与 P3 task_verify_required 标记"
+  acceptance_cmd: "python -m pytest tests/orchestrator/test_artifacts_manifest.py -q"
+  depends_on: []
+  scope: ["orchestrator/daemon/**", "tests/**"]
+- id: G2
+  title: "doccheck 扩展 --require-content(规范化后子串判定,缺失打印 FAIL: 缺少内容),支撑非标题类必含要素"
+  acceptance_cmd: "python -m pytest tests/orchestrator/test_doccheck.py -q"
+  depends_on: []
+  scope: ["orchestrator/daemon/doccheck.py", "tests/**"]
+- id: G3
+  title: "门禁模块 orchestrator/daemon/gates.py:check_gate() 按清单逐件校验产出 FAIL 行;tasks.yaml 走 slicer 契约校验;created_at 为空即存量旁路;Ticket 增 created_at 字段且 new_ticket 写 UTC ISO;SUSPEND_REASON_CODES 增 artifact_missing"
+  acceptance_cmd: "python -m pytest tests/orchestrator/test_gates.py tests/orchestrator/test_ticket.py -q"
+  depends_on: [G1, G2]
+  scope: ["orchestrator/daemon/**", "tests/**"]
+- id: G4
+  title: "闸门接线:transition() 增 project_dir 形参并对 GATED_EDGES 新单强制校验;runner 自动边传 project_dir、gate 失败转 suspend(artifact_missing)+gate_failed 事件、task[verify] 持久化;cli.py 与 dashboard 审批入口补传 project_dir;pytest 覆盖缺件阻断/空文件阻断/齐全放行/存量单不阻断"
+  acceptance_cmd: "python -m pytest tests/orchestrator/test_gate_enforcement.py tests/orchestrator/test_runner.py tests/orchestrator/test_statemachine.py tests/orchestrator/test_dashboard.py -q"
+  depends_on: [G3]
+  scope: ["orchestrator/**", "tests/**"]
+- id: G5
+  title: "角色提示词按清单改写:pm(P0 提案+P1 三件套)/architect(设计门禁检查点)/qa(验收报告)/release(发布记录)/sre(观察窗报告)各设产物段,产物名与必含章节同 ARTIFACT_MANIFEST 逐件一致;dev 不改"
+  acceptance_cmd: "python -m orchestrator.daemon.doccheck orchestrator/roles/prompts/pm.md --require-section 产物 --require-content -提案.md --require-content -功能清单.md --require-content -歧义澄清记录.md && python -m orchestrator.daemon.doccheck orchestrator/roles/prompts/architect.md --require-section 产物 --require-content -design.md --require-content -tasks.yaml && python -m orchestrator.daemon.doccheck orchestrator/roles/prompts/qa.md --require-section 产物 --require-content -验收报告.md && python -m orchestrator.daemon.doccheck orchestrator/roles/prompts/release.md --require-section 产物 --require-content -发布记录.md && python -m orchestrator.daemon.doccheck orchestrator/roles/prompts/sre.md --require-section 产物 --require-content -观察窗报告.md"
+  depends_on: [G1, G2]
+  scope: ["orchestrator/roles/prompts/**"]
+- id: G6
+  title: "口径文档 docs/specs/T-2026-0829-001-artifact-standard.md:全阶段清单说明(声明数据权威源为 artifacts.py)、与技能流逐项对齐表、机器/人工检查分级、created_at 生效边界规则、观察窗口径(默认 24h 可配)"
+  acceptance_cmd: "python -m orchestrator.daemon.doccheck docs/specs/T-2026-0829-001-artifact-standard.md --require-section 产物清单 --require-section 技能流对齐 --require-section 检查分级 --require-section 生效边界 --require-section 观察窗"
+  depends_on: [G1]

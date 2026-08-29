@@ -11,7 +11,8 @@ _REGISTRY = {
 }
 
 
-def get_adapter(name: str, keys_dir=None) -> HarnessAdapter:
+def get_adapter(name: str, keys_dir=None, est_call_cny: float = 0.0) -> HarnessAdapter:
     if name == "dsh":
-        return DshAdapter(keys_dir=keys_dir)
+        # est_call_cny:明放估算单价(T-2026-0829-004),由 cli 从 cfg budgets 透传
+        return DshAdapter(keys_dir=keys_dir, est_call_cny=est_call_cny)
     return _REGISTRY[name]()

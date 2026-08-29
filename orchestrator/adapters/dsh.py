@@ -11,12 +11,14 @@ from orchestrator.adapters.base import HarnessAdapter, HarnessResult, TaskPacket
 
 PROVIDER_ENV = {"deepseek": "DEEPSEEK_API_KEY", "glm": "ZHIPU_API_KEY"}
 
-# usage trailer 硬契约(T-2026-0828-003 设计 D3):dsh headless 结束时在 stdout 末行输出
+# usage trailer 契约(T-2026-0828-003 设计 D3):dsh headless 结束时在 stdout 末行输出
 # `__DSH_USAGE__ {"input_tokens":N, "output_tokens":N, "cost_cny":X.XX}`;
-# adapter 解析并剥离 trailer 填入 HarnessResult.tokens/cost_cny。解析不到 trailer
-# (旧版 dsh)→ status=failed + usage_missing=True:无账不推进,runner 记 usage_missing 事件。
+# adapter 解析并剥离 trailer 填入 HarnessResult.tokens/cost_cny。
+# 明放模式(T-2026-0829-004):现役 dsh(0.1.1-rc.2)不产 trailer,硬判负会卡死全部
+# dsh 角色 → 按 returncode 推进 + usage_missing=True + 按次估算入账(estimated=True);
+# 真实用量待 T-2026-0829-002(解析 session.jsonl.zstd)落地后恢复精确计量。
 USAGE_TRAILER = "__DSH_USAGE__"
-USAGE_MISSING_MSG = "dsh 未输出 usage trailer,台账无证据,视同失败"
+USAGE_MISSING_MSG = "dsh 未输出 usage trailer,本次按次估算入账(明放);真实用量待 T-2026-0829-002"
 
 
 def parse_usage_trailer(stdout: str) -> tuple[str, dict, float] | None:
@@ -45,9 +47,13 @@ def parse_usage_trailer(stdout: str) -> tuple[str, dict, float] | None:
 class DshAdapter(HarnessAdapter):
     name = "dsh"
 
-    def __init__(self, keys_dir: Path | None = None, profile: str = "headless"):
+    def __init__(self, keys_dir: Path | None = None, profile: str = "headless",
+                 est_call_cny: float = 0.0):
         self.keys_dir = Path(keys_dir) if keys_dir else None
         self.profile = profile
+        # 明放估算单价(T-2026-0829-004):无 trailer 时每次调用按此价入账;0=不估(向后兼容)。
+        # 负数钳到 0:负账会冲减日现金让双闸失灵(评审 F4)
+        self.est_call_cny = max(0.0, float(est_call_cny or 0.0))
 
     def _file_key(self, provider: str) -> str | None:
         """keys_dir/<provider>.env 里的有效 key;文件缺失/空值/TODO 占位 → None。"""
@@ -88,14 +94,23 @@ class DshAdapter(HarnessAdapter):
         except FileNotFoundError:
             return HarnessResult(status="failed", output="dsh 未安装(shutil.which 未找到)")
         except subprocess.TimeoutExpired:
-            return HarnessResult(status="timeout", output=f"timeout {packet.timeout}s")
+            # 超时也烧了钱(服务端计量到客户端掐断):照估入账,禁记 0(评审 F1)
+            est = self.est_call_cny
+            return HarnessResult(status="timeout", usage_missing=True,
+                                 output=f"timeout {packet.timeout}s",
+                                 cost_cny=est, estimated=est > 0)
         stdout, stderr = r.stdout or "", r.stderr or ""
         parsed = parse_usage_trailer(stdout)
         if parsed is None:
-            # 无账不推进(D3):旧版 dsh / 输出被截断吞掉 trailer → failed + usage_missing
+            # 明放(T-2026-0829-004):按 returncode 推进 + usage_missing 留痕 +
+            # 按次估算入账(禁止记 0);失败尝试照样烧钱,照估
+            est = self.est_call_cny
             return HarnessResult(
-                status="failed", usage_missing=True,
-                output=f"{USAGE_MISSING_MSG}\n--- 原始输出(截断) ---\n{(stdout + stderr)[:500]}")
+                status="done" if r.returncode == 0 else "failed",
+                usage_missing=True,
+                output=f"[usage_missing 警告] {USAGE_MISSING_MSG}\n"
+                       f"{(stdout + chr(10) + stderr if stderr else stdout)[:4000]}",
+                tokens={}, cost_cny=est, estimated=est > 0)
         body, tokens, cost = parsed
         if body and stderr:
             body = f"{body}\n{stderr}"
