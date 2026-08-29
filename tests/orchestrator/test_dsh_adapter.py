@@ -44,7 +44,8 @@ def test_nonzero_is_failed(tmp_path):
 
 def test_timeout(tmp_path):
     with patch("subprocess.run", side_effect=subprocess.TimeoutExpired(cmd="dsh", timeout=1)):
-        assert DshAdapter().run(_packet(tmp_path)).status == "timeout"
+        assert DshAdapter(sessions_dir=tmp_path / "none").run(
+        _packet(tmp_path)).status == "timeout"
 
 
 # ---- usage trailer 契约消费(T-2026-0828-003 设计 D3) ----

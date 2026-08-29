@@ -58,7 +58,7 @@ def test_dsh_trailer_exact_cost(tmp_path):
 
 
 def test_est_call_default_zero_no_estimate(tmp_path):
-    ad = DshAdapter()                              # 缺省不估(向后兼容)
+    ad = DshAdapter(sessions_dir=tmp_path / "none")  # 缺省不估(向后兼容)
     with patch("subprocess.run", return_value=_fake_run()):
         r = ad.run(_pkt(tmp_path))
     assert r.cost_cny == 0.0 and r.estimated is False

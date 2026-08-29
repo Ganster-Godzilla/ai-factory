@@ -95,11 +95,12 @@ def main(argv: list[str] | None = None) -> int:
             cfg = _cfg()
             budgets = cfg.get("budgets") or {}
             est = budgets.get("ds_est_call_cny") or 0.0
-            if budgets.get("mingfang_mode") is True and est <= 0:
-                # R9 禁止记 0:明放着估算缺失等于瞎放(评审 F2)——兜底价 + 显式警告
+            if est <= 0:
+                # R9 禁记 0:双缺兜底是常设路径(不随 mingfang 结束),
+                # 估算缺失等于给烧钱的调用开零账黑洞(评审)——兜底价 + 显式警告
                 est = 0.05
-                print("warn: mingfang_mode 开启但 ds_est_call_cny 缺失/为 0,"
-                      "按兜底 ¥0.05/次 估算入账", file=sys.stderr)
+                print("warn: ds_est_call_cny 缺失/为 0,双缺兜底按 ¥0.05/次 估算入账",
+                      file=sys.stderr)
             adapter = FakeHarness() if args.fake else get_adapter(
                 ROLE_ROUTING.get(
                     WORK_STATES.get(load_ticket(pool, args.id).state, "dev"), "dsh"),

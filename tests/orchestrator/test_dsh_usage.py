@@ -100,13 +100,13 @@ def test_find_session_missing_dir(tmp_path):
 
 def test_estimate_cost_rates():
     usage = {"input": 100000, "output": 10000, "cache_read": 1000000}
-    cost = estimate_cost(RATES, "deepseek", usage)
+    cost = estimate_cost(RATES["deepseek"], usage)
     # input 10万×¥2/M=0.2;output 1万×¥8/M=0.08;cache 100万×¥0.5/M=0.5 → 0.78
     assert cost == 0.78
 
 
 def test_estimate_cost_glm_zero():
-    cost = estimate_cost(RATES, "glm", {"input": 10**6, "output": 10**6,
+    cost = estimate_cost(RATES["glm"], {"input": 10**6, "output": 10**6,
                                         "cache_read": 10**6})
     assert cost == 0.0
 
@@ -182,4 +182,90 @@ def test_cache_read_not_in_tokens(tmp_path):
     with patch("subprocess.run", return_value=_fake_run("x")):
         r = ad.run(_pkt(tmp_path))
     assert set(r.tokens.keys()) == {"input_tokens", "output_tokens"}
-    assert r.cost_cny > 0    # cache 按 hit 价进了 cost(99999×0.5/M≈0.05)
+    # 精确钉死:0.0006(in/out)+ 99999×0.5/M=0.05 → 0.0506(评审:>0 断言太弱)
+    assert r.cost_cny == 0.0506
+
+
+# ---------- 评审回归(2026-08-29 code review R2) ----------
+
+def test_rates_for_production_model_names():
+    from orchestrator.adapters.dsh_usage import rates_for
+    # 评审 F1:生产 packet.model 是全模型名,不是 provider 键
+    assert rates_for("deepseek-v4-flash", RATES) is RATES["deepseek"]
+    assert rates_for("glm-5.3-flash", RATES) is RATES["glm"]
+    assert rates_for(None, RATES) is RATES["deepseek"]
+    assert rates_for("unknown-x", RATES) is RATES["deepseek"]
+    assert rates_for("deepseek-v4-flash", None) is None
+
+
+def test_production_model_session_cost(tmp_path):
+    # 生产名走全链:session 命中 + model="deepseek-v4-flash" → 按 deepseek 计价
+    sd = _sessions_for(tmp_path, tmp_path, [
+        _usage(1, 1, 10**13, inp=100000, out=10000, cache=1000000)])
+    ad = DshAdapter(rates=RATES, sessions_dir=sd)
+    with patch("subprocess.run", return_value=_fake_run("x")):
+        r = ad.run(_pkt(tmp_path, model="deepseek-v4-flash"))
+    assert r.cost_cny == 0.78 and r.estimated is False
+
+
+def test_rates_missing_falls_to_est(tmp_path):
+    # 评审 F2:rates 缺配 → 会话命中也走 est 兜底,禁记 ¥0 真账
+    sd = _sessions_for(tmp_path, tmp_path, [_usage(1, 1, 10**13, inp=1000)])
+    ad = DshAdapter(rates=None, sessions_dir=sd, est_call_cny=0.05)
+    with patch("subprocess.run", return_value=_fake_run("x")):
+        r = ad.run(_pkt(tmp_path))
+    assert r.cost_cny == 0.05 and r.estimated is True and r.usage_missing is True
+
+
+def test_zero_usage_keys_treated_as_missing(tmp_path):
+    # 评审 F3:键名漂移(GLM promptTokens)全零汇总 → 落双缺,不当"真实 ¥0 账"
+    rec = {"type": "assistant/chunk", "seq": 1, "time": 10**13,
+           "data": {"turn": 1, "step": 1, "chunk": {"type": "usage",
+                    "usage": {"promptTokens": 100, "completionTokens": 50}}}}
+    sd = _sessions_for(tmp_path, tmp_path, [rec])
+    ad = DshAdapter(rates=RATES, sessions_dir=sd, est_call_cny=0.05)
+    with patch("subprocess.run", return_value=_fake_run("x")):
+        r = ad.run(_pkt(tmp_path))
+    assert r.usage_missing is True and r.estimated is True
+
+
+def test_stale_session_excluded_no_buffer(tmp_path):
+    # 评审:撤掉 5s 缓冲——上一轮(1 分钟前)的记录不许混入当次
+    import time as _t
+    old_ms = int(_t.time() * 1000) - 60000
+    sd = _sessions_for(tmp_path, tmp_path, [_usage(1, 1, old_ms, inp=9999)])
+    ad = DshAdapter(rates=RATES, sessions_dir=sd, est_call_cny=0.05)
+    with patch("subprocess.run", return_value=_fake_run("x")):
+        r = ad.run(_pkt(tmp_path))
+    assert r.usage_missing is True and r.cost_cny == 0.05
+
+
+def test_torn_frame_salvaged(tmp_path):
+    # 评审:断帧(超时掐断)抢救完整帧,丢弃垃圾尾巴
+    import zstandard as z
+    d = tmp_path / "s"
+    d.mkdir()
+    good = z.ZstdCompressor().compress(
+        (json.dumps(_header("x")) + "\n" +
+         json.dumps(_usage(1, 1, 1000, inp=100, out=50)) + "\n").encode())
+    (d / "session.jsonl.zstd").write_bytes(good + b"\x28\xb5\x2f\xfdgarbage-tail")
+    got = read_session_usage(d / "session.jsonl.zstd", since_ms=0)
+    assert got == {"input": 100, "output": 50, "cache_read": 0}
+
+
+def test_string_token_values_coerced(tmp_path):
+    rec = {"type": "assistant/chunk", "seq": 1, "time": 1000,
+           "data": {"turn": 1, "step": 1, "chunk": {"type": "usage",
+                    "usage": {"inputTokens": "100", "outputTokens": "50"}}}}
+    f = _mk_session(tmp_path / "s", [rec])
+    assert read_session_usage(f, since_ms=0)["input"] == 100
+
+
+def test_escape_preserves_dots(tmp_path):
+    # 评审:worktree 目录名保留点号,快路径必须命中
+    sd = tmp_path / "sessions"
+    f = _mk_session(sd / "--d-ws-ai-.orc-worktrees-T-1--" / "session-1",
+                    [_header("d:\ws\ai\.orc-worktrees\T-1"),
+                     _usage(1, 1, 100)])
+    got = find_session_file(sd, "d:\ws\ai\.orc-worktrees\T-1", since_ms=0)
+    assert got == f

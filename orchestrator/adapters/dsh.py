@@ -63,6 +63,13 @@ class DshAdapter(HarnessAdapter):
             from orchestrator.adapters.dsh_usage import (DEFAULT_SESSIONS_DIR,
                                                          find_session_file,
                                                          read_session_usage)
+        except ImportError as e:
+            # 依赖缺失≠无会话:留诊断,否则故障表现为流程停摆难定位(评审)
+            import sys
+            print(f"[dsh] 会话解析依赖缺失({e}),会话源不可用;"
+                  f"请 pip install zstandard(先配镜像)", file=sys.stderr)
+            return None
+        try:
             sd = self.sessions_dir or DEFAULT_SESSIONS_DIR
             f = find_session_file(sd, workdir, since_ms)
             return read_session_usage(f, since_ms) if f else None
@@ -70,14 +77,27 @@ class DshAdapter(HarnessAdapter):
             return None
 
     def _real_result(self, status: str, usage: dict, model: str | None,
-                     output: str) -> HarnessResult:
-        from orchestrator.adapters.dsh_usage import estimate_cost
-        cost = estimate_cost(self.rates, model or "deepseek", usage)
+                     output: str) -> HarnessResult | None:
+        """真实计量结果;费率缺失/模型无条目 → None(调用方走 est 兜底,
+        不许记 ¥0 真账——R9,评审 F1/F2)。"""
+        from orchestrator.adapters.dsh_usage import estimate_cost, rates_for
+        rate = rates_for(model, self.rates)
+        if rate is None:
+            return None
+        # 剥离 trailer 标记行:残缺 trailer 不许污染正文(评审)
+        body = "\n".join(ln for ln in output.splitlines()
+                         if not ln.strip().startswith(USAGE_TRAILER))
         return HarnessResult(
-            status=status, output=output, estimated=False, usage_missing=False,
+            status=status, output=body, estimated=False, usage_missing=False,
             tokens={"input_tokens": usage["input"],
                     "output_tokens": usage["output"]},
-            cost_cny=cost)
+            cost_cny=estimate_cost(rate, usage))
+
+    def _est_fallback(self, status: str, output: str) -> HarnessResult:
+        """双缺兜底:判负/超时但照估入账(R9 禁记 0)。"""
+        est = self.est_call_cny
+        return HarnessResult(status=status, usage_missing=True, output=output,
+                             cost_cny=est, estimated=est > 0)
 
     def _file_key(self, provider: str) -> str | None:
         """keys_dir/<provider>.env 里的有效 key;文件缺失/空值/TODO 占位 → None。"""
@@ -111,7 +131,7 @@ class DshAdapter(HarnessAdapter):
         exe = shutil.which("dsh") or "dsh"
         profile = f"headless-{packet.model}" if packet.model else self.profile
         cmd = [exe, "--profile", profile, packet.prompt]
-        run_start_ms = time.time() * 1000 - 5000   # 5s 时钟缓冲(T-2026-0829-002)
+        run_start_ms = time.time() * 1000   # 同机时钟无偏移,缓冲只会重算上轮账(评审)
         try:
             r = subprocess.run(cmd, cwd=packet.workdir, capture_output=True, text=True,
                                encoding="utf-8", errors="replace",
@@ -122,12 +142,11 @@ class DshAdapter(HarnessAdapter):
             # 超时也烧了钱:先试会话真实计量(已完成 step 有 usage),双缺照估(评审 F1)
             usage = self._session_usage(packet.workdir, run_start_ms)
             if usage:
-                return self._real_result("timeout", usage, packet.model,
+                real = self._real_result("timeout", usage, packet.model,
                                          f"timeout {packet.timeout}s")
-            est = self.est_call_cny
-            return HarnessResult(status="timeout", usage_missing=True,
-                                 output=f"timeout {packet.timeout}s",
-                                 cost_cny=est, estimated=est > 0)
+                if real:
+                    return real
+            return self._est_fallback("timeout", f"timeout {packet.timeout}s")
         stdout, stderr = r.stdout or "", r.stderr or ""
         parsed = parse_usage_trailer(stdout)
         if parsed is None:
@@ -135,16 +154,15 @@ class DshAdapter(HarnessAdapter):
             usage = self._session_usage(packet.workdir, run_start_ms)
             if usage:
                 body = (stdout + "\n" + stderr) if stderr else stdout
-                return self._real_result(
+                real = self._real_result(
                     "done" if r.returncode == 0 else "failed",
                     usage, packet.model, body[:4000])
-            est = self.est_call_cny
-            return HarnessResult(
-                status="failed",     # 恢复硬契约:双源都断没理由放行(boss 决)
-                usage_missing=True,
-                output=f"[usage_missing] {USAGE_MISSING_MSG}\n"
-                       f"{(stdout + chr(10) + stderr if stderr else stdout)[:4000]}",
-                tokens={}, cost_cny=est, estimated=est > 0)
+                if real:
+                    return real
+            return self._est_fallback(
+                "failed",     # 恢复硬契约:双源都断没理由放行(boss 决)
+                f"[usage_missing] {USAGE_MISSING_MSG}\n"
+                f"{(stdout + chr(10) + stderr if stderr else stdout)[:4000]}")
         body, tokens, cost = parsed
         if body and stderr:
             body = f"{body}\n{stderr}"
