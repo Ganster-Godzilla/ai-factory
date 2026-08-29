@@ -3,7 +3,7 @@
   "version": "1.0",
   "last_updated": "2026-08-29",
   "overview": {
-    "description": "AI Factory 编排器;T-2026-0829-002 真实计量已交付,明放复审触发条件已达成(T-002 交付),请 boss 复审",
+    "description": "AI Factory;T-2026-0829-001 产物门禁统一已交付,余 T-2026-0828-004(任务分级)",
     "status": "active",
     "active_modules": []
   },
@@ -38,6 +38,18 @@
       "phase": "completed",
       "proposal": ".claude/proposals/PROJ-20260829-001.md",
       "requirements_dir": "document/business/dashboard/01_需求分析",
+      "milestones": {
+        "phase0_proposal": "completed",
+        "phase1_requirements": "completed",
+        "phase2_design": "completed",
+        "phase3_implement": "completed",
+        "phase4_verify": "completed",
+        "phase5_release": "completed"
+      }
+    },
+    "orchestrator-001": {
+      "phase": "completed",
+      "ticket": "T-2026-0829-001",
       "milestones": {
         "phase0_proposal": "completed",
         "phase1_requirements": "completed",
