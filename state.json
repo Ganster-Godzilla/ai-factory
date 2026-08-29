@@ -3,11 +3,22 @@
   "version": "1.0",
   "last_updated": "2026-08-29",
   "overview": {
-    "description": "AI Factory 编排器与插件体系;当前推进 Dashboard v2",
+    "description": "AI Factory 编排器与插件体系;当前推进 dsh 现金闸明放(T-2026-0829-004)",
     "status": "active",
-    "active_modules": ["dashboard"]
+    "active_modules": ["orchestrator"]
   },
   "modules": {
+    "orchestrator": {
+      "phase": "phase3_implement",
+      "ticket": "T-2026-0829-004",
+      "requirements_dir": "document/business/orchestrator/01_需求分析",
+      "milestones": {
+        "phase0_proposal": "completed",
+        "phase1_requirements": "completed",
+        "phase2_design": "completed",
+        "phase3_implement": "in_progress"
+      }
+    },
     "dashboard": {
       "phase": "completed",
       "proposal": ".claude/proposals/PROJ-20260829-001.md",

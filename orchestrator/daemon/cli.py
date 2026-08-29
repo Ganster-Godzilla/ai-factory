@@ -96,7 +96,8 @@ def main(argv: list[str] | None = None) -> int:
             adapter = FakeHarness() if args.fake else get_adapter(
                 ROLE_ROUTING.get(
                     WORK_STATES.get(load_ticket(pool, args.id).state, "dev"), "dsh"),
-                keys_dir=cfg.get("keys_dir"))
+                keys_dir=cfg.get("keys_dir"),
+                est_call_cny=(cfg.get("budgets") or {}).get("ds_est_call_cny", 0.0))
             print(advance_once(pool, args.id, adapter, Path(args.project_dir),
                                cfg=cfg,
                                consult_adapter=FakeHarness() if args.consult_fake else None))

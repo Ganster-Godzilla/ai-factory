@@ -14,6 +14,15 @@ budgets:
   # 治本=relay 周计数剔除 cache_read,入平台改进清单(T-2026-0828-003,M5)
   k3_week_token_budget: 30000000
   ds_daily_cny: 30
+  # 明放模式(T-2026-0829-004,2026-08-29 boss 决策):磨合期 DS 双闸(日现金线/单工单
+  # 预算帽)降级为 warn-only——超线写 budget_warn 事件放行,不卡 pipeline;
+  # 复审双触发:review_after 到期 或 T-2026-0829-002(session.jsonl.zstd 解析)交付。
+  # 复审时按 ledger estimated=true 条目对账,决定恢复硬闸或调整阈值。
+  mingfang_mode: true
+  review_after: "2026-09-12"
+  # 无 usage trailer 时每次 dsh 调用估算入账价(禁止记 0);
+  # DeepSeek 典型 dev 调用 ≈¥0.014,留 3 倍余量宁高估不低估
+  ds_est_call_cny: 0.05
 gateway:
   url: http://127.0.0.1:8787
 keys_dir: D:/Tool/keys

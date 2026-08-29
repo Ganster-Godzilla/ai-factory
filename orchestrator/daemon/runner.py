@@ -13,7 +13,8 @@ from orchestrator.daemon.circuitbreaker import (
 )
 from orchestrator.daemon.events import append_event
 from orchestrator.daemon.gateway import k3_effective_week_tokens
-from orchestrator.daemon.ledger import append_ledger, ds_daily_exceeded, ds_ticket_cost
+from orchestrator.daemon.ledger import (append_ledger, ds_daily_exceeded,
+                                        ds_day_cost, ds_ticket_cost)
 from orchestrator.daemon.slicer import load_task_list, make_packet, ready_tasks, scope_violations
 from orchestrator.daemon.statemachine import suspend, transition
 from orchestrator.daemon.ticket import load_ticket, save_ticket
@@ -62,6 +63,12 @@ def _model_for(cfg: dict | None, role: str) -> str | None:
     return ((cfg or {}).get("models") or {}).get(role) or ROLE_MODEL.get(role)
 
 
+def _mingfang(cfg: dict | None) -> bool:
+    """明放开关(T-2026-0829-004):budgets.mingfang_mode 显式 true 才放行;
+    缺键/缺 budgets 一律硬闸(向后兼容)。"""
+    return bool(((cfg or {}).get("budgets") or {}).get("mingfang_mode", False))
+
+
 def _record_cost(pool: Path, ticket, adapter: HarnessAdapter, result, role: str) -> None:
     res = ADAPTER_RESOURCE.get(adapter.name)
     if not res:
@@ -77,10 +84,12 @@ def _record_cost(pool: Path, ticket, adapter: HarnessAdapter, result, role: str)
         amount = tokens["input"] + tokens["output"]
     else:
         amount = result.cost_cny
-    # 三字段齐全才是一条完整账:0 元调用(GLM 体验卡)也留 calls 证据
+    # 三字段齐全才是一条完整账:0 元调用(GLM 体验卡)也留 calls 证据;
+    # 明放估算(T-2026-0829-004):amount>0 且 estimated 时透传标记
     if amount or tokens["input"] or tokens["output"]:
         append_ledger(pool, resource, amount, unit, ticket.id, role, adapter.name,
-                      tokens=tokens, calls=1)
+                      tokens=tokens, calls=1,
+                      estimated=getattr(result, "estimated", False))
 
 
 def _run_acceptance(cmd: str, cwd: Path, timeout: int = 600) -> subprocess.CompletedProcess:
@@ -156,12 +165,23 @@ def run_dev_tasks(pool: Path, ticket, adapter: HarnessAdapter,
                 reason_code="deadlock")
         return "suspend: 依赖死锁"
     # 成本闸在完工判定之后:全 done 工单优先进 p4,不得被帽挂起(T1 评审观察)
+    # 明放模式(T-2026-0829-004):mingfang_mode 下双闸降级为 budget_warn 事件放行;
+    # 缺省/关闭维持硬闸。配置即决策留痕(orchestrator.yaml 标注磨合期+复审日)
+    mingfang = _mingfang(cfg)
     if cfg and ds_daily_exceeded(pool, cfg):
-        return "blocked: ds 日现金线"
-    if ds_ticket_cost(pool, ticket.id) > (ticket.budget or {}).get("token_cap_cny", 10.0):
-        suspend(pool, ticket, actor="system", reason="工单预算帽",
-                reason_code="budget_cap")
-        return "suspend: 工单预算帽"
+        if not mingfang:
+            return "blocked: ds 日现金线"
+        append_event(pool, ticket.id, "system", "budget_warn", gate="ds_daily",
+                     value=round(ds_day_cost(pool), 4),
+                     threshold=(cfg.get("budgets") or {}).get("ds_daily_cny", 30))
+    cap = (ticket.budget or {}).get("token_cap_cny", 10.0)
+    if ds_ticket_cost(pool, ticket.id) > cap:
+        if not mingfang:
+            suspend(pool, ticket, actor="system", reason="工单预算帽",
+                    reason_code="budget_cap")
+            return "suspend: 工单预算帽"
+        append_event(pool, ticket.id, "system", "budget_warn", gate="ticket_cap",
+                     value=round(ds_ticket_cost(pool, ticket.id), 4), threshold=cap)
     task = ready[0]
     wt = ensure_worktree(project_dir, f"{ticket.id}-{task['id']}")
     packet = make_packet(task, ticket, wt, design_excerpt="")

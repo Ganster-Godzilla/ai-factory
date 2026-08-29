@@ -1,0 +1,27 @@
+# 任务切片-T-2026-0828-004: 任务分级与快速通道策略
+# 设计依据:docs/specs/T-2026-0828-004-design.md
+# 纯文档单:六任务串行递增写作 docs/specs/T-2026-0828-004-strategy.md,验收一律 doccheck
+- id: G1
+  title: "策略文档骨架+分级标准与定级权责章节(R1):四维(改动类型/风险/影响面/预估工作量)封闭取值域表、就高原则逐级判定规则、文档修订/单点bug/小特性/跨模块大特性四样例唯一定级、定级权责(建单必填人工指定;PM 单次最多升降一级;降 L3 须 boss 确认;level_changed 事件留痕;存量单视同 L1)"
+  acceptance_cmd: "python -m orchestrator.daemon.doccheck docs/specs/T-2026-0828-004-strategy.md --require-section 分级标准 --require-section 定级权责 --require-content L1 --require-content L2 --require-content L3 --require-content 就高"
+  depends_on: []
+- id: G2
+  title: "流程裁剪映射章节(R2):级别→P0–P5 阶段三态(保留/合并/豁免)裁剪表,L1 全保留,L2 合并 P0+P1 与 P4 并说明理由,L3 最短路形态(draft→p0_proposed→p3→p4→p5_ready→p5_releasing→done)与人工直接改+报备路径(适用条件/24h 补单/报备要素),豁免产物缺口逐项列出及事件流替代口径"
+  acceptance_cmd: "python -m orchestrator.daemon.doccheck docs/specs/T-2026-0828-004-strategy.md --require-section 流程裁剪 --require-section 豁免产物 --require-content 保留 --require-content 合并 --require-content 豁免 --require-content 报备"
+  depends_on: [G1]
+- id: G3
+  title: "快速通道安全约束章节(R3):不可省门禁封闭清单(发布批准/验收命令执行/台账入账/状态机迁移,声明任何级别不得豁免)+防滥用规则(级别变更留痕可审计;频度告警口径=每周 L3>10 或占当周新建>50% 触发 frequency_alert 不阻断;L3-manual 每周≤3 次,超出须 boss 逐单确认)"
+  acceptance_cmd: "python -m orchestrator.daemon.doccheck docs/specs/T-2026-0828-004-strategy.md --require-section 不可省门禁 --require-section 防滥用 --require-content 发布批准 --require-content 验收命令 --require-content 台账入账 --require-content frequency_alert"
+  depends_on: [G2]
+- id: G4
+  title: "熔断与会诊兼容章节(R4):L1/L2 保持重试≤3→会诊≤1;L3 收紧为重试≤2、免会诊、达上限 suspend(circuit_exhausted)转人工由 boss 定升级或关闭;预算闸(¥10 工单帽/¥30 日线/k3 周配额)全级别一视同仁"
+  acceptance_cmd: "python -m orchestrator.daemon.doccheck docs/specs/T-2026-0828-004-strategy.md --require-section 熔断兼容 --require-content circuit_exhausted --require-content 工单帽"
+  depends_on: [G3]
+- id: G5
+  title: "工单字段与展示口径章节(R5):YAML 新增 level 字段(取值域 L1|L2|L3,新单必填,存量缺字段兜底 L1,历史走事件流不入 yaml);Dashboard 列表页级别徽章+快速通道标记、详情页级别/定级来源/变更历史/是否快速通道可见;声明实施属后续实施单范围"
+  acceptance_cmd: "python -m orchestrator.daemon.doccheck docs/specs/T-2026-0828-004-strategy.md --require-section 工单字段 --require-section Dashboard --require-content level --require-content 定级来源"
+  depends_on: [G4]
+- id: G6
+  title: "歧义澄清决议章节+评审就绪终检(AC-6):PRD 五条开放问题逐条登记并给处置结论(档数与 hotfix/工作量标尺/PM 降级权边界/频度口径/报备落点);全文无 TBD/待定遗留"
+  acceptance_cmd: "python -m orchestrator.daemon.doccheck docs/specs/T-2026-0828-004-strategy.md --require-section 歧义澄清决议 --forbid TBD --forbid 待定"
+  depends_on: [G5]
