@@ -1,5 +1,4 @@
 import yaml
-from pathlib import Path
 from orchestrator.daemon.cli import main
 from orchestrator.daemon.ticket import load_ticket
 

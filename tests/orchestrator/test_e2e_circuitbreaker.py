@@ -3,9 +3,8 @@ import subprocess
 
 from orchestrator.adapters.fake import FakeHarness
 from orchestrator.daemon.events import read_events
-from orchestrator.daemon.ledger import ds_day_cost
 from orchestrator.daemon.runner import advance_once
-from orchestrator.daemon.statemachine import APPROVALS, transition
+from orchestrator.daemon.statemachine import transition
 from orchestrator.daemon.ticket import load_ticket, new_ticket, save_ticket
 
 

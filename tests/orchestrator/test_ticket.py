@@ -1,5 +1,5 @@
 import pytest
-from orchestrator.daemon.ticket import Ticket, new_ticket, load_ticket, save_ticket
+from orchestrator.daemon.ticket import new_ticket, load_ticket, save_ticket
 
 
 def test_new_ticket_defaults(pool):

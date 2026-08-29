@@ -36,7 +36,7 @@ def test_p3_dispatches_ready_tasks(pool, tmp_path):
     ]
     save_ticket(pool, t)
     h = FakeHarness()
-    msg = advance_once(pool, t.id, h, proj)
+    advance_once(pool, t.id, h, proj)
     t2 = load_ticket(pool, t.id)
     # 一次 advance 只派一个 ready 任务;task-2 依赖未满足
     assert t2.tasks[0]["status"] == "done"
@@ -155,7 +155,7 @@ def test_deadlocked_tasks_suspend(pool, tmp_path):
          "status": "pending", "attempts": 0},
     ]
     save_ticket(pool, t)
-    msg = advance_once(pool, t.id, FakeHarness(), proj)
+    advance_once(pool, t.id, FakeHarness(), proj)
     t2 = load_ticket(pool, t.id)
     assert t2.state == "suspended"
     from orchestrator.daemon.events import read_events

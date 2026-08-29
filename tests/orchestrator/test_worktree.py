@@ -1,5 +1,4 @@
 import subprocess
-from pathlib import Path
 import pytest
 from orchestrator.daemon.worktree import ensure_worktree, list_worktrees, recycle_worktree
 

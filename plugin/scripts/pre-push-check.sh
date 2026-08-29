@@ -19,7 +19,12 @@ else
   changed=$(git status --porcelain | awk '{print $2}')
 fi
 files=""
-for f in $changed; do [ -f "$f" ] && files="$files $f"; done
+# 只喂 Python 文件:lint_cmd 是 pyflakes,md/yaml/html 会让它误报(2026-08-29 事故)
+for f in $changed; do
+  case "$f" in
+    *.py) [ -f "$f" ] && files="$files $f" ;;
+  esac
+done
 [ -z "$files" ] && exit 0
 
 run_cmd="${lint_cmd//\{changed_files\}/$files}"
