@@ -152,3 +152,31 @@ def test_cli_module_entry(tmp_path):
         cwd=str(REPO_ROOT), timeout=60)
     assert r.returncode == 1
     assert 'FAIL: 缺少章节 "Why"' in r.stdout
+
+
+# ---- G2:--require-content(T-2026-0829-001 设计 D5) ----
+
+def test_require_content_hit_and_miss(tmp_path):
+    from orchestrator.daemon.doccheck import check
+    text = "# 功能清单\n\n| # | 功能 | 优先级 |\n|---|---|---|\n| F1 | x | P0 |\n"
+    assert check(text, require_content=["优先级"]) == []
+    fails = check(text, require_content=["优先级", "验收标准"])
+    assert fails == ['FAIL: 缺少内容 "验收标准"']
+
+
+def test_require_content_normalization(tmp_path):
+    from orchestrator.daemon.doccheck import check
+    # 行内多余空白/全角空格不影响子串命中(与 require-section 同套规整)
+    text = "# A\n\n功能  清单　带优先级\n"
+    assert check(text, require_content=["功能 清单"]) == []
+    # 大小写不敏感(forbid 同款口径)
+    assert check(text, require_content=["PRIORITY".replace("PRIORITY", "优先级")]) == []
+    assert check("abc DeF\n", require_content=["def"]) == []
+
+
+def test_require_content_cli(tmp_path):
+    from orchestrator.daemon.doccheck import main
+    f = tmp_path / "a.md"
+    f.write_text("# X\n含优先级\n", encoding="utf-8")
+    assert main([str(f), "--require-content", "优先级"]) == 0
+    assert main([str(f), "--require-content", "不存在词"]) == 1

@@ -36,6 +36,7 @@ SUSPEND_REASON_CODES = {
     "budget_cap", "daily_cap", "circuit_exhausted", "consult_exhausted",
     "quota_exceeded", "deadlock", "load_failed", "release_failed",
     "verify_failed", "manual",
+    "artifact_missing",   # T-2026-0829-001:门禁产物缺失/要素不全挂起
 }
 
 # P1 重做边(D2):PRD 驳回回炉,actor 限 boss。轮次计数在 transition 内统一记,
@@ -47,12 +48,32 @@ class IllegalTransition(Exception):
     pass
 
 
-def transition(pool: Path, ticket: Ticket, to_state: str, actor: str, **ev) -> Ticket:
+def _enforce_gate(project_dir, ticket: Ticket, to_state: str) -> None:
+    """产物门禁(T-2026-0829-001 M4):门禁边+新单强制校验。
+    project_dir 缺失=开发错误;check_gate 非空=IllegalTransition 含全部 FAIL 行。
+    注:测试默认经 conftest 旁路本函数(隔离既有用例),真闸门见 test_gate_enforcement。"""
+    from orchestrator.daemon.artifacts import manifest_for_edge
+    from orchestrator.daemon.gates import check_gate, gate_required
+    if manifest_for_edge(ticket.state, to_state) is None:
+        return
+    if not gate_required(ticket):
+        return
+    if project_dir is None:
+        raise IllegalTransition(
+            f"门禁边({ticket.state}→{to_state})需要 project_dir(开发错误)")
+    fails = check_gate(project_dir, ticket, to_state)
+    if fails:
+        raise IllegalTransition("门禁校验未过:\n" + "\n".join(fails))
+
+
+def transition(pool: Path, ticket: Ticket, to_state: str, actor: str,
+               project_dir: Path | None = None, **ev) -> Ticket:
     allowed = TRANSITIONS.get(ticket.state, {}).get(to_state)
     if allowed is None:
         raise IllegalTransition(f"{ticket.state} → {to_state} 不在迁移表")
     if "*" not in allowed and actor not in allowed:
         raise IllegalTransition(f"{ticket.state} → {to_state} 不允许 actor={actor}")
+    _enforce_gate(project_dir, ticket, to_state)
     frm = ticket.state
     ticket.state = to_state
     if (frm, to_state) == P1_REDO_EDGE:

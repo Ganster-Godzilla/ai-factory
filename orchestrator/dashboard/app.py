@@ -76,6 +76,11 @@ def create_app(pool_dir: Path, cfg: dict) -> Flask:
         d = views.ticket_detail(app.config["POOL"], ticket_id)
         return render_template("ticket.html", **d)
 
+    def _project_dir(t) -> Path | None:
+        """工单项目名 → cfg projects 登记目录(产物门禁工作根,T-2026-0829-001 M4)。"""
+        p = (app.config["CFG"].get("projects") or {}).get(t.project)
+        return Path(p) if p else None
+
     @app.post("/approve/<ticket_id>")
     def approve(ticket_id: str):
         pool = app.config["POOL"]
@@ -83,12 +88,14 @@ def create_app(pool_dir: Path, cfg: dict) -> Flask:
         try:
             if t.state == "draft" and t.created_by == "probe":
                 # 探针草稿"采纳" = 老板直接提交 P0(裁决:actor=boss 真实记录)
-                transition(pool, t, "p0_proposed", actor="boss")
+                transition(pool, t, "p0_proposed", actor="boss",
+                           project_dir=_project_dir(t))
             elif t.state == "p2_designing" and t.owner_role != "boss":
                 # owner 门禁(终审 F3):设计尚未交还 boss,与审批中心列表过滤口径一致
                 return _error(f"批准失败({t.id}):设计尚未完成(owner={t.owner_role})")
             elif t.state in APPROVALS:
-                transition(pool, t, APPROVALS[t.state], actor="boss")
+                transition(pool, t, APPROVALS[t.state], actor="boss",
+                           project_dir=_project_dir(t))
             else:
                 raise IllegalTransition(f"{t.state} 无可审批迁移")
         except IllegalTransition as e:

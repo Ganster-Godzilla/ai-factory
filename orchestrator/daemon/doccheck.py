@@ -60,8 +60,8 @@ def _title_matches(title: str, name: str) -> bool:
     )
 
 
-def check(text: str, require_sections=(), forbid=()) -> list[str]:
-    """返回 FAIL 子句列表(缺章节在前、禁用词在后);空列表=通过。"""
+def check(text: str, require_sections=(), forbid=(), require_content=()) -> list[str]:
+    """返回 FAIL 子句列表(缺章节→缺内容→禁用词);空列表=通过。"""
     norm = normalize(text)
     titles = _headings(norm)
     fails = []
@@ -70,6 +70,9 @@ def check(text: str, require_sections=(), forbid=()) -> list[str]:
         if not any(_title_matches(f, k) or _title_matches(s, k) for f, s in titles):
             fails.append(f'FAIL: 缺少章节 "{name}"')
     folded = norm.casefold()
+    # --require-content(T-2026-0829-001 D5):规范化后子串判定,支撑非标题类必含要素
+    fails += [f'FAIL: 缺少内容 "{c}"' for c in require_content
+              if c and c.casefold() not in folded]
     fails += [f'FAIL: 命中禁用词 "{w}"' for w in forbid
               if w and w.casefold() in folded]
     return fails
@@ -82,6 +85,9 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--require-section", action="append", default=[],
                     dest="require_sections", metavar="X",
                     help="必须存在的章节标题,可重复(层级/大小写/空白变体不敏感)")
+    ap.add_argument("--require-content", action="append", default=[],
+                    dest="require_content", metavar="C",
+                    help="必须包含的字面内容(规范化后子串,可重复)")
     ap.add_argument("--forbid", action="append", default=[], metavar="W",
                     help="禁止出现的词(大小写不敏感),可重复")
     args = ap.parse_args(argv)
@@ -90,7 +96,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"FAIL: 文件不存在: {args.file}")
         return 1
     fails = check(path.read_text(encoding="utf-8", errors="replace"),
-                  args.require_sections, args.forbid)
+                  args.require_sections, args.forbid, args.require_content)
     for line in fails:
         print(line)
     if fails:

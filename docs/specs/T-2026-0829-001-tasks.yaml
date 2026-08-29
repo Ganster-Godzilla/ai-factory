@@ -22,7 +22,7 @@
   scope: ["orchestrator/**", "tests/**"]
 - id: G5
   title: "角色提示词按清单改写:pm(P0 提案+P1 三件套)/architect(设计门禁检查点)/qa(验收报告)/release(发布记录)/sre(观察窗报告)各设产物段,产物名与必含章节同 ARTIFACT_MANIFEST 逐件一致;dev 不改"
-  acceptance_cmd: "python -m orchestrator.daemon.doccheck orchestrator/roles/prompts/pm.md --require-section 产物 --require-content -提案.md --require-content -功能清单.md --require-content -歧义澄清记录.md && python -m orchestrator.daemon.doccheck orchestrator/roles/prompts/architect.md --require-section 产物 --require-content -design.md --require-content -tasks.yaml && python -m orchestrator.daemon.doccheck orchestrator/roles/prompts/qa.md --require-section 产物 --require-content -验收报告.md && python -m orchestrator.daemon.doccheck orchestrator/roles/prompts/release.md --require-section 产物 --require-content -发布记录.md && python -m orchestrator.daemon.doccheck orchestrator/roles/prompts/sre.md --require-section 产物 --require-content -观察窗报告.md"
+  acceptance_cmd: "python -m orchestrator.daemon.doccheck orchestrator/roles/prompts/pm.md --require-section 产物 --require-content=-提案.md --require-content=-功能清单.md --require-content=-歧义澄清记录.md && python -m orchestrator.daemon.doccheck orchestrator/roles/prompts/architect.md --require-section 产物 --require-content=-design.md --require-content=-tasks.yaml && python -m orchestrator.daemon.doccheck orchestrator/roles/prompts/qa.md --require-section 产物 --require-content=-验收报告.md && python -m orchestrator.daemon.doccheck orchestrator/roles/prompts/release.md --require-section 产物 --require-content=-发布记录.md && python -m orchestrator.daemon.doccheck orchestrator/roles/prompts/sre.md --require-section 产物 --require-content=-观察窗报告.md"
   depends_on: [G1, G2]
   scope: ["orchestrator/roles/prompts/**"]
 - id: G6
