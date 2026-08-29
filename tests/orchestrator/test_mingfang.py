@@ -30,17 +30,18 @@ def _fake_run(stdout="out", rc=0):
 
 
 def test_dsh_degraded_estimated_cost(tmp_path):
-    ad = DshAdapter(est_call_cny=0.05)
+    # T-2026-0829-002 起:双缺(无 trailer 无会话)→ 硬判负但照估禁记 0
+    ad = DshAdapter(est_call_cny=0.05, sessions_dir=tmp_path / "none")
     with patch("subprocess.run", return_value=_fake_run("正文无 trailer")):
         r = ad.run(_pkt(tmp_path))
-    assert r.status == "done"                      # 按 returncode 推进
+    assert r.status == "failed"                      # 恢复硬契约(boss 决)
     assert r.usage_missing is True
     assert r.cost_cny == 0.05 and r.estimated is True   # 估算入账,禁止记 0
     assert r.tokens == {}
 
 
 def test_dsh_degraded_failed_rc(tmp_path):
-    ad = DshAdapter(est_call_cny=0.05)
+    ad = DshAdapter(est_call_cny=0.05, sessions_dir=tmp_path / "none")
     with patch("subprocess.run", return_value=_fake_run("boom", rc=1)):
         r = ad.run(_pkt(tmp_path))
     assert r.status == "failed" and r.usage_missing is True
@@ -57,7 +58,7 @@ def test_dsh_trailer_exact_cost(tmp_path):
 
 
 def test_est_call_default_zero_no_estimate(tmp_path):
-    ad = DshAdapter()                              # 缺省不估(向后兼容)
+    ad = DshAdapter(sessions_dir=tmp_path / "none")  # 缺省不估(向后兼容)
     with patch("subprocess.run", return_value=_fake_run()):
         r = ad.run(_pkt(tmp_path))
     assert r.cost_cny == 0.0 and r.estimated is False
