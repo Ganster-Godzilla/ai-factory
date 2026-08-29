@@ -25,6 +25,12 @@ def _pool() -> Path:
     return Path(_cfg()["pool"])
 
 
+def _project_dir(cfg: dict, ticket) -> Path | None:
+    """工单项目名 → cfg projects 登记目录(共置 gates.project_dir_for,评审 R3-10)。"""
+    from orchestrator.daemon.gates import project_dir_for
+    return project_dir_for(cfg, ticket.project)
+
+
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(prog="orc")
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -63,14 +69,15 @@ def main(argv: list[str] | None = None) -> int:
                 print(f"  {e['ts'][:19]}  {e['actor']:<10} {e['event']}")
         elif args.cmd == "approve":
             t = load_ticket(pool, args.id)
+            pd = _project_dir(_cfg(), t)   # 门禁边强制校验需要(T-2026-0829-001 M4)
             if args.actor == "pm" and t.state == "draft":
-                transition(pool, t, "p0_proposed", actor="pm")
+                transition(pool, t, "p0_proposed", actor="pm", project_dir=pd)
             else:
                 target = APPROVALS.get(t.state)
                 if not target:
                     print(f"{t.state} 不是审批态", file=sys.stderr)
                     return 1
-                transition(pool, t, target, actor=args.actor)
+                transition(pool, t, target, actor=args.actor, project_dir=pd)
             print(f"{args.id} → {load_ticket(pool, args.id).state}")
         elif args.cmd == "reject":
             t = load_ticket(pool, args.id)

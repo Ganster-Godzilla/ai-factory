@@ -11,3 +11,12 @@ scope 约定(R7 强制):改代码的任务必须写 scope 字段——相对项�
 (fnmatch 语义,`**` 递归),如 `scope: ["orchestrator/daemon/**", "tests/**"]`;
 确需全仓放开的,显式写 `scope: ["**/*"]`,不许省略。runner 在验收前检查 dev 的
 改动文件清单,越出 scope 即视同验收失败判负。纯文档/分析类任务可不写。
+
+## 产物(口径与编排器 ARTIFACT_MANIFEST 一致,门禁机器校验)
+1. `docs/specs/<工单号>-design.md`(P2 设计)
+   必含章节:Architecture / How / Checkpoints / Rollback;无未决开放问题
+2. `docs/specs/<工单号>-tasks.yaml`(P2 任务切片)
+   必过 slicer 契约校验:id 不重、依赖存在、无循环依赖
+
+设计门禁检查点:p2_designing→p2_approved 迁移时,闸门逐件机器校验上述产物,
+缺件/空文件/缺章节/契约违规一律阻断;语义质量(方案合理、切片粒度)由审批人复核。

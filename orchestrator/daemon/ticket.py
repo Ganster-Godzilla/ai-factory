@@ -4,7 +4,7 @@ from __future__ import annotations
 import os, time
 import re
 from dataclasses import dataclass, field, asdict
-from datetime import date
+from datetime import date, datetime, timezone
 from pathlib import Path
 
 import yaml
@@ -37,6 +37,7 @@ class Ticket:
     consult_count: int = 0   # 会诊后判负的任务数(§5.2:3 个任务判负 → 整单挂起)
     related_ticket: str | None = None   # 事故单回链原单 id(P5 发布失败自动建单时写入)
     p1_round: int = 0   # P1 重做轮次(D2):驳回回炉次数,只增不清;旧 yaml 缺字段时默认 0 兜底
+    created_at: str | None = None   # 建单时刻 UTC ISO(T-2026-0829-001 D3):None=存量单,新门禁不追溯
 
     @classmethod
     def load(cls, path: Path) -> "Ticket":
@@ -103,6 +104,7 @@ def new_ticket(pool: Path, project: str, summary: str, created_by: str = "human"
             owner_role="pm", summary=summary, created_by=created_by,
             priority="high" if type == "incident" else "normal",
             related_ticket=related_ticket,
+            created_at=datetime.now(timezone.utc).isoformat(),
         )
         save_ticket(pool, t)
         append_event(pool, t.id, created_by, "created", summary=summary)

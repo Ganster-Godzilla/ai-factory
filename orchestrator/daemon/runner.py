@@ -141,6 +141,25 @@ def _changed_files(wt: Path) -> list[str]:
     return out
 
 
+def _transition_gated(pool: Path, t, to_state: str, actor: str,
+                      project_dir: Path) -> str | None:
+    """runner 自动边的门禁接线(T-2026-0829-001 M4):
+    GateFailed(结构化,评审 R3-3)→ gate_failed 事件(missing 清单)+
+    suspend(artifact_missing);project_dir 缺失等其他 IllegalTransition 照常抛。"""
+    from orchestrator.daemon.statemachine import GateFailed
+    try:
+        transition(pool, t, to_state, actor=actor, project_dir=project_dir)
+        return None
+    except GateFailed as e:
+        append_event(pool, t.id, "system", "gate_failed", to=to_state,
+                     missing=e.fails)
+        suspend(pool, t, actor="system",
+                reason=f"产物门禁未过({to_state}): "
+                       f"{e.fails[0] if e.fails else e}",
+                reason_code="artifact_missing")
+        return f"suspend: 产物门禁未过({to_state})"
+
+
 def run_dev_tasks(pool: Path, ticket, adapter: HarnessAdapter,
                   project_dir: Path, cfg: dict | None = None,
                   consult_adapter: HarnessAdapter | None = None) -> str:
@@ -158,7 +177,10 @@ def run_dev_tasks(pool: Path, ticket, adapter: HarnessAdapter,
     ready = ready_tasks(ticket.tasks)
     if not ready:
         if all(t["status"] == "done" for t in ticket.tasks):
-            transition(pool, ticket, "p4_verifying", actor="system")
+            blocked = _transition_gated(pool, ticket, "p4_verifying", "system",
+                                        project_dir)
+            if blocked:
+                return blocked
             return "auto: p4_verifying"
         suspend(pool, ticket, actor="system",
                 reason="无可派发任务且未完成:依赖死锁或依赖缺失",
@@ -229,6 +251,9 @@ def run_dev_tasks(pool: Path, ticket, adapter: HarnessAdapter,
                     f"[acceptance 复检失败 exit={r.returncode}] {tail}\n"
                     f"--- harness 输出(截断) ---\n{result.output[:500]}"
                 )
+    if verify is not None:
+        # 验收留痕持久化(T-2026-0829-001 D6):P3 门禁直读工单 yaml,不回放事件流
+        task["verify"] = verify
     append_event(pool, ticket.id, "dev", "task_run", task=task["id"],
                  attempt=task["attempts"], status=result.status,
                  tokens=result.tokens, cost_cny=result.cost_cny,
@@ -328,7 +353,11 @@ def advance_once(pool: Path, ticket_id: str, adapter: HarnessAdapter,
             t.owner_role = "boss"
             save_ticket(pool, t)
         else:
-            transition(pool, t, SUCCESS_NEXT[t.state], actor="system" if t.state == "p3_running" else role)
+            blocked = _transition_gated(
+                pool, t, SUCCESS_NEXT[t.state],
+                "system" if t.state == "p3_running" else role, project_dir)
+            if blocked:
+                return blocked
     else:
         if t.state == "p5_releasing":
             suspend(pool, t, actor="system", reason=f"发布失败: {result.status}",
