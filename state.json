@@ -3,22 +3,22 @@
   "version": "1.0",
   "last_updated": "2026-08-29",
   "overview": {
-    "description": "AI Factory 编排器与插件体系;T-2026-0829-004 明放已交付,等待复审触发(2026-09-12 或 T-2026-0829-002)",
+    "description": "AI Factory 编排器;T-2026-0829-002 真实计量已交付,明放复审触发条件已达成(T-002 交付),请 boss 复审",
     "status": "active",
-    "active_modules": [
-      "dsh-usage"
-    ]
+    "active_modules": []
   },
   "modules": {
     "dsh-usage": {
-      "phase": "phase3_implement",
+      "phase": "completed",
       "ticket": "T-2026-0829-002",
       "requirements_dir": "document/business/dsh-usage/01_需求分析",
       "milestones": {
         "phase0_proposal": "completed",
         "phase1_requirements": "completed",
         "phase2_design": "completed",
-        "phase3_implement": "in_progress"
+        "phase3_implement": "completed",
+        "phase4_verify": "completed",
+        "phase5_release": "completed"
       }
     },
     "orchestrator": {
