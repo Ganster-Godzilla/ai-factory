@@ -34,6 +34,9 @@ def main(argv: list[str] | None = None) -> int:
     c = sub.add_parser("show"); c.add_argument("id")
     c = sub.add_parser("approve"); c.add_argument("id"); c.add_argument("--as", dest="actor", default="boss")
     c = sub.add_parser("reject"); c.add_argument("id")
+    c.add_argument("--redo", action="store_true",
+                   help="驳回回炉:p1_proposed → p1_drafting 让 PM 重做(记 p1_round);"
+                        "缺省仍关单。仅 p1_proposed 可用,其余态报错")
     c = sub.add_parser("suspend"); c.add_argument("id"); c.add_argument("reason")
     c = sub.add_parser("resume"); c.add_argument("id")
     c = sub.add_parser("advance"); c.add_argument("id"); c.add_argument("project_dir"); c.add_argument("--fake", action="store_true")
@@ -70,8 +73,17 @@ def main(argv: list[str] | None = None) -> int:
                 transition(pool, t, target, actor=args.actor)
             print(f"{args.id} → {load_ticket(pool, args.id).state}")
         elif args.cmd == "reject":
-            transition(pool, load_ticket(pool, args.id), "closed", actor="boss")
-            print(f"{args.id} → closed")
+            t = load_ticket(pool, args.id)
+            if args.redo:
+                if t.state != "p1_proposed":
+                    # 迁移表只拦非法边,p0→p1_drafting 这类合法边在此被命令语义挡住
+                    raise IllegalTransition(
+                        f"reject --redo 仅用于 p1_proposed,当前 {t.state}")
+                transition(pool, t, "p1_drafting", actor="boss")
+                print(f"{args.id} → p1_drafting (round={t.p1_round})")
+            else:
+                transition(pool, t, "closed", actor="boss")
+                print(f"{args.id} → closed")
         elif args.cmd == "suspend":
             suspend(pool, load_ticket(pool, args.id), actor="boss", reason=args.reason,
                     reason_code="manual")

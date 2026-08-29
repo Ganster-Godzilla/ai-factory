@@ -1,6 +1,12 @@
+import json
+import subprocess
+
+import pytest
+
 from orchestrator.adapters.base import HarnessAdapter, HarnessResult
+from orchestrator.adapters.dsh import USAGE_MISSING_MSG
 from orchestrator.adapters.fake import FakeHarness
-from orchestrator.daemon.ledger import k3_week_tokens
+from orchestrator.daemon.ledger import ds_day_calls, ds_ticket_cost, k3_week_tokens
 from orchestrator.daemon.runner import advance_once
 from orchestrator.daemon.statemachine import transition
 from orchestrator.daemon.ticket import load_ticket, new_ticket, save_ticket
@@ -284,7 +290,7 @@ def test_incident_links_back(pool, tmp_path):
                for e in read_events(pool, t.id))
 
 
-def test_none_budget_survives_cap_gate(pool, tmp_path):
+def test_none_budget_survives_cap_gate(pool, tmp_path, monkeypatch):
     # 搭车 T1:手改 YAML 把 budget 抹成 None 时,工单帽闸 .get 不得 AttributeError
     proj = _git_repo(tmp_path)
     t = new_ticket(pool, project="p", summary="x")
@@ -292,6 +298,12 @@ def test_none_budget_survives_cap_gate(pool, tmp_path):
     t.tasks = [{"id": "task-1", "title": "a", "acceptance_cmd": "exit 0",
                 "depends_on": [], "status": "pending", "attempts": 0}]
     save_ticket(pool, t)
+    # 验收复检不依赖环境里的 bash(沙箱内 git-bash 可能起不来):stub 掉 _run_acceptance,
+    # 本测试只关心 budget=None 时工单帽闸不得 AttributeError、任务照常完工
+    from orchestrator.daemon import runner as _runner
+    monkeypatch.setattr(_runner, "_run_acceptance",
+                        lambda cmd, cwd, timeout=600: subprocess.CompletedProcess(
+                            args=[], returncode=0, stdout="", stderr=""))
     import yaml
     path = pool / "tickets" / f"{t.id}.yaml"
     data = yaml.safe_load(path.read_text(encoding="utf-8"))
@@ -318,3 +330,209 @@ def test_all_done_goes_p4_even_when_daily_cap_exceeded(pool, tmp_path):
     assert msg == "auto: p4_verifying"
     assert load_ticket(pool, t.id).state == "p4_verifying"
     assert not h.received
+
+
+# ---- dsh usage trailer 契约消费 + 台账三字段对齐(T-2026-0828-003 D3) ----
+
+class StubDshAdapter(HarnessAdapter):
+    """模拟消费 usage trailer 后的 DshAdapter 产出"""
+    name = "dsh"
+
+    def __init__(self, status="done", tokens=None, cost=0.42, usage_missing=False):
+        self._status = status
+        # 契约:无 trailer = 无 usage 数据,不给 tokens/cost
+        self._tokens = {"input_tokens": 1000, "output_tokens": 500} \
+            if tokens is None and not usage_missing else (tokens or {})
+        self._cost = 0.0 if usage_missing else cost
+        self._usage_missing = usage_missing
+
+    def run(self, packet):
+        output = (USAGE_MISSING_MSG + "\nwork done") if self._usage_missing else "work done"
+        return HarnessResult(status=self._status, output=output,
+                             tokens=self._tokens, cost_cny=self._cost,
+                             usage_missing=self._usage_missing)
+
+
+def _p3_ticket(pool, task_status="pending"):
+    t = new_ticket(pool, project="p", summary="x")
+    t.state = "p3_running"
+    t.tasks = [{"id": "task-1", "title": "a", "acceptance_cmd": "exit 0",
+                "depends_on": [], "status": task_status, "attempts": 0}]
+    save_ticket(pool, t)
+    return t
+
+
+@pytest.fixture
+def acceptance_ok(monkeypatch):
+    # 验收复检不依赖环境里的 bash(沙箱内 git-bash 可能起不来):stub 成必过
+    from orchestrator.daemon import runner as _runner
+    monkeypatch.setattr(_runner, "_run_acceptance",
+                        lambda cmd, cwd, timeout=600: subprocess.CompletedProcess(
+                            args=[], returncode=0, stdout="", stderr=""))
+
+
+def _entries(pool):
+    p = pool / "ledger.jsonl"
+    if not p.exists():
+        return []
+    return [json.loads(l) for l in p.read_text(encoding="utf-8").splitlines() if l.strip()]
+
+
+def test_dsh_ledger_entry_has_amount_tokens_calls(pool, tmp_path, acceptance_ok):
+    # dsh 侧:cost 记 amount,usage trailer 的 tokens 归一为 input/output,calls=1
+    proj = _git_repo(tmp_path)
+    t = _p3_ticket(pool)
+    cfg = {"budgets": {"k3_week_token_budget": 10**9, "ds_daily_cny": 10**9}}
+    advance_once(pool, t.id, StubDshAdapter(), proj, cfg=cfg,
+                 consult_adapter=FakeHarness())
+    entries = _entries(pool)
+    assert len(entries) == 1
+    e = entries[0]
+    assert e["resource"] == "deepseek" and e["unit"] == "cny" and e["amount"] == 0.42
+    assert e["tokens"] == {"input": 1000, "output": 500} and e["calls"] == 1
+    assert ds_ticket_cost(pool, t.id) == 0.42
+    assert ds_day_calls(pool) == 1
+
+
+def test_k3_ledger_entry_has_tokens_calls(pool, tmp_path):
+    # k3 侧与 dsh 侧同构:三字段齐全(D3 口径对齐)
+    t = new_ticket(pool, project="p", summary="x")
+    t.state = "p1_drafting"
+    save_ticket(pool, t)
+    cfg = {"budgets": {"k3_week_token_budget": 10**9, "ds_daily_cny": 10**9}}
+    advance_once(pool, t.id, StubAdapter(), tmp_path, cfg=cfg)
+    e = _entries(pool)[0]
+    assert e["resource"] == "k3" and e["unit"] == "tokens" and e["amount"] == 150
+    assert e["tokens"] == {"input": 100, "output": 50} and e["calls"] == 1
+
+
+def test_usage_missing_records_event_and_no_ledger(pool, tmp_path):
+    # 旧版 dsh 无 usage trailer → failed + usage_missing 事件;无账不入账、不推进
+    proj = _git_repo(tmp_path)
+    t = _p3_ticket(pool)
+    cfg = {"budgets": {"k3_week_token_budget": 10**9, "ds_daily_cny": 10**9}}
+    msg = advance_once(pool, t.id,
+                       StubDshAdapter(status="failed", cost=0.0, usage_missing=True),
+                       proj, cfg=cfg, consult_adapter=FakeHarness())
+    assert msg.startswith("retry:")
+    um = [e for e in read_events(pool, t.id) if e["event"] == "usage_missing"]
+    assert len(um) == 1 and um[0]["task"] == "task-1"
+    assert "usage trailer" in um[0]["output"]
+    assert _entries(pool) == [] and ds_ticket_cost(pool, t.id) == 0.0
+
+
+def test_role_path_usage_missing_event(pool, tmp_path):
+    # dsh 角色(qa/release/sre)走 advance_once 通用路径,同样记 usage_missing
+    t = new_ticket(pool, project="p", summary="x")
+    t.state = "p4_verifying"
+    save_ticket(pool, t)
+    advance_once(pool, t.id,
+                 StubDshAdapter(status="failed", cost=0.0, usage_missing=True),
+                 tmp_path)
+    assert any(e["event"] == "usage_missing" for e in read_events(pool, t.id))
+# ---------- R7 scope 越界强制检查 ----------
+
+def _p3_scoped_task(pool, proj_path, scope, acceptance="exit 0"):
+    """建 p3 工单 + 预建该任务的 worktree(模拟 dev 已领工位)。"""
+    from orchestrator.daemon.worktree import ensure_worktree
+    t = new_ticket(pool, project="p", summary="x")
+    t.state = "p3_running"
+    task = {"id": "task-1", "title": "a", "acceptance_cmd": acceptance,
+            "depends_on": [], "status": "pending", "attempts": 0}
+    if scope is not None:
+        task["scope"] = scope
+    t.tasks = [task]
+    save_ticket(pool, t)
+    wt = ensure_worktree(proj_path, f"{t.id}-task-1")
+    return t, wt
+
+
+def _last_task_run_event(pool, tid):
+    return [e for e in read_events(pool, tid) if e["event"] == "task_run"][-1]
+
+
+def test_changed_files_enumerates_untracked_nested_files(tmp_path):
+    # -uall:未跟踪目录不折叠成 `?? docs/`,否则精确 glob(如 docs/note.md)会误判越界
+    from orchestrator.daemon.runner import _changed_files
+    from orchestrator.daemon.worktree import ensure_worktree
+    proj = _git_repo(tmp_path)
+    wt = ensure_worktree(proj, "uall-check")
+    (wt / "docs").mkdir()
+    (wt / "docs" / "note.md").write_text("x", encoding="utf-8")
+    (wt / "sneaky.py").write_text("y", encoding="utf-8")
+    assert _changed_files(wt) == ["docs/note.md", "sneaky.py"]
+
+
+def test_scope_violation_fails_before_acceptance(pool, tmp_path):
+    """R7:harness 谎报 done 且改动越出 scope → 验收前拦下,FAIL 行置顶走重试阶梯"""
+    proj = _git_repo(tmp_path)
+    t, wt = _p3_scoped_task(pool, proj, ["docs/**"])
+    (wt / "sneaky.py").write_text("越界改动", encoding="utf-8")   # 未跟踪,越出 docs/**
+    advance_once(pool, t.id, FakeHarness(), proj)   # acceptance_cmd=exit 0 本可通过
+    t2 = load_ticket(pool, t.id)
+    assert t2.tasks[0]["status"] == "pending"        # 不许 done
+    assert t2.tasks[0]["attempts"] == 1
+    assert "FAIL: scope 越界: sneaky.py" in t2.tasks[0]["last_error"]
+    ev = _last_task_run_event(pool, t.id)
+    assert ev["verify"] == "failed"
+    assert ev["output"].startswith("FAIL: scope 越界: sneaky.py")
+    assert "acceptance 复检失败" not in ev["output"]   # 验收未烧:越界属致命,验收前先拦
+
+
+def _stub_acceptance_ok(monkeypatch):
+    """复检桩:返回 exit=0(与 test_acceptance_timeout 同一 monkeypatch 先例),
+    让完工路径不依赖宿主 bash(msys 段被占时 bash.exe 无法启动,见 QA 备注)。"""
+    import subprocess as sp
+    from orchestrator.daemon import runner
+    monkeypatch.setattr(runner, "_run_acceptance",
+                        lambda cmd, cwd, timeout=600: sp.CompletedProcess(cmd, 0, "", ""))
+
+
+def test_scope_clean_change_passes(pool, tmp_path, monkeypatch):
+    """改动都在 scope 内 → 正常走验收与完工"""
+    _stub_acceptance_ok(monkeypatch)
+    proj = _git_repo(tmp_path)
+    t, wt = _p3_scoped_task(pool, proj, ["docs/**"])
+    (wt / "docs").mkdir()
+    (wt / "docs" / "note.md").write_text("界内", encoding="utf-8")
+    advance_once(pool, t.id, FakeHarness(), proj)
+    t2 = load_ticket(pool, t.id)
+    assert t2.tasks[0]["status"] == "done"
+    assert _last_task_run_event(pool, t.id)["verify"] == "passed"
+
+
+def test_scope_catches_committed_change_via_orc_base(pool, tmp_path):
+    """已提交的越界改动 status 看不到,靠 .orc-base 的 git diff 兜住;.orc-base 自身不算改动"""
+    import subprocess as sp
+    proj = _git_repo(tmp_path)
+    t, wt = _p3_scoped_task(pool, proj, ["docs/**"])
+    (wt / "sneaky.py").write_text("先改后提交", encoding="utf-8")
+    sp.run(["git", "add", "-A"], cwd=wt, check=True, capture_output=True)   # 连 .orc-base 一起提交
+    sp.run(["git", "commit", "-m", "x"], cwd=wt, check=True, capture_output=True)
+    advance_once(pool, t.id, FakeHarness(), proj)
+    t2 = load_ticket(pool, t.id)
+    assert t2.tasks[0]["status"] == "pending"
+    assert "FAIL: scope 越界: sneaky.py" in t2.tasks[0]["last_error"]
+    assert ".orc-base" not in t2.tasks[0]["last_error"]   # 编排器记号不是 dev 产物
+
+
+def test_scope_without_base_file_degrades_to_status(pool, tmp_path):
+    """无 .orc-base(旧 worktree)→ 退化为仅 git status,未跟踪越界改动仍被拦"""
+    proj = _git_repo(tmp_path)
+    t, wt = _p3_scoped_task(pool, proj, ["docs/**"])
+    (wt / ".orc-base").unlink()
+    (wt / "sneaky.py").write_text("越界", encoding="utf-8")
+    advance_once(pool, t.id, FakeHarness(), proj)
+    t2 = load_ticket(pool, t.id)
+    assert t2.tasks[0]["status"] == "pending"
+    assert "FAIL: scope 越界: sneaky.py" in t2.tasks[0]["last_error"]
+
+
+def test_no_scope_keeps_old_behavior(pool, tmp_path, monkeypatch):
+    """scope 缺省不检查:旧清单不设 scope,散件不拦,行为不变"""
+    _stub_acceptance_ok(monkeypatch)
+    proj = _git_repo(tmp_path)
+    t, wt = _p3_scoped_task(pool, proj, None)
+    (wt / "sneaky.py").write_text("无 scope 不查", encoding="utf-8")
+    advance_once(pool, t.id, FakeHarness(), proj)
+    assert load_ticket(pool, t.id).tasks[0]["status"] == "done"

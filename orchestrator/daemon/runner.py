@@ -14,7 +14,7 @@ from orchestrator.daemon.circuitbreaker import (
 from orchestrator.daemon.events import append_event
 from orchestrator.daemon.gateway import k3_effective_week_tokens
 from orchestrator.daemon.ledger import append_ledger, ds_daily_exceeded, ds_ticket_cost
-from orchestrator.daemon.slicer import load_task_list, make_packet, ready_tasks
+from orchestrator.daemon.slicer import load_task_list, make_packet, ready_tasks, scope_violations
 from orchestrator.daemon.statemachine import suspend, transition
 from orchestrator.daemon.ticket import load_ticket, save_ticket
 from orchestrator.daemon.worktree import ensure_worktree
@@ -67,14 +67,20 @@ def _record_cost(pool: Path, ticket, adapter: HarnessAdapter, result, role: str)
     if not res:
         return
     resource, unit = res
+    # 台账统一口径 D3:tokens 只留 {"input","output"} 两键(k3 侧来自 claude JSON usage,
+    # dsh 侧来自 usage trailer,键名归一);amount 不变:k3=input+output,ds=cost_cny
+    tokens = {"input": int(result.tokens.get("input_tokens") or 0),
+              "output": int(result.tokens.get("output_tokens") or 0)}
     if unit == "tokens":
         # 口径只算 input+output:cache_read 等会造成水位虚高,
         # 且 tokens 里混入嵌套 dict 时 sum(values()) 会 TypeError
-        amount = result.tokens.get("input_tokens", 0) + result.tokens.get("output_tokens", 0)
+        amount = tokens["input"] + tokens["output"]
     else:
         amount = result.cost_cny
-    if amount:
-        append_ledger(pool, resource, amount, unit, ticket.id, role, adapter.name)
+    # 三字段齐全才是一条完整账:0 元调用(GLM 体验卡)也留 calls 证据
+    if amount or tokens["input"] or tokens["output"]:
+        append_ledger(pool, resource, amount, unit, ticket.id, role, adapter.name,
+                      tokens=tokens, calls=1)
 
 
 def _run_acceptance(cmd: str, cwd: Path, timeout: int = 600) -> subprocess.CompletedProcess:
@@ -87,6 +93,43 @@ def _run_acceptance(cmd: str, cwd: Path, timeout: int = 600) -> subprocess.Compl
     return subprocess.run(cmd, shell=True, executable="bash",
                           cwd=cwd, capture_output=True, text=True,
                           encoding="utf-8", errors="replace", timeout=timeout)
+
+
+def _changed_files(wt: Path) -> list[str]:
+    """R7:worktree 内 dev 的改动文件清单(相对项目根,/ 分隔)。
+    来源 = `git status --porcelain`(未跟踪+已修改)+ `git diff --name-only <base>`
+    (已提交;base 由 ensure_worktree 落盘的 .orc-base 提供,无该文件则退化为仅 status)。
+    .orc-base 是编排器记号而非 dev 产物,不计入。"""
+    files: list[str] = []
+    r = subprocess.run(
+        # -uall:未跟踪目录不折叠(否则嵌套新文件以 `?? docs/` 出现,精确 glob 会误判)
+        ["git", "-c", "core.quotepath=false", "status", "--porcelain", "-uall"],
+        cwd=wt, capture_output=True, text=True, encoding="utf-8", errors="replace")
+    if r.returncode == 0:
+        for line in r.stdout.splitlines():
+            if len(line) < 4:
+                continue
+            path = line[3:].strip()
+            if " -> " in path:          # rename 取新路径
+                path = path.split(" -> ", 1)[1]
+            if path:
+                files.append(path.strip('"'))
+    base_file = wt / ".orc-base"
+    if base_file.exists():
+        base_ref = base_file.read_text(encoding="utf-8").strip()
+        if base_ref:
+            r = subprocess.run(
+                ["git", "-c", "core.quotepath=false", "diff", "--name-only", base_ref],
+                cwd=wt, capture_output=True, text=True, encoding="utf-8", errors="replace")
+            if r.returncode == 0:
+                files.extend(p for p in (s.strip() for s in r.stdout.splitlines()) if p)
+    seen: set[str] = set()
+    out: list[str] = []
+    for f in files:
+        if f != ".orc-base" and f not in seen:
+            seen.add(f)
+            out.append(f)
+    return out
 
 
 def run_dev_tasks(pool: Path, ticket, adapter: HarnessAdapter,
@@ -127,10 +170,25 @@ def run_dev_tasks(pool: Path, ticket, adapter: HarnessAdapter,
         packet.prompt = retry_prompt(task, packet.prompt, task.get("last_error", ""))
     result = adapter.run(packet)
     task["attempts"] += 1
+    if result.usage_missing:
+        # D3:旧版 dsh 无 usage trailer,无账不推进——事件留痕供审计
+        append_event(pool, ticket.id, "dev", "usage_missing", task=task["id"],
+                     output=result.output[:500])
     if cfg:
         # DS 现金不分成败:失败/被复检打回的尝试照样烧钱,每次调用都入账
         _record_cost(pool, ticket, adapter, result, "dev")
     verify = None
+    if result.status == "done" and task.get("scope"):
+        # R7 scope 越界强制检查:dev done 后、验收前先拦——越界属致命,不必再烧验收
+        violations = scope_violations(_changed_files(wt), task["scope"])
+        if violations:
+            verify = "failed"
+            result.status = "failed"
+            # FAIL: 行置顶(D5 约定),走既有重试阶梯,dev 下一轮直接看到越界文件列表
+            result.output = (
+                f"FAIL: scope 越界: {', '.join(violations)}\n"
+                f"--- harness 输出(截断) ---\n{result.output[:500]}"
+            )
     if result.status == "done" and task.get("acceptance_cmd"):
         try:
             r = _run_acceptance(task["acceptance_cmd"], wt)
@@ -232,6 +290,9 @@ def advance_once(pool: Path, ticket_id: str, adapter: HarnessAdapter,
         model=_model_for(cfg, role),
     )
     result = adapter.run(packet)
+    if result.usage_missing:
+        # dsh 角色路径(qa/release/sre)同样受无账不推进约束
+        append_event(pool, t.id, role, "usage_missing", output=result.output[:500])
     append_event(pool, t.id, role, "role_run",
                  status=result.status, tokens=result.tokens,
                  cost_cny=result.cost_cny, output=result.output[:500])
