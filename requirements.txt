@@ -1,0 +1,6 @@
+# ai-factory 运行依赖
+# 装包先配镜像(运维教训):pip config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple
+pyyaml
+flask
+pytest
+zstandard   # T-2026-0829-002:dsh 会话文件 session.jsonl.zstd 解析

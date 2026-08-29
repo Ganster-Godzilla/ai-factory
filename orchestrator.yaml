@@ -23,6 +23,17 @@ budgets:
   # 无 usage trailer 时每次 dsh 调用估算入账价(禁止记 0);
   # DeepSeek 典型 dev 调用 ≈¥0.014,留 3 倍余量宁高估不低估
   ds_est_call_cny: 0.05
+# dsh 会话文件真实计量费率表(T-2026-0829-002):官网标准价(2026-08),改价改配置
+# cache hit 单独计价(真实计费项,但不进 tokens 字段——防水位虚高)
+rates:
+  deepseek:
+    input_per_m: 2.0
+    cache_hit_per_m: 0.5
+    output_per_m: 8.0
+  glm:   # 免费期记 0,tokens 照记
+    input_per_m: 0.0
+    cache_hit_per_m: 0.0
+    output_per_m: 0.0
 gateway:
   url: http://127.0.0.1:8787
 keys_dir: D:/Tool/keys

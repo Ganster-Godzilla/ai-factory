@@ -60,26 +60,28 @@ def test_trailer_parsed_tokens_cost_filled_and_stripped(tmp_path):
     assert USAGE_TRAILER not in r.output          # trailer 剥离,不污染正文
 
 
-def test_no_trailer_degraded_warn_and_estimate(tmp_path):
-    # 明放(T-2026-0829-004):现役 dsh 无 trailer → 按 returncode 推进 + usage_missing
-    # 留痕 + 按次估算入账(禁止记 0);缺省 est=0 时估算关闭(向后兼容)
+def test_no_trailer_dual_missing_failed_but_estimated(tmp_path):
+    # T-2026-0829-002 恢复硬契约:trailer/会话双缺 → failed+usage_missing;
+    # 但调用已发生=烧了钱,按 est 照估入账(R9 禁记 0)。sessions_dir 指空目录保测试密闭
+    empty = tmp_path / "no_sessions"
     with patch("subprocess.run", return_value=_fake(stdout="ok", trailer=False)):
-        r = DshAdapter().run(_packet(tmp_path))
-    assert r.status == "done"                        # rc=0 → done,不再硬判负
+        r = DshAdapter(sessions_dir=empty).run(_packet(tmp_path))
+    assert r.status == "failed"
     assert r.usage_missing is True
     assert USAGE_MISSING_MSG in r.output
     assert r.tokens == {} and r.cost_cny == 0.0 and r.estimated is False
     with patch("subprocess.run", return_value=_fake(stdout="ok", trailer=False)):
-        r = DshAdapter(est_call_cny=0.05).run(_packet(tmp_path))
-    assert r.status == "done" and r.cost_cny == 0.05 and r.estimated is True
+        r = DshAdapter(sessions_dir=empty, est_call_cny=0.05).run(_packet(tmp_path))
+    assert r.status == "failed" and r.cost_cny == 0.05 and r.estimated is True
 
 
 def test_trailer_must_be_last_line(tmp_path):
-    # trailer 之后还有正文 = 输出流不完整/非契约版本,视同缺失→明放降级
+    # trailer 之后还有正文 = 输出流不完整/非契约版本,视同缺失→双缺判负照估
     with patch("subprocess.run",
                return_value=_fake(stdout=f"{_trailer()}\n后续还有输出", trailer=False)):
-        r = DshAdapter(est_call_cny=0.05).run(_packet(tmp_path))
-    assert r.status == "done" and r.usage_missing is True
+        r = DshAdapter(sessions_dir=tmp_path / "none", est_call_cny=0.05
+                       ).run(_packet(tmp_path))
+    assert r.status == "failed" and r.usage_missing is True
     assert r.cost_cny == 0.05 and r.estimated is True
 
 
@@ -89,8 +91,9 @@ def test_malformed_trailer_treated_as_missing(tmp_path):
             f'{USAGE_TRAILER} {{"input_tokens": 1}}']   # 缺 output_tokens/cost_cny 键
     for bad in bads:
         with patch("subprocess.run", return_value=_fake(stdout=bad, trailer=False)):
-            r = DshAdapter(est_call_cny=0.05).run(_packet(tmp_path))
-        assert r.status == "done" and r.usage_missing is True, bad
+            r = DshAdapter(sessions_dir=tmp_path / "none", est_call_cny=0.05
+                           ).run(_packet(tmp_path))
+        assert r.status == "failed" and r.usage_missing is True, bad
         assert r.estimated is True, bad
 
 
