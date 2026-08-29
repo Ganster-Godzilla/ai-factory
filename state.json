@@ -3,7 +3,7 @@
   "version": "1.0",
   "last_updated": "2026-08-29",
   "overview": {
-    "description": "AI Factory;T-2026-0829-001 产物门禁统一已交付,余 T-2026-0828-004(任务分级)",
+    "description": "AI Factory;工单池清零(2026-08-29 收官),下批:任务分级策略实施单",
     "status": "active",
     "active_modules": []
   },
@@ -58,6 +58,11 @@
         "phase4_verify": "completed",
         "phase5_release": "completed"
       }
+    },
+    "strategy-004": {
+      "phase": "completed",
+      "ticket": "T-2026-0828-004",
+      "milestones": {}
     }
   },
   "budget": {

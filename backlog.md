@@ -11,7 +11,8 @@
 ## Done
 | 日期 | 事项 |
 |---|---|
-| 2026-08-29 | **T-2026-0829-001 阶段产物与门禁口径统一交付**:ARTIFACT_MANIFEST 单一事实源+transition 迁移级闸门(cli/dashboard/runner 三入口)+created_at 存量边界+incident 豁免;评审两轮 23 项全处置(含 P0 门禁边挂错的设计级错误——挪审批边界);257/257 绿,合 main e46484f,工单 done |
+| 2026-08-29 | **T-2026-0828-004 任务分级与快速通道策略交付(纯文档单)**:strategy.md 落盘——L1/L2/L3 就高判定、L3 最短路+人工报备、不可省门禁四项封闭清单、L3 熔断收紧、level 字段与 Dashboard 口径;六段 doccheck 验收一次过,合 main 6e5527b,工单 done。**ai-factory 工单池清零收官** |
+| 2026-08-29 | **T-2026-0829-001 阶段产物与门禁口径统一交付**:ARTIFACT_MANIFEST 单一事实源+迁移级闸门;评审两轮 23 项全处置;合 main e46484f,工单 done |
 | 2026-08-29 | **T-2026-0829-002 dsh 会话文件真实计量交付**:台账估算→真账;评审两轮 27 项全处置;223 绿,合 main b145a26,工单 done |
 | 2026-08-29 | **T-2026-0829-004 dsh 现金闸"明放"交付**:估算入账+双闸 warn-only+复审提醒;integration 合 main;合 main 6740b53,工单 done |
 | 2026-08-29 | T-2026-0828-005 事故单关闭:github 抖动致 push 失败,网络恢复后补推 sk 仓 main+v0.1.0/v0.1.1 双 tag 远端核验 |
@@ -28,7 +29,6 @@
 | 2026-08-29 | 明放复审(T-002 交付触发):mingfang 续期至 2026-09-12,不关闸 | boss 担心其他项目(SK 等)开发期失败重试被硬闸卡死;现有真实计量,超线全程可见 |
 
 ## 下一步
-- **最后一张**:T-2026-0828-004(任务分级快速通道,p2_approved)——ai-factory 收尾收官单。
+- **ai-factory 工单池已清零(2026-08-29 收官)**:后续按策略单 T-2026-0828-004 的实施单(状态机加边/runner 按 level 选流程/CLI --level/Dashboard 徽章)立项推进。
 - 明放续期至 2026-09-12(已复审,见关键决策):届时按真账再评;mingfang 复审横幅保留。
-- T-002 遗留已知边界(未来立案):concurrent_max=2 下同项目并发 run 的会话归属按 mtime 启发式,理论可双计;GLM 会话格式未实证(同构假设,格式不符自动落双缺判负)。
-- T-001 遗留已知边界(已录 artifact-standard.md):门禁读当前分支工作树;tasks TOCTOU;artifact_missing 挂起后 resume 重跑角色(release 非幂等有重放风险)。
+- 遗留边界(未来立案,已录 artifact-standard.md/backlog):并发 run 会话归属、GLM 会话格式未实证、门禁读当前分支、tasks TOCTOU、artifact_missing 挂起 resume 重跑角色。
