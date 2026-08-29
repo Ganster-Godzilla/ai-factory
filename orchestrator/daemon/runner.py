@@ -13,8 +13,7 @@ from orchestrator.daemon.circuitbreaker import (
 )
 from orchestrator.daemon.events import append_event
 from orchestrator.daemon.gateway import k3_effective_week_tokens
-from orchestrator.daemon.ledger import (append_ledger, ds_daily_exceeded,
-                                        ds_day_cost, ds_ticket_cost)
+from orchestrator.daemon.ledger import append_ledger, ds_day_cost, ds_ticket_cost
 from orchestrator.daemon.slicer import load_task_list, make_packet, ready_tasks, scope_violations
 from orchestrator.daemon.statemachine import suspend, transition
 from orchestrator.daemon.ticket import load_ticket, save_ticket
@@ -65,8 +64,9 @@ def _model_for(cfg: dict | None, role: str) -> str | None:
 
 def _mingfang(cfg: dict | None) -> bool:
     """明放开关(T-2026-0829-004):budgets.mingfang_mode 显式 true 才放行;
-    缺键/缺 budgets 一律硬闸(向后兼容)。"""
-    return bool(((cfg or {}).get("budgets") or {}).get("mingfang_mode", False))
+    缺键/缺 budgets 一律硬闸(向后兼容)。必须 is True:yaml 里写 "false"(带引号)
+    是字符串,bool() 会误判为真——安全开关不许反向失效(评审 F3)。"""
+    return ((cfg or {}).get("budgets") or {}).get("mingfang_mode") is True
 
 
 def _record_cost(pool: Path, ticket, adapter: HarnessAdapter, result, role: str) -> None:
@@ -168,20 +168,23 @@ def run_dev_tasks(pool: Path, ticket, adapter: HarnessAdapter,
     # 明放模式(T-2026-0829-004):mingfang_mode 下双闸降级为 budget_warn 事件放行;
     # 缺省/关闭维持硬闸。配置即决策留痕(orchestrator.yaml 标注磨合期+复审日)
     mingfang = _mingfang(cfg)
-    if cfg and ds_daily_exceeded(pool, cfg):
-        if not mingfang:
-            return "blocked: ds 日现金线"
-        append_event(pool, ticket.id, "system", "budget_warn", gate="ds_daily",
-                     value=round(ds_day_cost(pool), 4),
-                     threshold=(cfg.get("budgets") or {}).get("ds_daily_cny", 30))
+    if cfg:
+        day_cost = ds_day_cost(pool)
+        daily_cap = (cfg.get("budgets") or {}).get("ds_daily_cny", 30)
+        if day_cost > daily_cap:
+            if not mingfang:
+                return "blocked: ds 日现金线"
+            append_event(pool, ticket.id, "system", "budget_warn", gate="ds_daily",
+                         value=round(day_cost, 4), threshold=daily_cap)
+    ticket_cost = ds_ticket_cost(pool, ticket.id)
     cap = (ticket.budget or {}).get("token_cap_cny", 10.0)
-    if ds_ticket_cost(pool, ticket.id) > cap:
+    if ticket_cost > cap:
         if not mingfang:
             suspend(pool, ticket, actor="system", reason="工单预算帽",
                     reason_code="budget_cap")
             return "suspend: 工单预算帽"
         append_event(pool, ticket.id, "system", "budget_warn", gate="ticket_cap",
-                     value=round(ds_ticket_cost(pool, ticket.id), 4), threshold=cap)
+                     value=round(ticket_cost, 4), threshold=cap)
     task = ready[0]
     wt = ensure_worktree(project_dir, f"{ticket.id}-{task['id']}")
     packet = make_packet(task, ticket, wt, design_excerpt="")
@@ -191,7 +194,7 @@ def run_dev_tasks(pool: Path, ticket, adapter: HarnessAdapter,
     result = adapter.run(packet)
     task["attempts"] += 1
     if result.usage_missing:
-        # D3:旧版 dsh 无 usage trailer,无账不推进——事件留痕供审计
+        # 明放(T-2026-0829-004):无 trailer 按 returncode 推进+估算入账,事件留痕供审计
         append_event(pool, ticket.id, "dev", "usage_missing", task=task["id"],
                      output=result.output[:500])
     if cfg:
@@ -311,7 +314,7 @@ def advance_once(pool: Path, ticket_id: str, adapter: HarnessAdapter,
     )
     result = adapter.run(packet)
     if result.usage_missing:
-        # dsh 角色路径(qa/release/sre)同样受无账不推进约束
+        # dsh 角色路径(qa/release/sre)明放同款:无 trailer 推进+估算,事件留痕
         append_event(pool, t.id, role, "usage_missing", output=result.output[:500])
     append_event(pool, t.id, role, "role_run",
                  status=result.status, tokens=result.tokens,

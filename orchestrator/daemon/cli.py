@@ -93,11 +93,17 @@ def main(argv: list[str] | None = None) -> int:
             print(f"{args.id} → resumed")
         elif args.cmd == "advance":
             cfg = _cfg()
+            budgets = cfg.get("budgets") or {}
+            est = budgets.get("ds_est_call_cny") or 0.0
+            if budgets.get("mingfang_mode") is True and est <= 0:
+                # R9 禁止记 0:明放着估算缺失等于瞎放(评审 F2)——兜底价 + 显式警告
+                est = 0.05
+                print("warn: mingfang_mode 开启但 ds_est_call_cny 缺失/为 0,"
+                      "按兜底 ¥0.05/次 估算入账", file=sys.stderr)
             adapter = FakeHarness() if args.fake else get_adapter(
                 ROLE_ROUTING.get(
                     WORK_STATES.get(load_ticket(pool, args.id).state, "dev"), "dsh"),
-                keys_dir=cfg.get("keys_dir"),
-                est_call_cny=(cfg.get("budgets") or {}).get("ds_est_call_cny", 0.0))
+                keys_dir=cfg.get("keys_dir"), est_call_cny=est)
             print(advance_once(pool, args.id, adapter, Path(args.project_dir),
                                cfg=cfg,
                                consult_adapter=FakeHarness() if args.consult_fake else None))

@@ -1,7 +1,8 @@
 """双资源台账:pool/ledger.jsonl,append-only。k3=周配额(tokens),DeepSeek=现金(cny)。
 
-每条 entry 三字段口径对齐(T-2026-0828-003 D3):amount(额度/现金)+
-tokens={"input":N,"output":N}+calls(调用次数)。旧 entry 缺新字段时查询端 .get 兜底。
+每条 entry 四字段口径(T-2026-0828-003 D3 + T-2026-0829-004):amount(额度/现金)+
+tokens={"input":N,"output":N}+calls(调用次数)+estimated(是否估算值,明放按次入账为 true)。
+旧 entry 缺新字段时查询端 .get 兜底。
 """
 from __future__ import annotations
 

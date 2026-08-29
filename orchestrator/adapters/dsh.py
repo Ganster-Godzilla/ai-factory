@@ -51,8 +51,9 @@ class DshAdapter(HarnessAdapter):
                  est_call_cny: float = 0.0):
         self.keys_dir = Path(keys_dir) if keys_dir else None
         self.profile = profile
-        # 明放估算单价(T-2026-0829-004):无 trailer 时每次调用按此价入账;0=不估(向后兼容)
-        self.est_call_cny = float(est_call_cny or 0.0)
+        # 明放估算单价(T-2026-0829-004):无 trailer 时每次调用按此价入账;0=不估(向后兼容)。
+        # 负数钳到 0:负账会冲减日现金让双闸失灵(评审 F4)
+        self.est_call_cny = max(0.0, float(est_call_cny or 0.0))
 
     def _file_key(self, provider: str) -> str | None:
         """keys_dir/<provider>.env 里的有效 key;文件缺失/空值/TODO 占位 → None。"""
@@ -93,7 +94,11 @@ class DshAdapter(HarnessAdapter):
         except FileNotFoundError:
             return HarnessResult(status="failed", output="dsh 未安装(shutil.which 未找到)")
         except subprocess.TimeoutExpired:
-            return HarnessResult(status="timeout", output=f"timeout {packet.timeout}s")
+            # 超时也烧了钱(服务端计量到客户端掐断):照估入账,禁记 0(评审 F1)
+            est = self.est_call_cny
+            return HarnessResult(status="timeout", usage_missing=True,
+                                 output=f"timeout {packet.timeout}s",
+                                 cost_cny=est, estimated=est > 0)
         stdout, stderr = r.stdout or "", r.stderr or ""
         parsed = parse_usage_trailer(stdout)
         if parsed is None:
@@ -104,7 +109,7 @@ class DshAdapter(HarnessAdapter):
                 status="done" if r.returncode == 0 else "failed",
                 usage_missing=True,
                 output=f"[usage_missing 警告] {USAGE_MISSING_MSG}\n"
-                       f"--- 原始输出(截断) ---\n{(stdout + stderr)[:500]}",
+                       f"{(stdout + chr(10) + stderr if stderr else stdout)[:4000]}",
                 tokens={}, cost_cny=est, estimated=est > 0)
         body, tokens, cost = parsed
         if body and stderr:

@@ -223,16 +223,20 @@ def overview_data(pool: Path, cfg: dict) -> dict:
     groups = pending_groups(pool)
     pending = sum(len(v) for k, v in groups.items() if k != "suspended")
 
-    # 明放复审提醒(T-2026-0829-004):mingfang_mode 开启时总览挂提示条;过 review_after 变红
+    # 明放复审提醒(T-2026-0829-004):mingfang_mode 开启时总览挂提示条;过 review_after 变红。
+    # is True:yaml 写 "false"(带引号)不许误判(评审 F3);缺复审日=配置残缺,按过期逼修(评审 F8)
     budgets = cfg.get("budgets") or {}
-    mingfang = bool(budgets.get("mingfang_mode", False))
-    review_after = str(budgets.get("review_after", "") or "")
+    mingfang = budgets.get("mingfang_mode") is True
+    review_after = str(budgets.get("review_after") or "")
     overdue = False
-    if mingfang and review_after:
-        try:
-            overdue = date.today() > date.fromisoformat(review_after)
-        except ValueError:
-            overdue = True   # 日期配置损坏:按过期处理,逼人去修配置
+    if mingfang:
+        if not review_after:
+            overdue = True
+        else:
+            try:
+                overdue = date.today() > date.fromisoformat(review_after)
+            except ValueError:
+                overdue = True   # 日期配置损坏:按过期处理,逼人去修配置
 
     return {
         "k3_used": k3_used,

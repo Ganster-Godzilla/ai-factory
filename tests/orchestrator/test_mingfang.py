@@ -191,3 +191,39 @@ def test_index_mingfang_banner(pool):
     app.config["TESTING"] = True
     html = app.test_client().get("/").get_data(as_text=True)
     assert "明放" in html and "2020-01-01" in html
+
+
+# ---------- 评审修复回归(2026-08-29 code review) ----------
+
+def test_timeout_also_estimated(tmp_path):
+    # 评审 F1:超时也烧钱(服务端计量到掐断),照估禁记 0
+    with patch("subprocess.run",
+               side_effect=subprocess.TimeoutExpired(cmd="dsh", timeout=1)):
+        r = DshAdapter(est_call_cny=0.05).run(_pkt(tmp_path))
+    assert r.status == "timeout" and r.cost_cny == 0.05 and r.estimated is True
+
+
+def test_negative_est_clamped(tmp_path):
+    # 评审 F4:负单价会冲减日现金让双闸失灵 → 钳 0
+    ad = DshAdapter(est_call_cny=-0.05)
+    assert ad.est_call_cny == 0.0
+
+
+def test_mingfang_quoted_string_false_stays_hard(pool, tmp_path):
+    # 评审 F3:yaml 写 mingfang_mode: "false"(带引号)不许误判放行
+    from orchestrator.daemon.runner import run_dev_tasks
+    t = _ticket_with_task(pool)
+    append_ledger(pool, "deepseek", 99.0, "cny", t.id, "dev", "dsh")
+    cfg = {"budgets": {"ds_daily_cny": 0.01, "mingfang_mode": "false",
+                       "k3_week_token_budget": 10**9}}
+    out = run_dev_tasks(pool, t, _fake_adapter(), _git_repo(tmp_path), cfg=cfg)
+    assert "blocked" in out
+
+
+def test_overview_mingfang_missing_review_date_overdue(pool):
+    # 评审 F8:mingfang 开着但没配复审日=配置残缺,按过期逼修
+    from orchestrator.dashboard.views import overview_data
+    cfg = {"budgets": {"k3_week_token_budget": 1, "ds_daily_cny": 30,
+                       "mingfang_mode": True},
+           "gateway": {"url": "http://127.0.0.1:1"}}
+    assert overview_data(pool, cfg)["mingfang_overdue"] is True
