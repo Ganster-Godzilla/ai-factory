@@ -45,7 +45,7 @@ def test_gate_missing_artifact_fails(pool, tmp_path):
 
 def test_gate_empty_file_fails(pool, tmp_path):
     t = _new(pool)
-    _write(tmp_path, f"document/business/{t.id}-提案.md", "")
+    _write(tmp_path, f"document/business/{t.id}-测试需求/00_提案/提案.md", "")
     t.state = "p0_proposed"
     fails = check_gate(tmp_path, t, "p1_drafting")
     assert any("空" in f for f in fails)
@@ -53,7 +53,7 @@ def test_gate_empty_file_fails(pool, tmp_path):
 
 def test_gate_missing_sections_and_content(pool, tmp_path):
     t = _new(pool)
-    _write(tmp_path, f"document/business/{t.id}-提案.md", "# 只有问题\n")
+    _write(tmp_path, f"document/business/{t.id}-测试需求/00_提案/提案.md", "# 只有问题\n")
     t.state = "p0_proposed"
     fails = check_gate(tmp_path, t, "p1_drafting")
     assert any('缺少章节 "方向"' in f for f in fails)
@@ -62,7 +62,7 @@ def test_gate_missing_sections_and_content(pool, tmp_path):
 
 def test_gate_complete_p0_passes(pool, tmp_path):
     t = _new(pool)
-    _write(tmp_path, f"document/business/{t.id}-提案.md",
+    _write(tmp_path, f"document/business/{t.id}-测试需求/00_提案/提案.md",
            "# 提案\n## 问题\nx\n## 方向\nx\n## 范围\nx\n## 不做\nx\n")
     assert check_gate(tmp_path, t, "p1_drafting") == []
 
@@ -70,11 +70,11 @@ def test_gate_complete_p0_passes(pool, tmp_path):
 def test_gate_p1_requires_content_keyword(pool, tmp_path):
     t = _new(pool)
     t.state = "p1_drafting"
-    _write(tmp_path, f"document/business/{t.id}-prd.md",
+    _write(tmp_path, f"document/business/{t.id}-测试需求/01_需求分析/prd.md",
            "# PRD\n## Why\nx\n## What\nx\n## 验收标准\nx\n")
-    _write(tmp_path, f"document/business/{t.id}-功能清单.md",
+    _write(tmp_path, f"document/business/{t.id}-测试需求/01_需求分析/功能清单.md",
            "# 功能清单\n只有功能没有等级列\n")
-    _write(tmp_path, f"document/business/{t.id}-歧义澄清记录.md", "# 无歧义\n")
+    _write(tmp_path, f"document/business/{t.id}-测试需求/01_需求分析/歧义澄清记录.md", "# 无歧义\n")
     fails = check_gate(tmp_path, t, "p1_proposed")
     assert any('缺少内容 "优先级"' in f for f in fails)
 
@@ -82,9 +82,9 @@ def test_gate_p1_requires_content_keyword(pool, tmp_path):
 def test_gate_tasks_yaml_contract(pool, tmp_path):
     t = _new(pool)
     t.state = "p2_designing"
-    _write(tmp_path, f"docs/specs/{t.id}-design.md",
+    _write(tmp_path, f"document/business/{t.id}-测试需求/02_设计文档/design.md",
            "# D\n## Architecture\nx\n## How\nx\n## Checkpoints\nx\n## Rollback\nx\n")
-    _write(tmp_path, f"docs/specs/{t.id}-tasks.yaml",
+    _write(tmp_path, f"document/business/{t.id}-测试需求/02_设计文档/tasks.yaml",
            "- id: G1\n  depends_on: [G9]\n")   # 未知依赖
     fails = check_gate(tmp_path, t, "p2_approved")
     assert any("tasks.yaml" in f and "依赖" in f for f in fails)
@@ -123,12 +123,12 @@ def test_empty_tasks_yaml_fails(pool, tmp_path):
     # 评审 R3-1:空 tasks.yaml 不许滑过 P2(曾 continue 跳过空文件检查)
     t = _new(pool)
     t.state = "p2_designing"
-    _write(tmp_path, f"docs/specs/{t.id}-design.md",
+    _write(tmp_path, f"document/business/{t.id}-测试需求/02_设计文档/design.md",
            "# D\n## Architecture\nx\n## How\nx\n## Checkpoints\nx\n## Rollback\nx\n")
-    _write(tmp_path, f"docs/specs/{t.id}-tasks.yaml", "")
+    _write(tmp_path, f"document/business/{t.id}-测试需求/02_设计文档/tasks.yaml", "")
     fails = check_gate(tmp_path, t, "p2_approved")
     assert any("tasks.yaml" in f and "空" in f for f in fails)
-    _write(tmp_path, f"docs/specs/{t.id}-tasks.yaml", "# 只有注释\n")
+    _write(tmp_path, f"document/business/{t.id}-测试需求/02_设计文档/tasks.yaml", "# 只有注释\n")
     fails = check_gate(tmp_path, t, "p2_approved")
     assert any("空" in f for f in fails)
 
@@ -139,3 +139,16 @@ def test_incident_bypasses_gate(pool, tmp_path):
     t.type = "incident"
     t.state = "p1_drafting"
     assert check_gate(tmp_path, t, "p1_proposed") == []
+
+
+def test_biz_dir_glob_resolution(pool, tmp_path):
+    # T-2026-0830-001 F2:{tid_dir} glob 前缀解析,短名任意;多匹配取字典序首
+    from orchestrator.daemon.gates import _resolve_rel
+    (tmp_path / "document/business/T-1-zeta/00_提案").mkdir(parents=True)
+    (tmp_path / "document/business/T-1-alpha/00_提案").mkdir(parents=True)
+    got = _resolve_rel(tmp_path, "document/business/{tid_dir}/00_提案/提案.md", "T-1")
+    assert got == "document/business/T-1-alpha/00_提案/提案.md"
+    assert _resolve_rel(tmp_path, "docs/specs/{tid}-design.md", "T-1") == \
+        "docs/specs/T-1-design.md"
+    assert _resolve_rel(tmp_path,
+                        "document/business/{tid_dir}/00_提案/提案.md", "T-9") is None

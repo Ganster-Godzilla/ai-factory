@@ -35,7 +35,7 @@ def test_gated_edge_missing_artifact_blocks(pool, tmp_path):
 
 def test_gated_edge_complete_passes(pool, tmp_path):
     t = _new(pool)
-    _write(tmp_path, f"document/business/{t.id}-提案.md",
+    _write(tmp_path, f"document/business/{t.id}-测试需求/00_提案/提案.md",
            "# 提案\n## 问题\nx\n## 方向\nx\n## 范围\nx\n## 不做\nx\n")
     transition(pool, t, "p0_proposed", actor="pm", project_dir=tmp_path)
     assert t.state == "p0_proposed"

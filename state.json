@@ -11,7 +11,7 @@
     "dsh-usage": {
       "phase": "completed",
       "ticket": "T-2026-0829-002",
-      "requirements_dir": "document/business/dsh-usage/01_需求分析",
+      "requirements_dir": "document/business/T-2026-0829-002-dsh真实计量/01_需求分析",
       "milestones": {
         "phase0_proposal": "completed",
         "phase1_requirements": "completed",
@@ -24,7 +24,7 @@
     "orchestrator": {
       "phase": "completed",
       "ticket": "T-2026-0829-004",
-      "requirements_dir": "document/business/orchestrator/01_需求分析",
+      "requirements_dir": "document/business/T-2026-0829-004-dsh明放/01_需求分析",
       "milestones": {
         "phase0_proposal": "completed",
         "phase1_requirements": "completed",
@@ -37,7 +37,7 @@
     "dashboard": {
       "phase": "completed",
       "proposal": ".claude/proposals/PROJ-20260829-001.md",
-      "requirements_dir": "document/business/dashboard/01_需求分析",
+      "requirements_dir": "document/business/T-2026-0829-003-dashboard-v2/01_需求分析",
       "milestones": {
         "phase0_proposal": "completed",
         "phase1_requirements": "completed",

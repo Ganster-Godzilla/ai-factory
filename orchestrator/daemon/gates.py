@@ -32,6 +32,12 @@ def gate_required(ticket) -> bool:
             and getattr(ticket, "type", "feature") != "incident")
 
 
+def _resolve_rel(project_dir: Path, template: str, tid: str) -> str | None:
+    """路径模板 → 实际相对路径(统一走 artifacts.resolve_artifact_path)。"""
+    from orchestrator.daemon.artifacts import resolve_artifact_path
+    return resolve_artifact_path(project_dir, template, tid)
+
+
 def check_gate(project_dir: Path, ticket, to_state: str) -> list[str]:
     """迁移到 to_state 前的产物校验;返回 FAIL 行列表,空=放行。"""
     stage = manifest_for_edge(ticket.state, to_state)
@@ -41,7 +47,12 @@ def check_gate(project_dir: Path, ticket, to_state: str) -> list[str]:
     fails: list[str] = []
 
     for art in spec["artifacts"]:
-        rel = art["path"].format(tid=ticket.id)
+        rel = _resolve_rel(Path(project_dir), art["path"], ticket.id)
+        if rel is None:
+            fails.append(_fail(art["path"].replace("{tid_dir}",
+                                                 f"{ticket.id}-<短名>"),
+                               "产物不存在(工单文件夹未建)"))
+            continue
         p = Path(project_dir) / rel
         if not p.is_file():
             fails.append(_fail(rel, "产物不存在"))

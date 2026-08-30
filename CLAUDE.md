@@ -19,5 +19,6 @@
 ## 布局
 
 - `orchestrator/` 编排器(daemon/dashboard/adapters);`plugin/` 技能包与模板
-- `pool/` 工单池(yaml + events.jsonl + ledger.jsonl);`document/business/` 需求产物;`docs/specs/` 设计
+- `pool/` 工单池(yaml + events.jsonl + ledger.jsonl)
+- `document/business/<工单号>-<需求短名>/` 需求产物(00_提案 / 01_需求分析,T-2026-0830-001 起工单文件夹制,扁平混排已废弃);`docs/specs/` 设计
 - `backlog.md` / `state.json` 进度看板与状态;`.claude/proposals/` Phase 0 提案

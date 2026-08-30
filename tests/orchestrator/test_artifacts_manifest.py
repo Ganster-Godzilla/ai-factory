@@ -32,7 +32,7 @@ def test_p0_proposal_artifact():
     arts = ARTIFACT_MANIFEST["P0"]["artifacts"]
     assert len(arts) == 1
     a = arts[0]
-    assert a["path"] == "document/business/{tid}-提案.md"
+    assert a["path"] == "document/business/{tid_dir}/00_提案/提案.md"
     assert a["role"] == "pm"
     assert set(a["require_sections"]) == {"问题", "方向", "范围", "不做"}
     assert ARTIFACT_MANIFEST["P0"]["human_checklist"]
@@ -40,9 +40,9 @@ def test_p0_proposal_artifact():
 
 def test_p1_three_artifacts():
     paths = [a["path"] for a in ARTIFACT_MANIFEST["P1"]["artifacts"]]
-    assert paths == ["document/business/{tid}-prd.md",
-                     "document/business/{tid}-功能清单.md",
-                     "document/business/{tid}-歧义澄清记录.md"]
+    assert paths == ["document/business/{tid_dir}/01_需求分析/prd.md",
+                     "document/business/{tid_dir}/01_需求分析/功能清单.md",
+                     "document/business/{tid_dir}/01_需求分析/歧义澄清记录.md"]
     prd = next(a for a in ARTIFACT_MANIFEST["P1"]["artifacts"]
                if a["path"].endswith("prd.md"))
     assert set(prd["require_sections"]) == {"Why", "What", "验收标准"}
@@ -53,8 +53,8 @@ def test_p1_three_artifacts():
 
 def test_p2_design_and_tasks_contract():
     paths = [a["path"] for a in ARTIFACT_MANIFEST["P2"]["artifacts"]]
-    assert "docs/specs/{tid}-design.md" in paths
-    assert "docs/specs/{tid}-tasks.yaml" in paths
+    assert "document/business/{tid_dir}/02_设计文档/design.md" in paths
+    assert "document/business/{tid_dir}/02_设计文档/tasks.yaml" in paths
     design = next(a for a in ARTIFACT_MANIFEST["P2"]["artifacts"]
                   if "design.md" in a["path"])
     assert set(design["require_sections"]) == {"Architecture", "How",
@@ -72,7 +72,7 @@ def test_p3_verify_required_flag():
 
 def test_p4_p5_artifacts():
     p4 = ARTIFACT_MANIFEST["P4"]["artifacts"][0]
-    assert p4["path"] == "docs/specs/{tid}-验收报告.md"
+    assert p4["path"] == "document/business/{tid_dir}/04_测试/验收报告.md"
     assert set(p4["require_sections"]) == {"环境", "范围", "用例结果", "结论"}
     rel = ARTIFACT_MANIFEST["P5_RELEASE"]["artifacts"][0]
     assert set(rel["require_sections"]) == {"合并清单", "版本", "回滚方案"}
