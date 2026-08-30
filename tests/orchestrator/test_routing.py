@@ -49,9 +49,10 @@ def test_p3_dispatches_ready_tasks(pool, tmp_path):
 
 
 def _write_tasks_yaml(proj, tid, body):
-    d = proj / "docs" / "specs"
+    # T-2026-0830-001 起:tasks.yaml 在工单文件夹 02_设计文档/ 下
+    d = proj / "document" / "business" / f"{tid}-测试需求" / "02_设计文档"
     d.mkdir(parents=True, exist_ok=True)
-    (d / f"{tid}-tasks.yaml").write_text(body, encoding="utf-8", newline="\n")
+    (d / "tasks.yaml").write_text(body, encoding="utf-8", newline="\n")
 
 
 def test_p3_lazy_loads_tasks_yaml(pool, tmp_path):

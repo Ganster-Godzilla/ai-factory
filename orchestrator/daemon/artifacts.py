@@ -12,7 +12,8 @@ ARTIFACT_MANIFEST: dict[str, dict] = {
         # 挂提交边会让探针采纳/cli 提交永远 409,draft 态无角色能产出提案)
         "gate_edge": ("p0_proposed", "p1_drafting"),
         "artifacts": [{
-            "path": "document/business/{tid}-提案.md",
+            # {tid_dir} = document/business/<工单号>-<需求短名>/,glob 前缀解析(T-2026-0830-001)
+            "path": "document/business/{tid_dir}/00_提案/提案.md",
             "role": "pm",
             "require_sections": ["问题", "方向", "范围", "不做"],
             "require_content": [],
@@ -22,15 +23,15 @@ ARTIFACT_MANIFEST: dict[str, dict] = {
     "P1": {
         "gate_edge": ("p1_drafting", "p1_proposed"),
         "artifacts": [
-            {"path": "document/business/{tid}-prd.md",
+            {"path": "document/business/{tid_dir}/01_需求分析/prd.md",
              "role": "pm",
              "require_sections": ["Why", "What", "验收标准"],
              "require_content": []},
-            {"path": "document/business/{tid}-功能清单.md",
+            {"path": "document/business/{tid_dir}/01_需求分析/功能清单.md",
              "role": "pm",
              "require_sections": ["功能清单"],
              "require_content": ["优先级"]},
-            {"path": "document/business/{tid}-歧义澄清记录.md",
+            {"path": "document/business/{tid_dir}/01_需求分析/歧义澄清记录.md",
              "role": "pm",
              "require_sections": [],
              "require_content": []},   # 无歧义也须显式写"无歧义"(人工项)
@@ -40,11 +41,11 @@ ARTIFACT_MANIFEST: dict[str, dict] = {
     "P2": {
         "gate_edge": ("p2_designing", "p2_approved"),
         "artifacts": [
-            {"path": "docs/specs/{tid}-design.md",
+            {"path": "document/business/{tid_dir}/02_设计文档/design.md",
              "role": "architect",
              "require_sections": ["Architecture", "How", "Checkpoints", "Rollback"],
              "require_content": []},
-            {"path": "docs/specs/{tid}-tasks.yaml",
+            {"path": "document/business/{tid_dir}/02_设计文档/tasks.yaml",
              "role": "architect",
              "require_sections": [],
              "require_content": [],
@@ -61,7 +62,7 @@ ARTIFACT_MANIFEST: dict[str, dict] = {
     "P4": {
         "gate_edge": ("p4_verifying", "p5_ready"),
         "artifacts": [{
-            "path": "docs/specs/{tid}-验收报告.md",
+            "path": "document/business/{tid_dir}/04_测试/验收报告.md",
             "role": "qa",
             "require_sections": ["环境", "范围", "用例结果", "结论"],
             "require_content": [],
@@ -71,7 +72,7 @@ ARTIFACT_MANIFEST: dict[str, dict] = {
     "P5_RELEASE": {
         "gate_edge": ("p5_releasing", "monitoring"),
         "artifacts": [{
-            "path": "docs/specs/{tid}-发布记录.md",
+            "path": "document/business/{tid_dir}/05_部署交付/发布记录.md",
             "role": "release",
             "require_sections": ["合并清单", "版本", "回滚方案"],
             "require_content": [],
@@ -81,7 +82,7 @@ ARTIFACT_MANIFEST: dict[str, dict] = {
     "P5_MONITOR": {
         "gate_edge": ("monitoring", "done"),
         "artifacts": [{
-            "path": "docs/specs/{tid}-观察窗报告.md",
+            "path": "document/business/{tid_dir}/05_部署交付/观察窗报告.md",
             "role": "sre",
             "require_sections": ["观察窗", "健康检查", "结论"],
             "require_content": [],
@@ -98,3 +99,22 @@ def manifest_for_edge(frm: str, to: str) -> str | None:
         if spec["gate_edge"] == (frm, to):
             return stage
     return None
+
+
+def resolve_artifact_path(project_dir, template: str, tid: str) -> str | None:
+    """路径模板 → 实际相对路径(gates/runner 共用解析器,T-2026-0830-001 F6)。
+    {tid} 直替;{tid_dir} 解析 document/business/<id>-*/ 工单文件夹
+    (短名纯人读,机器只用 id 前缀;多匹配取字典序首个)。
+    零匹配 → None(调用方按产物不存在/未找到处理)。"""
+    from pathlib import Path
+    if "{tid_dir}" not in template:
+        return template.format(tid=tid)
+    base = Path(project_dir) / "document" / "business"
+    matches = sorted(p for p in base.glob(f"{tid}-*") if p.is_dir()) \
+        if base.is_dir() else []
+    exact = base / tid
+    if exact.is_dir():
+        matches.insert(0, exact)
+    if not matches:
+        return None
+    return template.replace("{tid_dir}", matches[0].name).format(tid=tid)

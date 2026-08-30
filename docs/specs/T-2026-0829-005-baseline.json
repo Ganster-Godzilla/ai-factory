@@ -1,0 +1,4295 @@
+{
+  "meta": {
+    "python": "3.11.5",
+    "fastapi": "0.141.1",
+    "pydantic": "2.13.5",
+    "uvicorn": "0.52.4"
+  },
+  "http": {
+    "routes": [
+      {
+        "type": "Route",
+        "path": "/openapi.json",
+        "methods": [
+          "GET",
+          "HEAD"
+        ],
+        "name": "openapi"
+      },
+      {
+        "type": "Route",
+        "path": "/docs",
+        "methods": [
+          "GET",
+          "HEAD"
+        ],
+        "name": "swagger_ui_html"
+      },
+      {
+        "type": "Route",
+        "path": "/docs/oauth2-redirect",
+        "methods": [
+          "GET",
+          "HEAD"
+        ],
+        "name": "swagger_ui_redirect"
+      },
+      {
+        "type": "Route",
+        "path": "/redoc",
+        "methods": [
+          "GET",
+          "HEAD"
+        ],
+        "name": "redoc_html"
+      },
+      {
+        "type": "Mount",
+        "path": "/media",
+        "name": "media"
+      },
+      {
+        "type": "APIRoute",
+        "path": "/api/health",
+        "methods": [
+          "GET"
+        ],
+        "name": "health",
+        "status_code": null,
+        "include_in_schema": true
+      },
+      {
+        "type": "APIRoute",
+        "path": "/api/providers",
+        "methods": [
+          "GET"
+        ],
+        "name": "list_providers",
+        "status_code": null,
+        "include_in_schema": true
+      },
+      {
+        "type": "APIRoute",
+        "path": "/api/ad-settings",
+        "methods": [
+          "GET"
+        ],
+        "name": "get_ad_model_settings",
+        "status_code": null,
+        "include_in_schema": true
+      },
+      {
+        "type": "APIRoute",
+        "path": "/api/stop",
+        "methods": [
+          "POST"
+        ],
+        "name": "stop_all_operations",
+        "status_code": null,
+        "include_in_schema": true
+      },
+      {
+        "type": "APIRoute",
+        "path": "/api/ad-projects",
+        "methods": [
+          "POST"
+        ],
+        "name": "create_ad_project",
+        "status_code": null,
+        "include_in_schema": true
+      },
+      {
+        "type": "APIRoute",
+        "path": "/api/ad-projects/history",
+        "methods": [
+          "GET"
+        ],
+        "name": "ad_project_history",
+        "status_code": null,
+        "include_in_schema": true
+      },
+      {
+        "type": "APIRoute",
+        "path": "/api/ad-projects/{project_id}",
+        "methods": [
+          "DELETE"
+        ],
+        "name": "delete_ad_project",
+        "status_code": null,
+        "include_in_schema": true
+      },
+      {
+        "type": "APIRoute",
+        "path": "/api/ad-projects/{project_id}",
+        "methods": [
+          "GET"
+        ],
+        "name": "ad_project",
+        "status_code": null,
+        "include_in_schema": true
+      },
+      {
+        "type": "APIRoute",
+        "path": "/api/ad-projects/{project_id}/assets",
+        "methods": [
+          "POST"
+        ],
+        "name": "upload_ad_assets",
+        "status_code": null,
+        "include_in_schema": true
+      },
+      {
+        "type": "APIRoute",
+        "path": "/api/ad-projects/{project_id}/reference-video",
+        "methods": [
+          "POST"
+        ],
+        "name": "upload_reference_video",
+        "status_code": null,
+        "include_in_schema": true
+      },
+      {
+        "type": "APIRoute",
+        "path": "/api/ad-projects/{project_id}/plan",
+        "methods": [
+          "POST"
+        ],
+        "name": "create_ad_plan",
+        "status_code": null,
+        "include_in_schema": true
+      },
+      {
+        "type": "APIRoute",
+        "path": "/api/ad-projects/{project_id}/plan-feedback",
+        "methods": [
+          "POST"
+        ],
+        "name": "revise_ad_plan",
+        "status_code": null,
+        "include_in_schema": true
+      },
+      {
+        "type": "APIRoute",
+        "path": "/api/ad-projects/{project_id}/plan-from-segment",
+        "methods": [
+          "POST"
+        ],
+        "name": "revise_ad_plan_from_segment",
+        "status_code": null,
+        "include_in_schema": true
+      },
+      {
+        "type": "APIRoute",
+        "path": "/api/ad-projects/{project_id}/plan-prompts",
+        "methods": [
+          "POST"
+        ],
+        "name": "update_ad_plan_prompts",
+        "status_code": null,
+        "include_in_schema": true
+      },
+      {
+        "type": "APIRoute",
+        "path": "/api/ad-projects/{project_id}/plan-prompt-rewrite",
+        "methods": [
+          "POST"
+        ],
+        "name": "rewrite_ad_segment_prompt",
+        "status_code": null,
+        "include_in_schema": true
+      },
+      {
+        "type": "APIRoute",
+        "path": "/api/ad-projects/{project_id}/plan-prompts-rewrite",
+        "methods": [
+          "POST"
+        ],
+        "name": "rewrite_ad_plan_prompts",
+        "status_code": null,
+        "include_in_schema": true
+      },
+      {
+        "type": "APIRoute",
+        "path": "/api/ad-projects/{project_id}/plan-approve",
+        "methods": [
+          "POST"
+        ],
+        "name": "approve_ad_plan",
+        "status_code": null,
+        "include_in_schema": true
+      },
+      {
+        "type": "APIRoute",
+        "path": "/api/ad-projects/{project_id}/generate",
+        "methods": [
+          "POST"
+        ],
+        "name": "generate_approved_ad",
+        "status_code": null,
+        "include_in_schema": true
+      },
+      {
+        "type": "APIRoute",
+        "path": "/api/ad-projects/{project_id}/segments/{segment_id}/continuation-confirm",
+        "methods": [
+          "POST"
+        ],
+        "name": "confirm_ad_continuation",
+        "status_code": null,
+        "include_in_schema": true
+      },
+      {
+        "type": "APIRoute",
+        "path": "/api/ad-projects/{project_id}/recover-cloud-output",
+        "methods": [
+          "POST"
+        ],
+        "name": "recover_ad_cloud_output",
+        "status_code": null,
+        "include_in_schema": true
+      },
+      {
+        "type": "APIRoute",
+        "path": "/api/ad-projects/{project_id}/voices",
+        "methods": [
+          "GET"
+        ],
+        "name": "list_ad_voices",
+        "status_code": null,
+        "include_in_schema": true
+      },
+      {
+        "type": "APIRoute",
+        "path": "/api/ad-projects/{project_id}/voice-preview",
+        "methods": [
+          "POST"
+        ],
+        "name": "create_ad_voice_preview",
+        "status_code": null,
+        "include_in_schema": true
+      },
+      {
+        "type": "APIRoute",
+        "path": "/api/ad-projects/{project_id}/bgm",
+        "methods": [
+          "GET"
+        ],
+        "name": "list_project_bgm",
+        "status_code": null,
+        "include_in_schema": true
+      },
+      {
+        "type": "APIRoute",
+        "path": "/api/ad-projects/{project_id}/bgm/{bgm_id:path}/audio",
+        "methods": [
+          "GET"
+        ],
+        "name": "project_bgm_audio",
+        "status_code": null,
+        "include_in_schema": true
+      },
+      {
+        "type": "APIRoute",
+        "path": "/api/ad-projects/{project_id}/final-copy",
+        "methods": [
+          "POST"
+        ],
+        "name": "rewrite_ad_final_copy",
+        "status_code": null,
+        "include_in_schema": true
+      },
+      {
+        "type": "APIRoute",
+        "path": "/api/ad-projects/{project_id}/final-edit",
+        "methods": [
+          "POST"
+        ],
+        "name": "edit_ad_final",
+        "status_code": null,
+        "include_in_schema": true
+      },
+      {
+        "type": "APIRoute",
+        "path": "/api/ad-projects/{project_id}/stop",
+        "methods": [
+          "POST"
+        ],
+        "name": "stop_ad_project",
+        "status_code": null,
+        "include_in_schema": true
+      },
+      {
+        "type": "APIRoute",
+        "path": "/api/ad-projects/{project_id}/return-to-plan",
+        "methods": [
+          "POST"
+        ],
+        "name": "return_ad_project_to_plan",
+        "status_code": null,
+        "include_in_schema": true
+      },
+      {
+        "type": "APIRoute",
+        "path": "/api/generations",
+        "methods": [
+          "GET"
+        ],
+        "name": "list_generations",
+        "status_code": null,
+        "include_in_schema": true
+      },
+      {
+        "type": "APIRoute",
+        "path": "/api/generations/{generation_id}",
+        "methods": [
+          "GET"
+        ],
+        "name": "generation_detail",
+        "status_code": null,
+        "include_in_schema": true
+      },
+      {
+        "type": "APIRoute",
+        "path": "/api/assets",
+        "methods": [
+          "POST"
+        ],
+        "name": "create_asset",
+        "status_code": null,
+        "include_in_schema": true
+      },
+      {
+        "type": "APIRoute",
+        "path": "/api/generations",
+        "methods": [
+          "POST"
+        ],
+        "name": "create_generation",
+        "status_code": null,
+        "include_in_schema": true
+      },
+      {
+        "type": "APIRoute",
+        "path": "/api/generations/{generation_id}/edits",
+        "methods": [
+          "POST"
+        ],
+        "name": "edit_generation",
+        "status_code": null,
+        "include_in_schema": true
+      },
+      {
+        "type": "APIRoute",
+        "path": "/api/generations/{generation_id}/continuations",
+        "methods": [
+          "POST"
+        ],
+        "name": "continue_generation",
+        "status_code": null,
+        "include_in_schema": true
+      },
+      {
+        "type": "APIWebSocketRoute",
+        "path": "/api/events",
+        "name": "events"
+      }
+    ],
+    "openapi": {
+      "openapi": "3.1.0",
+      "info": {
+        "title": "SK2 Local Video Studio",
+        "version": "0.1.0"
+      },
+      "paths": {
+        "/api/health": {
+          "get": {
+            "summary": "Health",
+            "operationId": "health_api_health_get",
+            "responses": {
+              "200": {
+                "description": "Successful Response",
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "additionalProperties": true,
+                      "type": "object",
+                      "title": "Response Health Api Health Get"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "/api/providers": {
+          "get": {
+            "summary": "List Providers",
+            "operationId": "list_providers_api_providers_get",
+            "responses": {
+              "200": {
+                "description": "Successful Response",
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "additionalProperties": true,
+                      "type": "object",
+                      "title": "Response List Providers Api Providers Get"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "/api/ad-settings": {
+          "get": {
+            "summary": "Get Ad Model Settings",
+            "operationId": "get_ad_model_settings_api_ad_settings_get",
+            "responses": {
+              "200": {
+                "description": "Successful Response",
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "additionalProperties": true,
+                      "type": "object",
+                      "title": "Response Get Ad Model Settings Api Ad Settings Get"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "/api/stop": {
+          "post": {
+            "summary": "Stop All Operations",
+            "operationId": "stop_all_operations_api_stop_post",
+            "responses": {
+              "200": {
+                "description": "Successful Response",
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "additionalProperties": true,
+                      "type": "object",
+                      "title": "Response Stop All Operations Api Stop Post"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "/api/ad-projects": {
+          "post": {
+            "summary": "Create Ad Project",
+            "operationId": "create_ad_project_api_ad_projects_post",
+            "requestBody": {
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/CreateAdProjectRequest"
+                  }
+                }
+              },
+              "required": true
+            },
+            "responses": {
+              "200": {
+                "description": "Successful Response",
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "additionalProperties": true,
+                      "type": "object",
+                      "title": "Response Create Ad Project Api Ad Projects Post"
+                    }
+                  }
+                }
+              },
+              "422": {
+                "description": "Validation Error",
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "$ref": "#/components/schemas/HTTPValidationError"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "/api/ad-projects/history": {
+          "get": {
+            "summary": "Ad Project History",
+            "operationId": "ad_project_history_api_ad_projects_history_get",
+            "responses": {
+              "200": {
+                "description": "Successful Response",
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "additionalProperties": true,
+                      "type": "object",
+                      "title": "Response Ad Project History Api Ad Projects History Get"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "/api/ad-projects/{project_id}": {
+          "delete": {
+            "summary": "Delete Ad Project",
+            "operationId": "delete_ad_project_api_ad_projects__project_id__delete",
+            "parameters": [
+              {
+                "name": "project_id",
+                "in": "path",
+                "required": true,
+                "schema": {
+                  "type": "string",
+                  "title": "Project Id"
+                }
+              }
+            ],
+            "responses": {
+              "200": {
+                "description": "Successful Response",
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "type": "object",
+                      "additionalProperties": true,
+                      "title": "Response Delete Ad Project Api Ad Projects  Project Id  Delete"
+                    }
+                  }
+                }
+              },
+              "422": {
+                "description": "Validation Error",
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "$ref": "#/components/schemas/HTTPValidationError"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "get": {
+            "summary": "Ad Project",
+            "operationId": "ad_project_api_ad_projects__project_id__get",
+            "parameters": [
+              {
+                "name": "project_id",
+                "in": "path",
+                "required": true,
+                "schema": {
+                  "type": "string",
+                  "title": "Project Id"
+                }
+              }
+            ],
+            "responses": {
+              "200": {
+                "description": "Successful Response",
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "type": "object",
+                      "additionalProperties": true,
+                      "title": "Response Ad Project Api Ad Projects  Project Id  Get"
+                    }
+                  }
+                }
+              },
+              "422": {
+                "description": "Validation Error",
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "$ref": "#/components/schemas/HTTPValidationError"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "/api/ad-projects/{project_id}/assets": {
+          "post": {
+            "summary": "Upload Ad Assets",
+            "operationId": "upload_ad_assets_api_ad_projects__project_id__assets_post",
+            "parameters": [
+              {
+                "name": "project_id",
+                "in": "path",
+                "required": true,
+                "schema": {
+                  "type": "string",
+                  "title": "Project Id"
+                }
+              }
+            ],
+            "requestBody": {
+              "required": true,
+              "content": {
+                "multipart/form-data": {
+                  "schema": {
+                    "$ref": "#/components/schemas/Body_upload_ad_assets_api_ad_projects__project_id__assets_post"
+                  }
+                }
+              }
+            },
+            "responses": {
+              "200": {
+                "description": "Successful Response",
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "type": "object",
+                      "additionalProperties": true,
+                      "title": "Response Upload Ad Assets Api Ad Projects  Project Id  Assets Post"
+                    }
+                  }
+                }
+              },
+              "422": {
+                "description": "Validation Error",
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "$ref": "#/components/schemas/HTTPValidationError"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "/api/ad-projects/{project_id}/reference-video": {
+          "post": {
+            "summary": "Upload Reference Video",
+            "operationId": "upload_reference_video_api_ad_projects__project_id__reference_video_post",
+            "parameters": [
+              {
+                "name": "project_id",
+                "in": "path",
+                "required": true,
+                "schema": {
+                  "type": "string",
+                  "title": "Project Id"
+                }
+              }
+            ],
+            "requestBody": {
+              "required": true,
+              "content": {
+                "multipart/form-data": {
+                  "schema": {
+                    "$ref": "#/components/schemas/Body_upload_reference_video_api_ad_projects__project_id__reference_video_post"
+                  }
+                }
+              }
+            },
+            "responses": {
+              "200": {
+                "description": "Successful Response",
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "type": "object",
+                      "additionalProperties": true,
+                      "title": "Response Upload Reference Video Api Ad Projects  Project Id  Reference Video Post"
+                    }
+                  }
+                }
+              },
+              "422": {
+                "description": "Validation Error",
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "$ref": "#/components/schemas/HTTPValidationError"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "/api/ad-projects/{project_id}/plan": {
+          "post": {
+            "summary": "Create Ad Plan",
+            "operationId": "create_ad_plan_api_ad_projects__project_id__plan_post",
+            "parameters": [
+              {
+                "name": "project_id",
+                "in": "path",
+                "required": true,
+                "schema": {
+                  "type": "string",
+                  "title": "Project Id"
+                }
+              }
+            ],
+            "responses": {
+              "200": {
+                "description": "Successful Response",
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "type": "object",
+                      "additionalProperties": true,
+                      "title": "Response Create Ad Plan Api Ad Projects  Project Id  Plan Post"
+                    }
+                  }
+                }
+              },
+              "422": {
+                "description": "Validation Error",
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "$ref": "#/components/schemas/HTTPValidationError"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "/api/ad-projects/{project_id}/plan-feedback": {
+          "post": {
+            "summary": "Revise Ad Plan",
+            "operationId": "revise_ad_plan_api_ad_projects__project_id__plan_feedback_post",
+            "parameters": [
+              {
+                "name": "project_id",
+                "in": "path",
+                "required": true,
+                "schema": {
+                  "type": "string",
+                  "title": "Project Id"
+                }
+              }
+            ],
+            "requestBody": {
+              "required": true,
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/AdPlanFeedbackRequest"
+                  }
+                }
+              }
+            },
+            "responses": {
+              "200": {
+                "description": "Successful Response",
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "type": "object",
+                      "additionalProperties": true,
+                      "title": "Response Revise Ad Plan Api Ad Projects  Project Id  Plan Feedback Post"
+                    }
+                  }
+                }
+              },
+              "422": {
+                "description": "Validation Error",
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "$ref": "#/components/schemas/HTTPValidationError"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "/api/ad-projects/{project_id}/plan-from-segment": {
+          "post": {
+            "summary": "Revise Ad Plan From Segment",
+            "operationId": "revise_ad_plan_from_segment_api_ad_projects__project_id__plan_from_segment_post",
+            "parameters": [
+              {
+                "name": "project_id",
+                "in": "path",
+                "required": true,
+                "schema": {
+                  "type": "string",
+                  "title": "Project Id"
+                }
+              }
+            ],
+            "requestBody": {
+              "required": true,
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/AdPlanFromSegmentRequest"
+                  }
+                }
+              }
+            },
+            "responses": {
+              "200": {
+                "description": "Successful Response",
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "type": "object",
+                      "additionalProperties": true,
+                      "title": "Response Revise Ad Plan From Segment Api Ad Projects  Project Id  Plan From Segment Post"
+                    }
+                  }
+                }
+              },
+              "422": {
+                "description": "Validation Error",
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "$ref": "#/components/schemas/HTTPValidationError"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "/api/ad-projects/{project_id}/plan-prompts": {
+          "post": {
+            "summary": "Update Ad Plan Prompts",
+            "operationId": "update_ad_plan_prompts_api_ad_projects__project_id__plan_prompts_post",
+            "parameters": [
+              {
+                "name": "project_id",
+                "in": "path",
+                "required": true,
+                "schema": {
+                  "type": "string",
+                  "title": "Project Id"
+                }
+              }
+            ],
+            "requestBody": {
+              "required": true,
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/AdPlanPromptUpdateRequest"
+                  }
+                }
+              }
+            },
+            "responses": {
+              "200": {
+                "description": "Successful Response",
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "type": "object",
+                      "additionalProperties": true,
+                      "title": "Response Update Ad Plan Prompts Api Ad Projects  Project Id  Plan Prompts Post"
+                    }
+                  }
+                }
+              },
+              "422": {
+                "description": "Validation Error",
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "$ref": "#/components/schemas/HTTPValidationError"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "/api/ad-projects/{project_id}/plan-prompt-rewrite": {
+          "post": {
+            "summary": "Rewrite Ad Segment Prompt",
+            "operationId": "rewrite_ad_segment_prompt_api_ad_projects__project_id__plan_prompt_rewrite_post",
+            "parameters": [
+              {
+                "name": "project_id",
+                "in": "path",
+                "required": true,
+                "schema": {
+                  "type": "string",
+                  "title": "Project Id"
+                }
+              }
+            ],
+            "requestBody": {
+              "required": true,
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/AdSegmentPromptRewriteRequest"
+                  }
+                }
+              }
+            },
+            "responses": {
+              "200": {
+                "description": "Successful Response",
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "type": "object",
+                      "additionalProperties": true,
+                      "title": "Response Rewrite Ad Segment Prompt Api Ad Projects  Project Id  Plan Prompt Rewrite Post"
+                    }
+                  }
+                }
+              },
+              "422": {
+                "description": "Validation Error",
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "$ref": "#/components/schemas/HTTPValidationError"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "/api/ad-projects/{project_id}/plan-prompts-rewrite": {
+          "post": {
+            "summary": "Rewrite Ad Plan Prompts",
+            "operationId": "rewrite_ad_plan_prompts_api_ad_projects__project_id__plan_prompts_rewrite_post",
+            "parameters": [
+              {
+                "name": "project_id",
+                "in": "path",
+                "required": true,
+                "schema": {
+                  "type": "string",
+                  "title": "Project Id"
+                }
+              }
+            ],
+            "requestBody": {
+              "required": true,
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/AdPlanPromptRewriteRequest"
+                  }
+                }
+              }
+            },
+            "responses": {
+              "200": {
+                "description": "Successful Response",
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "type": "object",
+                      "additionalProperties": true,
+                      "title": "Response Rewrite Ad Plan Prompts Api Ad Projects  Project Id  Plan Prompts Rewrite Post"
+                    }
+                  }
+                }
+              },
+              "422": {
+                "description": "Validation Error",
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "$ref": "#/components/schemas/HTTPValidationError"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "/api/ad-projects/{project_id}/plan-approve": {
+          "post": {
+            "summary": "Approve Ad Plan",
+            "operationId": "approve_ad_plan_api_ad_projects__project_id__plan_approve_post",
+            "parameters": [
+              {
+                "name": "project_id",
+                "in": "path",
+                "required": true,
+                "schema": {
+                  "type": "string",
+                  "title": "Project Id"
+                }
+              }
+            ],
+            "requestBody": {
+              "required": true,
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/AdPlanApprovalRequest"
+                  }
+                }
+              }
+            },
+            "responses": {
+              "200": {
+                "description": "Successful Response",
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "type": "object",
+                      "additionalProperties": true,
+                      "title": "Response Approve Ad Plan Api Ad Projects  Project Id  Plan Approve Post"
+                    }
+                  }
+                }
+              },
+              "422": {
+                "description": "Validation Error",
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "$ref": "#/components/schemas/HTTPValidationError"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "/api/ad-projects/{project_id}/generate": {
+          "post": {
+            "summary": "Generate Approved Ad",
+            "operationId": "generate_approved_ad_api_ad_projects__project_id__generate_post",
+            "parameters": [
+              {
+                "name": "project_id",
+                "in": "path",
+                "required": true,
+                "schema": {
+                  "type": "string",
+                  "title": "Project Id"
+                }
+              }
+            ],
+            "requestBody": {
+              "required": true,
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/AdGenerationRequest"
+                  }
+                }
+              }
+            },
+            "responses": {
+              "200": {
+                "description": "Successful Response",
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "type": "object",
+                      "additionalProperties": true,
+                      "title": "Response Generate Approved Ad Api Ad Projects  Project Id  Generate Post"
+                    }
+                  }
+                }
+              },
+              "422": {
+                "description": "Validation Error",
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "$ref": "#/components/schemas/HTTPValidationError"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "/api/ad-projects/{project_id}/segments/{segment_id}/continuation-confirm": {
+          "post": {
+            "summary": "Confirm Ad Continuation",
+            "operationId": "confirm_ad_continuation_api_ad_projects__project_id__segments__segment_id__continuation_confirm_post",
+            "parameters": [
+              {
+                "name": "project_id",
+                "in": "path",
+                "required": true,
+                "schema": {
+                  "type": "string",
+                  "title": "Project Id"
+                }
+              },
+              {
+                "name": "segment_id",
+                "in": "path",
+                "required": true,
+                "schema": {
+                  "type": "string",
+                  "title": "Segment Id"
+                }
+              }
+            ],
+            "requestBody": {
+              "required": true,
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/AdContinuationConfirmationRequest"
+                  }
+                }
+              }
+            },
+            "responses": {
+              "200": {
+                "description": "Successful Response",
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "type": "object",
+                      "additionalProperties": true,
+                      "title": "Response Confirm Ad Continuation Api Ad Projects  Project Id  Segments  Segment Id  Continuation Confirm Post"
+                    }
+                  }
+                }
+              },
+              "422": {
+                "description": "Validation Error",
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "$ref": "#/components/schemas/HTTPValidationError"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "/api/ad-projects/{project_id}/recover-cloud-output": {
+          "post": {
+            "summary": "Recover Ad Cloud Output",
+            "description": "Fetch existing Wanxiang task results without advancing the ad workflow.",
+            "operationId": "recover_ad_cloud_output_api_ad_projects__project_id__recover_cloud_output_post",
+            "parameters": [
+              {
+                "name": "project_id",
+                "in": "path",
+                "required": true,
+                "schema": {
+                  "type": "string",
+                  "title": "Project Id"
+                }
+              }
+            ],
+            "responses": {
+              "200": {
+                "description": "Successful Response",
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "type": "object",
+                      "additionalProperties": true,
+                      "title": "Response Recover Ad Cloud Output Api Ad Projects  Project Id  Recover Cloud Output Post"
+                    }
+                  }
+                }
+              },
+              "422": {
+                "description": "Validation Error",
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "$ref": "#/components/schemas/HTTPValidationError"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "/api/ad-projects/{project_id}/voices": {
+          "get": {
+            "summary": "List Ad Voices",
+            "operationId": "list_ad_voices_api_ad_projects__project_id__voices_get",
+            "parameters": [
+              {
+                "name": "project_id",
+                "in": "path",
+                "required": true,
+                "schema": {
+                  "type": "string",
+                  "title": "Project Id"
+                }
+              }
+            ],
+            "responses": {
+              "200": {
+                "description": "Successful Response",
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "type": "object",
+                      "additionalProperties": true,
+                      "title": "Response List Ad Voices Api Ad Projects  Project Id  Voices Get"
+                    }
+                  }
+                }
+              },
+              "422": {
+                "description": "Validation Error",
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "$ref": "#/components/schemas/HTTPValidationError"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "/api/ad-projects/{project_id}/voice-preview": {
+          "post": {
+            "summary": "Create Ad Voice Preview",
+            "operationId": "create_ad_voice_preview_api_ad_projects__project_id__voice_preview_post",
+            "parameters": [
+              {
+                "name": "project_id",
+                "in": "path",
+                "required": true,
+                "schema": {
+                  "type": "string",
+                  "title": "Project Id"
+                }
+              }
+            ],
+            "requestBody": {
+              "required": true,
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/AdVoicePreviewRequest"
+                  }
+                }
+              }
+            },
+            "responses": {
+              "200": {
+                "description": "Successful Response",
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "type": "object",
+                      "additionalProperties": true,
+                      "title": "Response Create Ad Voice Preview Api Ad Projects  Project Id  Voice Preview Post"
+                    }
+                  }
+                }
+              },
+              "422": {
+                "description": "Validation Error",
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "$ref": "#/components/schemas/HTTPValidationError"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "/api/ad-projects/{project_id}/bgm": {
+          "get": {
+            "summary": "List Project Bgm",
+            "operationId": "list_project_bgm_api_ad_projects__project_id__bgm_get",
+            "parameters": [
+              {
+                "name": "project_id",
+                "in": "path",
+                "required": true,
+                "schema": {
+                  "type": "string",
+                  "title": "Project Id"
+                }
+              }
+            ],
+            "responses": {
+              "200": {
+                "description": "Successful Response",
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "type": "object",
+                      "additionalProperties": true,
+                      "title": "Response List Project Bgm Api Ad Projects  Project Id  Bgm Get"
+                    }
+                  }
+                }
+              },
+              "422": {
+                "description": "Validation Error",
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "$ref": "#/components/schemas/HTTPValidationError"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "/api/ad-projects/{project_id}/bgm/{bgm_id}/audio": {
+          "get": {
+            "summary": "Project Bgm Audio",
+            "operationId": "project_bgm_audio_api_ad_projects__project_id__bgm__bgm_id__audio_get",
+            "parameters": [
+              {
+                "name": "project_id",
+                "in": "path",
+                "required": true,
+                "schema": {
+                  "type": "string",
+                  "title": "Project Id"
+                }
+              },
+              {
+                "name": "bgm_id",
+                "in": "path",
+                "required": true,
+                "schema": {
+                  "type": "string",
+                  "title": "Bgm Id"
+                }
+              }
+            ],
+            "responses": {
+              "200": {
+                "description": "Successful Response",
+                "content": {
+                  "application/json": {
+                    "schema": {}
+                  }
+                }
+              },
+              "422": {
+                "description": "Validation Error",
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "$ref": "#/components/schemas/HTTPValidationError"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "/api/ad-projects/{project_id}/final-copy": {
+          "post": {
+            "summary": "Rewrite Ad Final Copy",
+            "operationId": "rewrite_ad_final_copy_api_ad_projects__project_id__final_copy_post",
+            "parameters": [
+              {
+                "name": "project_id",
+                "in": "path",
+                "required": true,
+                "schema": {
+                  "type": "string",
+                  "title": "Project Id"
+                }
+              }
+            ],
+            "requestBody": {
+              "required": true,
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/AdFinalCopyRequest"
+                  }
+                }
+              }
+            },
+            "responses": {
+              "200": {
+                "description": "Successful Response",
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "type": "object",
+                      "additionalProperties": true,
+                      "title": "Response Rewrite Ad Final Copy Api Ad Projects  Project Id  Final Copy Post"
+                    }
+                  }
+                }
+              },
+              "422": {
+                "description": "Validation Error",
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "$ref": "#/components/schemas/HTTPValidationError"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "/api/ad-projects/{project_id}/final-edit": {
+          "post": {
+            "summary": "Edit Ad Final",
+            "operationId": "edit_ad_final_api_ad_projects__project_id__final_edit_post",
+            "parameters": [
+              {
+                "name": "project_id",
+                "in": "path",
+                "required": true,
+                "schema": {
+                  "type": "string",
+                  "title": "Project Id"
+                }
+              }
+            ],
+            "requestBody": {
+              "required": true,
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/AdFinalEditRequest"
+                  }
+                }
+              }
+            },
+            "responses": {
+              "200": {
+                "description": "Successful Response",
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "type": "object",
+                      "additionalProperties": true,
+                      "title": "Response Edit Ad Final Api Ad Projects  Project Id  Final Edit Post"
+                    }
+                  }
+                }
+              },
+              "422": {
+                "description": "Validation Error",
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "$ref": "#/components/schemas/HTTPValidationError"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "/api/ad-projects/{project_id}/stop": {
+          "post": {
+            "summary": "Stop Ad Project",
+            "operationId": "stop_ad_project_api_ad_projects__project_id__stop_post",
+            "parameters": [
+              {
+                "name": "project_id",
+                "in": "path",
+                "required": true,
+                "schema": {
+                  "type": "string",
+                  "title": "Project Id"
+                }
+              }
+            ],
+            "responses": {
+              "200": {
+                "description": "Successful Response",
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "type": "object",
+                      "additionalProperties": true,
+                      "title": "Response Stop Ad Project Api Ad Projects  Project Id  Stop Post"
+                    }
+                  }
+                }
+              },
+              "422": {
+                "description": "Validation Error",
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "$ref": "#/components/schemas/HTTPValidationError"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "/api/ad-projects/{project_id}/return-to-plan": {
+          "post": {
+            "summary": "Return Ad Project To Plan",
+            "operationId": "return_ad_project_to_plan_api_ad_projects__project_id__return_to_plan_post",
+            "parameters": [
+              {
+                "name": "project_id",
+                "in": "path",
+                "required": true,
+                "schema": {
+                  "type": "string",
+                  "title": "Project Id"
+                }
+              }
+            ],
+            "responses": {
+              "200": {
+                "description": "Successful Response",
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "type": "object",
+                      "additionalProperties": true,
+                      "title": "Response Return Ad Project To Plan Api Ad Projects  Project Id  Return To Plan Post"
+                    }
+                  }
+                }
+              },
+              "422": {
+                "description": "Validation Error",
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "$ref": "#/components/schemas/HTTPValidationError"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "/api/generations": {
+          "get": {
+            "summary": "List Generations",
+            "operationId": "list_generations_api_generations_get",
+            "responses": {
+              "200": {
+                "description": "Successful Response",
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "items": {
+                        "additionalProperties": true,
+                        "type": "object"
+                      },
+                      "type": "array",
+                      "title": "Response List Generations Api Generations Get"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "post": {
+            "summary": "Create Generation",
+            "operationId": "create_generation_api_generations_post",
+            "requestBody": {
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/CreateGenerationRequest"
+                  }
+                }
+              },
+              "required": true
+            },
+            "responses": {
+              "200": {
+                "description": "Successful Response",
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "additionalProperties": true,
+                      "type": "object",
+                      "title": "Response Create Generation Api Generations Post"
+                    }
+                  }
+                }
+              },
+              "422": {
+                "description": "Validation Error",
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "$ref": "#/components/schemas/HTTPValidationError"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "/api/generations/{generation_id}": {
+          "get": {
+            "summary": "Generation Detail",
+            "operationId": "generation_detail_api_generations__generation_id__get",
+            "parameters": [
+              {
+                "name": "generation_id",
+                "in": "path",
+                "required": true,
+                "schema": {
+                  "type": "string",
+                  "title": "Generation Id"
+                }
+              }
+            ],
+            "responses": {
+              "200": {
+                "description": "Successful Response",
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "type": "object",
+                      "additionalProperties": true,
+                      "title": "Response Generation Detail Api Generations  Generation Id  Get"
+                    }
+                  }
+                }
+              },
+              "422": {
+                "description": "Validation Error",
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "$ref": "#/components/schemas/HTTPValidationError"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "/api/assets": {
+          "post": {
+            "summary": "Create Asset",
+            "operationId": "create_asset_api_assets_post",
+            "requestBody": {
+              "content": {
+                "multipart/form-data": {
+                  "schema": {
+                    "$ref": "#/components/schemas/Body_create_asset_api_assets_post"
+                  }
+                }
+              },
+              "required": true
+            },
+            "responses": {
+              "200": {
+                "description": "Successful Response",
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "additionalProperties": true,
+                      "type": "object",
+                      "title": "Response Create Asset Api Assets Post"
+                    }
+                  }
+                }
+              },
+              "422": {
+                "description": "Validation Error",
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "$ref": "#/components/schemas/HTTPValidationError"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "/api/generations/{generation_id}/edits": {
+          "post": {
+            "summary": "Edit Generation",
+            "operationId": "edit_generation_api_generations__generation_id__edits_post",
+            "parameters": [
+              {
+                "name": "generation_id",
+                "in": "path",
+                "required": true,
+                "schema": {
+                  "type": "string",
+                  "title": "Generation Id"
+                }
+              }
+            ],
+            "requestBody": {
+              "required": true,
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/EditGenerationRequest"
+                  }
+                }
+              }
+            },
+            "responses": {
+              "200": {
+                "description": "Successful Response",
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "type": "object",
+                      "additionalProperties": true,
+                      "title": "Response Edit Generation Api Generations  Generation Id  Edits Post"
+                    }
+                  }
+                }
+              },
+              "422": {
+                "description": "Validation Error",
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "$ref": "#/components/schemas/HTTPValidationError"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "/api/generations/{generation_id}/continuations": {
+          "post": {
+            "summary": "Continue Generation",
+            "operationId": "continue_generation_api_generations__generation_id__continuations_post",
+            "parameters": [
+              {
+                "name": "generation_id",
+                "in": "path",
+                "required": true,
+                "schema": {
+                  "type": "string",
+                  "title": "Generation Id"
+                }
+              }
+            ],
+            "requestBody": {
+              "required": true,
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ContinueGenerationRequest"
+                  }
+                }
+              }
+            },
+            "responses": {
+              "200": {
+                "description": "Successful Response",
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "type": "object",
+                      "additionalProperties": true,
+                      "title": "Response Continue Generation Api Generations  Generation Id  Continuations Post"
+                    }
+                  }
+                }
+              },
+              "422": {
+                "description": "Validation Error",
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "$ref": "#/components/schemas/HTTPValidationError"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "components": {
+        "schemas": {
+          "AdContinuationConfirmationRequest": {
+            "properties": {
+              "prompt": {
+                "type": "string",
+                "maxLength": 5000,
+                "minLength": 5,
+                "title": "Prompt"
+              },
+              "reference_index": {
+                "type": "integer",
+                "maximum": 31.0,
+                "minimum": 0.0,
+                "title": "Reference Index"
+              }
+            },
+            "type": "object",
+            "required": [
+              "prompt",
+              "reference_index"
+            ],
+            "title": "AdContinuationConfirmationRequest"
+          },
+          "AdFinalCopyRequest": {
+            "properties": {
+              "instruction": {
+                "type": "string",
+                "maxLength": 1000,
+                "title": "Instruction",
+                "default": ""
+              }
+            },
+            "type": "object",
+            "title": "AdFinalCopyRequest"
+          },
+          "AdFinalEditRequest": {
+            "properties": {
+              "voiceover_script": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "maxLength": 2000
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Voiceover Script"
+              },
+              "post_caption": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "maxLength": 1000
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Post Caption"
+              },
+              "hashtags": {
+                "anyOf": [
+                  {
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array",
+                    "maxItems": 10
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Hashtags"
+              },
+              "voice_enabled": {
+                "anyOf": [
+                  {
+                    "type": "boolean"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Voice Enabled"
+              },
+              "subtitle_enabled": {
+                "anyOf": [
+                  {
+                    "type": "boolean"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Subtitle Enabled"
+              },
+              "bgm_enabled": {
+                "anyOf": [
+                  {
+                    "type": "boolean"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Bgm Enabled"
+              },
+              "bgm_id": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "maxLength": 200
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Bgm Id"
+              },
+              "voice_id": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "maxLength": 128
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Voice Id"
+              }
+            },
+            "type": "object",
+            "title": "AdFinalEditRequest"
+          },
+          "AdGenerationRequest": {
+            "properties": {
+              "payment_confirmed": {
+                "type": "boolean",
+                "title": "Payment Confirmed",
+                "default": false
+              }
+            },
+            "type": "object",
+            "title": "AdGenerationRequest"
+          },
+          "AdPlanApprovalRequest": {
+            "properties": {
+              "version": {
+                "type": "integer",
+                "minimum": 1.0,
+                "title": "Version"
+              },
+              "payment_confirmed": {
+                "type": "boolean",
+                "title": "Payment Confirmed",
+                "default": false
+              },
+              "video_provider_id": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "maxLength": 128
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Video Provider Id"
+              },
+              "video_resolution": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "maxLength": 20
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Video Resolution"
+              },
+              "video_fps": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "maximum": 24.0,
+                    "minimum": 4.0
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Video Fps"
+              }
+            },
+            "type": "object",
+            "required": [
+              "version"
+            ],
+            "title": "AdPlanApprovalRequest"
+          },
+          "AdPlanFeedbackRequest": {
+            "properties": {
+              "feedback": {
+                "type": "string",
+                "maxLength": 2000,
+                "minLength": 2,
+                "title": "Feedback"
+              }
+            },
+            "type": "object",
+            "required": [
+              "feedback"
+            ],
+            "title": "AdPlanFeedbackRequest"
+          },
+          "AdPlanFromSegmentRequest": {
+            "properties": {
+              "from_segment": {
+                "type": "integer",
+                "maximum": 24.0,
+                "minimum": 2.0,
+                "title": "From Segment"
+              },
+              "feedback": {
+                "type": "string",
+                "maxLength": 2000,
+                "minLength": 2,
+                "title": "Feedback"
+              }
+            },
+            "type": "object",
+            "required": [
+              "from_segment",
+              "feedback"
+            ],
+            "title": "AdPlanFromSegmentRequest"
+          },
+          "AdPlanPromptRewriteRequest": {
+            "properties": {
+              "version": {
+                "type": "integer",
+                "minimum": 1.0,
+                "title": "Version"
+              },
+              "instruction": {
+                "type": "string",
+                "maxLength": 1000,
+                "title": "Instruction",
+                "default": ""
+              }
+            },
+            "type": "object",
+            "required": [
+              "version"
+            ],
+            "title": "AdPlanPromptRewriteRequest"
+          },
+          "AdPlanPromptUpdateRequest": {
+            "properties": {
+              "version": {
+                "type": "integer",
+                "minimum": 1.0,
+                "title": "Version"
+              },
+              "segments": {
+                "items": {
+                  "$ref": "#/components/schemas/AdPlanSegmentUpdate"
+                },
+                "type": "array",
+                "maxItems": 24,
+                "minItems": 1,
+                "title": "Segments"
+              },
+              "manual_video_prompt_prefix": {
+                "type": "string",
+                "maxLength": 3000,
+                "title": "Manual Video Prompt Prefix",
+                "default": ""
+              },
+              "manual_negative_prompt": {
+                "type": "string",
+                "maxLength": 2000,
+                "minLength": 1,
+                "title": "Manual Negative Prompt"
+              }
+            },
+            "type": "object",
+            "required": [
+              "version",
+              "segments",
+              "manual_negative_prompt"
+            ],
+            "title": "AdPlanPromptUpdateRequest"
+          },
+          "AdPlanSegmentUpdate": {
+            "properties": {
+              "prompt": {
+                "type": "string",
+                "maxLength": 3000,
+                "minLength": 5,
+                "title": "Prompt"
+              },
+              "duration_seconds": {
+                "type": "number",
+                "maximum": 120.0,
+                "minimum": 1.0,
+                "title": "Duration Seconds"
+              },
+              "asset_index": {
+                "type": "integer",
+                "maximum": 7.0,
+                "minimum": -1.0,
+                "title": "Asset Index"
+              }
+            },
+            "type": "object",
+            "required": [
+              "prompt",
+              "duration_seconds",
+              "asset_index"
+            ],
+            "title": "AdPlanSegmentUpdate"
+          },
+          "AdSegmentPromptRewriteRequest": {
+            "properties": {
+              "version": {
+                "type": "integer",
+                "minimum": 1.0,
+                "title": "Version"
+              },
+              "segment_index": {
+                "type": "integer",
+                "maximum": 23.0,
+                "minimum": 0.0,
+                "title": "Segment Index"
+              },
+              "current_prompt": {
+                "type": "string",
+                "maxLength": 3000,
+                "minLength": 5,
+                "title": "Current Prompt"
+              },
+              "instruction": {
+                "type": "string",
+                "maxLength": 1000,
+                "title": "Instruction",
+                "default": ""
+              }
+            },
+            "type": "object",
+            "required": [
+              "version",
+              "segment_index",
+              "current_prompt"
+            ],
+            "title": "AdSegmentPromptRewriteRequest"
+          },
+          "AdVoicePreviewRequest": {
+            "properties": {
+              "voice_id": {
+                "type": "string",
+                "maxLength": 128,
+                "minLength": 3,
+                "title": "Voice Id"
+              }
+            },
+            "type": "object",
+            "required": [
+              "voice_id"
+            ],
+            "title": "AdVoicePreviewRequest"
+          },
+          "Body_create_asset_api_assets_post": {
+            "properties": {
+              "file": {
+                "type": "string",
+                "contentMediaType": "application/octet-stream",
+                "title": "File"
+              }
+            },
+            "type": "object",
+            "required": [
+              "file"
+            ],
+            "title": "Body_create_asset_api_assets_post"
+          },
+          "Body_upload_ad_assets_api_ad_projects__project_id__assets_post": {
+            "properties": {
+              "files": {
+                "items": {
+                  "type": "string",
+                  "contentMediaType": "application/octet-stream"
+                },
+                "type": "array",
+                "title": "Files"
+              }
+            },
+            "type": "object",
+            "required": [
+              "files"
+            ],
+            "title": "Body_upload_ad_assets_api_ad_projects__project_id__assets_post"
+          },
+          "Body_upload_reference_video_api_ad_projects__project_id__reference_video_post": {
+            "properties": {
+              "file": {
+                "type": "string",
+                "contentMediaType": "application/octet-stream",
+                "title": "File"
+              }
+            },
+            "type": "object",
+            "required": [
+              "file"
+            ],
+            "title": "Body_upload_reference_video_api_ad_projects__project_id__reference_video_post"
+          },
+          "ContinueGenerationRequest": {
+            "properties": {
+              "prompt": {
+                "type": "string",
+                "maxLength": 4000,
+                "minLength": 3,
+                "title": "Prompt"
+              },
+              "negative_prompt": {
+                "type": "string",
+                "title": "Negative Prompt",
+                "default": "模糊，画面变形，闪烁，文字，水印"
+              },
+              "provider_id": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Provider Id"
+              },
+              "length": {
+                "type": "integer",
+                "maximum": 81.0,
+                "minimum": 5.0,
+                "title": "Length",
+                "default": 49
+              },
+              "fps": {
+                "type": "integer",
+                "maximum": 24.0,
+                "minimum": 4.0,
+                "title": "Fps",
+                "default": 8
+              },
+              "tail_frames": {
+                "type": "integer",
+                "maximum": 24.0,
+                "minimum": 2.0,
+                "title": "Tail Frames",
+                "default": 8
+              },
+              "seed": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": 0.0
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Seed"
+              },
+              "payment_confirmed": {
+                "type": "boolean",
+                "title": "Payment Confirmed",
+                "default": false
+              }
+            },
+            "type": "object",
+            "required": [
+              "prompt"
+            ],
+            "title": "ContinueGenerationRequest"
+          },
+          "CreateAdProjectRequest": {
+            "properties": {
+              "brief": {
+                "type": "string",
+                "maxLength": 2000,
+                "minLength": 3,
+                "title": "Brief"
+              },
+              "target_duration_seconds": {
+                "type": "integer",
+                "maximum": 120.0,
+                "minimum": 5.0,
+                "title": "Target Duration Seconds",
+                "default": 15
+              },
+              "planned_segment_count": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "maximum": 24.0,
+                    "minimum": 1.0
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Planned Segment Count"
+              },
+              "voice_enabled": {
+                "type": "boolean",
+                "title": "Voice Enabled",
+                "default": true
+              },
+              "subtitle_enabled": {
+                "type": "boolean",
+                "title": "Subtitle Enabled",
+                "default": true
+              },
+              "bgm_enabled": {
+                "type": "boolean",
+                "title": "Bgm Enabled",
+                "default": true
+              },
+              "tts_provider": {
+                "type": "string",
+                "title": "Tts Provider",
+                "default": "edge-tts"
+              },
+              "voice_id": {
+                "type": "string",
+                "title": "Voice Id",
+                "default": "zh-CN-XiaoxiaoNeural"
+              },
+              "video_provider_id": {
+                "type": "string",
+                "title": "Video Provider Id",
+                "default": "alibaba-wan27-r2v"
+              },
+              "video_resolution": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "maxLength": 20
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Video Resolution"
+              },
+              "video_fps": {
+                "type": "integer",
+                "maximum": 24.0,
+                "minimum": 4.0,
+                "title": "Video Fps",
+                "default": 8
+              }
+            },
+            "type": "object",
+            "required": [
+              "brief"
+            ],
+            "title": "CreateAdProjectRequest"
+          },
+          "CreateGenerationRequest": {
+            "properties": {
+              "prompt": {
+                "type": "string",
+                "maxLength": 4000,
+                "minLength": 3,
+                "title": "Prompt"
+              },
+              "negative_prompt": {
+                "type": "string",
+                "title": "Negative Prompt",
+                "default": "模糊，画面变形，闪烁，文字，水印"
+              },
+              "reference_asset_id": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Reference Asset Id"
+              },
+              "provider_id": {
+                "type": "string",
+                "title": "Provider Id",
+                "default": "alibaba-wan27-r2v"
+              },
+              "width": {
+                "type": "integer",
+                "multipleOf": 16.0,
+                "maximum": 1024.0,
+                "minimum": 128.0,
+                "title": "Width",
+                "default": 512
+              },
+              "height": {
+                "type": "integer",
+                "multipleOf": 16.0,
+                "maximum": 1024.0,
+                "minimum": 128.0,
+                "title": "Height",
+                "default": 288
+              },
+              "length": {
+                "type": "integer",
+                "maximum": 81.0,
+                "minimum": 5.0,
+                "title": "Length",
+                "default": 49
+              },
+              "fps": {
+                "type": "integer",
+                "maximum": 24.0,
+                "minimum": 4.0,
+                "title": "Fps",
+                "default": 8
+              },
+              "seed": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": 0.0
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Seed"
+              },
+              "resolution": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "maxLength": 20
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Resolution"
+              },
+              "payment_confirmed": {
+                "type": "boolean",
+                "title": "Payment Confirmed",
+                "default": false
+              }
+            },
+            "type": "object",
+            "required": [
+              "prompt"
+            ],
+            "title": "CreateGenerationRequest"
+          },
+          "EditGenerationRequest": {
+            "properties": {
+              "instruction": {
+                "type": "string",
+                "maxLength": 4000,
+                "minLength": 3,
+                "title": "Instruction"
+              },
+              "negative_prompt": {
+                "type": "string",
+                "title": "Negative Prompt",
+                "default": "模糊，画面变形，闪烁，文字，水印"
+              },
+              "provider_id": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Provider Id"
+              },
+              "seed": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": 0.0
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Seed"
+              },
+              "payment_confirmed": {
+                "type": "boolean",
+                "title": "Payment Confirmed",
+                "default": false
+              }
+            },
+            "type": "object",
+            "required": [
+              "instruction"
+            ],
+            "title": "EditGenerationRequest"
+          },
+          "HTTPValidationError": {
+            "properties": {
+              "detail": {
+                "items": {
+                  "$ref": "#/components/schemas/ValidationError"
+                },
+                "type": "array",
+                "title": "Detail"
+              }
+            },
+            "type": "object",
+            "title": "HTTPValidationError"
+          },
+          "ValidationError": {
+            "properties": {
+              "loc": {
+                "items": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "integer"
+                    }
+                  ]
+                },
+                "type": "array",
+                "title": "Location"
+              },
+              "msg": {
+                "type": "string",
+                "title": "Message"
+              },
+              "type": {
+                "type": "string",
+                "title": "Error Type"
+              },
+              "input": {
+                "title": "Input"
+              },
+              "ctx": {
+                "type": "object",
+                "title": "Context"
+              }
+            },
+            "type": "object",
+            "required": [
+              "loc",
+              "msg",
+              "type"
+            ],
+            "title": "ValidationError"
+          }
+        }
+      }
+    }
+  },
+  "module": {
+    "apps/api/data.py": [
+      {
+        "kind": "Expr",
+        "name": "",
+        "value": "'数据层:env 读取 / 路径布局 / SQLite / 锁与任务表 / 事件广播。\\n\\n自 main.py 单体拆出(T2 工单 S2,行为不变,代码原样搬运):\\n- env        —— .env 解析与取值(read_local_environment / local_env_value);\\n- 路径       —— 仓库根、data 目录族、Provider 配置与工作流目录(导入时确保目录存在);\\n- SQLite     —— 连接、行转换、ap …"
+      },
+      {
+        "kind": "import",
+        "name": "import asyncio"
+      },
+      {
+        "kind": "import",
+        "name": "import json"
+      },
+      {
+        "kind": "import",
+        "name": "import os"
+      },
+      {
+        "kind": "import",
+        "name": "import sqlite3"
+      },
+      {
+        "kind": "import",
+        "name": "import time"
+      },
+      {
+        "kind": "import",
+        "name": "from pathlib import Path"
+      },
+      {
+        "kind": "import",
+        "name": "from typing import Any"
+      },
+      {
+        "kind": "import",
+        "name": "from fastapi import WebSocket"
+      },
+      {
+        "kind": "assign",
+        "name": "ROOT_DIR",
+        "value": "Path(__file__).resolve().parents[2]"
+      },
+      {
+        "kind": "assign",
+        "name": "ENV_PATH",
+        "value": "ROOT_DIR / '.env'"
+      },
+      {
+        "kind": "def",
+        "name": "read_local_environment",
+        "signature": "read_local_environment() -> dict[str, str]",
+        "decorators": []
+      },
+      {
+        "kind": "def",
+        "name": "local_env_value",
+        "signature": "local_env_value(name: str, default: str='') -> str",
+        "decorators": []
+      },
+      {
+        "kind": "assign",
+        "name": "DATA_DIR",
+        "value": "ROOT_DIR / 'data'"
+      },
+      {
+        "kind": "assign",
+        "name": "UPLOAD_DIR",
+        "value": "DATA_DIR / 'uploads'"
+      },
+      {
+        "kind": "assign",
+        "name": "MEDIA_DIR",
+        "value": "DATA_DIR / 'media'"
+      },
+      {
+        "kind": "assign",
+        "name": "WORK_DIR",
+        "value": "DATA_DIR / 'work'"
+      },
+      {
+        "kind": "assign",
+        "name": "AD_MEDIA_DIR",
+        "value": "MEDIA_DIR / 'ad'"
+      },
+      {
+        "kind": "assign",
+        "name": "AD_WORK_DIR",
+        "value": "WORK_DIR / 'ad'"
+      },
+      {
+        "kind": "assign",
+        "name": "AD_PROMPT_DIR",
+        "value": "Path(__file__).resolve().parent / 'prompts' / 'ad'"
+      },
+      {
+        "kind": "assign",
+        "name": "DATABASE_PATH",
+        "value": "DATA_DIR / 'sk2.db'"
+      },
+      {
+        "kind": "assign",
+        "name": "PROVIDERS_PATH",
+        "value": "Path(os.getenv('SK2_PROVIDERS_PATH', str(ROOT_DIR / 'providers.json')))"
+      },
+      {
+        "kind": "Expr",
+        "name": "",
+        "value": "DATA_DIR.mkdir(parents=True, exist_ok=True)"
+      },
+      {
+        "kind": "Expr",
+        "name": "",
+        "value": "UPLOAD_DIR.mkdir(parents=True, exist_ok=True)"
+      },
+      {
+        "kind": "Expr",
+        "name": "",
+        "value": "MEDIA_DIR.mkdir(parents=True, exist_ok=True)"
+      },
+      {
+        "kind": "Expr",
+        "name": "",
+        "value": "WORK_DIR.mkdir(parents=True, exist_ok=True)"
+      },
+      {
+        "kind": "Expr",
+        "name": "",
+        "value": "AD_MEDIA_DIR.mkdir(parents=True, exist_ok=True)"
+      },
+      {
+        "kind": "Expr",
+        "name": "",
+        "value": "AD_WORK_DIR.mkdir(parents=True, exist_ok=True)"
+      },
+      {
+        "kind": "assign",
+        "name": "WORKFLOW_DIR",
+        "value": "ROOT_DIR / 'workflows'"
+      },
+      {
+        "kind": "assign",
+        "name": "job_lock",
+        "value": "asyncio.Lock()"
+      },
+      {
+        "kind": "assign",
+        "name": "model_lock",
+        "value": "asyncio.Lock()"
+      },
+      {
+        "kind": "assign",
+        "name": "stop_lock",
+        "value": "asyncio.Lock()"
+      },
+      {
+        "kind": "ann-assign",
+        "name": "event_clients",
+        "annotation": "set[WebSocket]",
+        "value": "set()"
+      },
+      {
+        "kind": "ann-assign",
+        "name": "generation_tasks",
+        "annotation": "dict[str, asyncio.Task[None]]",
+        "value": "{}"
+      },
+      {
+        "kind": "ann-assign",
+        "name": "edit_parser_tasks",
+        "annotation": "set[asyncio.Task[Any]]",
+        "value": "set()"
+      },
+      {
+        "kind": "ann-assign",
+        "name": "ad_project_tasks",
+        "annotation": "dict[str, asyncio.Task[None]]",
+        "value": "{}"
+      },
+      {
+        "kind": "ann-assign",
+        "name": "ad_segment_review_tasks",
+        "annotation": "dict[str, set[asyncio.Task[None]]]",
+        "value": "{}"
+      },
+      {
+        "kind": "def",
+        "name": "now",
+        "signature": "now() -> int",
+        "decorators": []
+      },
+      {
+        "kind": "def",
+        "name": "database",
+        "signature": "database() -> sqlite3.Connection",
+        "decorators": []
+      },
+      {
+        "kind": "def",
+        "name": "row_to_dict",
+        "signature": "row_to_dict(row: sqlite3.Row | None) -> dict[str, Any] | None",
+        "decorators": []
+      },
+      {
+        "kind": "def",
+        "name": "get_app_setting",
+        "signature": "get_app_setting(name: str, default: str='') -> str",
+        "decorators": []
+      },
+      {
+        "kind": "def",
+        "name": "set_app_setting",
+        "signature": "set_app_setting(name: str, value: str) -> None",
+        "decorators": []
+      },
+      {
+        "kind": "def",
+        "name": "initialize_database",
+        "signature": "initialize_database(default_video_provider_id: str) -> None",
+        "decorators": []
+      },
+      {
+        "kind": "async def",
+        "name": "broadcast",
+        "signature": "broadcast(event: dict[str, Any]) -> None",
+        "decorators": []
+      }
+    ],
+    "apps/api/llm.py": [
+      {
+        "kind": "Expr",
+        "name": "",
+        "value": "'LLM 域:广告 LLM 客户端 / 设置 / prompt 加载 / 用量记录。\\n\\n自 main.py 单体拆出(T2 工单 S3,行为不变,代码原样搬运):\\n- 设置    —— 广告 LLM 设置与环境变量快照(ad_llm_settings / ad_llm_public_snapshot),\\n            以及本地 Ollama 兜底模型常量(OLLAMA_URL / OLLAMA_MODEL);\\n- 客户端  —— OpenAI 兼容 /re …"
+      },
+      {
+        "kind": "import",
+        "name": "import asyncio"
+      },
+      {
+        "kind": "import",
+        "name": "import base64"
+      },
+      {
+        "kind": "import",
+        "name": "import json"
+      },
+      {
+        "kind": "import",
+        "name": "import re"
+      },
+      {
+        "kind": "import",
+        "name": "from pathlib import Path"
+      },
+      {
+        "kind": "import",
+        "name": "from typing import Any"
+      },
+      {
+        "kind": "import",
+        "name": "import httpx"
+      },
+      {
+        "kind": "import",
+        "name": "from data import AD_PROMPT_DIR, database, local_env_value, now"
+      },
+      {
+        "kind": "assign",
+        "name": "OLLAMA_URL",
+        "value": "local_env_value('SK2_OLLAMA_URL', 'http://127.0.0.1:11434')"
+      },
+      {
+        "kind": "assign",
+        "name": "OLLAMA_MODEL",
+        "value": "local_env_value('SK2_OLLAMA_MODEL', 'qwen3:4b-instruct')"
+      },
+      {
+        "kind": "def",
+        "name": "ad_llm_settings",
+        "signature": "ad_llm_settings(default_video_provider_id: str='') -> dict[str, str]",
+        "decorators": []
+      },
+      {
+        "kind": "def",
+        "name": "ad_llm_public_snapshot",
+        "signature": "ad_llm_public_snapshot(settings: dict[str, str] | None=None) -> dict[str, str]",
+        "decorators": []
+      },
+      {
+        "kind": "def",
+        "name": "record_ad_llm_usage",
+        "signature": "record_ad_llm_usage(project_id: str, stage: str, settings: dict[str, str]) -> None",
+        "decorators": []
+      },
+      {
+        "kind": "def",
+        "name": "load_ad_prompt",
+        "signature": "load_ad_prompt(name: str) -> str",
+        "decorators": []
+      },
+      {
+        "kind": "def",
+        "name": "parse_json_response",
+        "signature": "parse_json_response(value: str) -> dict[str, Any]",
+        "decorators": []
+      },
+      {
+        "kind": "def",
+        "name": "response_text",
+        "signature": "response_text(payload: dict[str, Any]) -> str",
+        "decorators": []
+      },
+      {
+        "kind": "async def",
+        "name": "request_ad_llm",
+        "signature": "request_ad_llm(*, system_prompt: str, user_prompt: str, image_paths: list[Path] | None=None, usage_project_id: str | None=None, usage_stage: str='advertising_generation') -> dict[str, Any]",
+        "decorators": []
+      }
+    ],
+    "apps/api/main.py": [
+      {
+        "kind": "import",
+        "name": "import asyncio"
+      },
+      {
+        "kind": "import",
+        "name": "import base64"
+      },
+      {
+        "kind": "import",
+        "name": "import json"
+      },
+      {
+        "kind": "import",
+        "name": "import logging"
+      },
+      {
+        "kind": "import",
+        "name": "import os"
+      },
+      {
+        "kind": "import",
+        "name": "import re"
+      },
+      {
+        "kind": "import",
+        "name": "import shutil"
+      },
+      {
+        "kind": "import",
+        "name": "import subprocess"
+      },
+      {
+        "kind": "import",
+        "name": "import time"
+      },
+      {
+        "kind": "import",
+        "name": "import uuid"
+      },
+      {
+        "kind": "import",
+        "name": "from contextlib import asynccontextmanager"
+      },
+      {
+        "kind": "import",
+        "name": "from dataclasses import dataclass"
+      },
+      {
+        "kind": "import",
+        "name": "from pathlib import Path"
+      },
+      {
+        "kind": "import",
+        "name": "from typing import Any, Literal"
+      },
+      {
+        "kind": "import",
+        "name": "import edge_tts"
+      },
+      {
+        "kind": "import",
+        "name": "import httpx"
+      },
+      {
+        "kind": "import",
+        "name": "from fastapi import FastAPI, File, HTTPException, UploadFile, WebSocket, WebSocketDisconnect"
+      },
+      {
+        "kind": "import",
+        "name": "from fastapi.middleware.cors import CORSMiddleware"
+      },
+      {
+        "kind": "import",
+        "name": "from fastapi.responses import FileResponse"
+      },
+      {
+        "kind": "import",
+        "name": "from fastapi.staticfiles import StaticFiles"
+      },
+      {
+        "kind": "import",
+        "name": "from pydantic import BaseModel, Field, ValidationError"
+      },
+      {
+        "kind": "import",
+        "name": "from data import AD_MEDIA_DIR, AD_WORK_DIR, MEDIA_DIR, PROVIDERS_PATH, ROOT_DIR, UPLOAD_DIR, WORK_DIR, WORKFLOW_DIR, ad_project_tasks, ad_segment_review_tasks, broadcast, database, edit_parser_tasks, event_clients, generation_tasks, initialize_database, job_lock, local_env_value, model_lock, now, row_to_dict, stop_lock"
+      },
+      {
+        "kind": "import",
+        "name": "from llm import OLLAMA_MODEL, OLLAMA_URL, ad_llm_settings, load_ad_prompt, request_ad_llm"
+      },
+      {
+        "kind": "import",
+        "name": "from media import ad_transition_overlap, concat_ad_clips, extract_ad_keyframes, extract_cloud_continuation_candidates, extract_reference_video_frames, extract_video_last_frame, extract_video_tail, ffmpeg_executable, has_audio_stream, join_continuation_video, list_ad_bgm, normalize_ad_clip, probe_image_dimensions, probe_video_duration, render_ad_voiceover_track, resolve_ad_bgm, trim_continuation_lead, write_ad_subtitles"
+      },
+      {
+        "kind": "assign",
+        "name": "AD_NEGATIVE_PROMPT",
+        "value": "'低画质，模糊，画面变形，闪烁，动作抖动，产品变形，包装前后不一致，人物面部前后不一致，重复主体，多余肢体，手部畸形，文字，商标，水印，突然的镜头晃动'"
+      },
+      {
+        "kind": "assign",
+        "name": "model_activity",
+        "value": "'idle'"
+      },
+      {
+        "kind": "assign",
+        "name": "logger",
+        "value": "logging.getLogger(__name__)"
+      },
+      {
+        "kind": "class",
+        "name": "VideoProvider",
+        "bases": [],
+        "decorators": [
+          "dataclass(frozen=True)"
+        ]
+      },
+      {
+        "kind": "def",
+        "name": "load_providers",
+        "signature": "load_providers() -> tuple[str, dict[str, VideoProvider]]",
+        "decorators": []
+      },
+      {
+        "kind": "assign",
+        "name": "",
+        "value": "load_providers()"
+      },
+      {
+        "kind": "def",
+        "name": "get_provider",
+        "signature": "get_provider(provider_id: str, capability: str | None=None) -> VideoProvider",
+        "decorators": []
+      },
+      {
+        "kind": "def",
+        "name": "get_ad_project_provider",
+        "signature": "get_ad_project_provider(project: dict[str, Any], provider_id: str) -> VideoProvider",
+        "decorators": []
+      },
+      {
+        "kind": "def",
+        "name": "provider_supports_continuation",
+        "signature": "provider_supports_continuation(provider: VideoProvider) -> bool",
+        "decorators": []
+      },
+      {
+        "kind": "def",
+        "name": "provider_resolution",
+        "signature": "provider_resolution(provider: VideoProvider, requested: str | None) -> str | None",
+        "decorators": []
+      },
+      {
+        "kind": "def",
+        "name": "provider_supports_custom_fps",
+        "signature": "provider_supports_custom_fps(provider: VideoProvider) -> bool",
+        "decorators": []
+      },
+      {
+        "kind": "def",
+        "name": "provider_default_fps",
+        "signature": "provider_default_fps(provider: VideoProvider) -> int",
+        "decorators": []
+      },
+      {
+        "kind": "def",
+        "name": "provider_fps",
+        "signature": "provider_fps(provider: VideoProvider, requested: int) -> int",
+        "decorators": []
+      },
+      {
+        "kind": "def",
+        "name": "local_video_dimensions",
+        "signature": "local_video_dimensions(provider: VideoProvider, resolution: str | None) -> tuple[int, int]",
+        "decorators": []
+      },
+      {
+        "kind": "def",
+        "name": "provider_for_generation",
+        "signature": "provider_for_generation(generation: dict[str, Any]) -> VideoProvider",
+        "decorators": []
+      },
+      {
+        "kind": "def",
+        "name": "local_setting",
+        "signature": "local_setting(provider: VideoProvider, key: str) -> str",
+        "decorators": []
+      },
+      {
+        "kind": "def",
+        "name": "provider_runtime_setting",
+        "signature": "provider_runtime_setting(provider: VideoProvider, key: str) -> Any",
+        "decorators": []
+      },
+      {
+        "kind": "def",
+        "name": "provider_runtime_model",
+        "signature": "provider_runtime_model(provider: VideoProvider) -> str",
+        "decorators": []
+      },
+      {
+        "kind": "def",
+        "name": "provider_api_key",
+        "signature": "provider_api_key(provider: VideoProvider) -> str",
+        "decorators": []
+      },
+      {
+        "kind": "def",
+        "name": "provider_api_key_is_configured",
+        "signature": "provider_api_key_is_configured(provider: VideoProvider) -> bool",
+        "decorators": []
+      },
+      {
+        "kind": "def",
+        "name": "requires_payment_confirmation",
+        "signature": "requires_payment_confirmation(provider: VideoProvider) -> bool",
+        "decorators": []
+      },
+      {
+        "kind": "def",
+        "name": "ensure_payment_confirmation",
+        "signature": "ensure_payment_confirmation(provider: VideoProvider, payment_confirmed: bool) -> None",
+        "decorators": []
+      },
+      {
+        "kind": "def",
+        "name": "public_provider",
+        "signature": "public_provider(provider: VideoProvider) -> dict[str, Any]",
+        "decorators": []
+      },
+      {
+        "kind": "class",
+        "name": "CreateGenerationRequest",
+        "bases": [
+          "BaseModel"
+        ],
+        "decorators": []
+      },
+      {
+        "kind": "class",
+        "name": "EditGenerationRequest",
+        "bases": [
+          "BaseModel"
+        ],
+        "decorators": []
+      },
+      {
+        "kind": "class",
+        "name": "ContinueGenerationRequest",
+        "bases": [
+          "BaseModel"
+        ],
+        "decorators": []
+      },
+      {
+        "kind": "class",
+        "name": "CreateAdProjectRequest",
+        "bases": [
+          "BaseModel"
+        ],
+        "decorators": []
+      },
+      {
+        "kind": "class",
+        "name": "AdPlanFeedbackRequest",
+        "bases": [
+          "BaseModel"
+        ],
+        "decorators": []
+      },
+      {
+        "kind": "class",
+        "name": "AdPlanFromSegmentRequest",
+        "bases": [
+          "BaseModel"
+        ],
+        "decorators": []
+      },
+      {
+        "kind": "class",
+        "name": "AdPlanApprovalRequest",
+        "bases": [
+          "BaseModel"
+        ],
+        "decorators": []
+      },
+      {
+        "kind": "class",
+        "name": "AdGenerationRequest",
+        "bases": [
+          "BaseModel"
+        ],
+        "decorators": []
+      },
+      {
+        "kind": "class",
+        "name": "AdContinuationConfirmationRequest",
+        "bases": [
+          "BaseModel"
+        ],
+        "decorators": []
+      },
+      {
+        "kind": "class",
+        "name": "AdPlanSegmentUpdate",
+        "bases": [
+          "BaseModel"
+        ],
+        "decorators": []
+      },
+      {
+        "kind": "class",
+        "name": "AdPlanPromptUpdateRequest",
+        "bases": [
+          "BaseModel"
+        ],
+        "decorators": []
+      },
+      {
+        "kind": "class",
+        "name": "AdSegmentPromptRewriteRequest",
+        "bases": [
+          "BaseModel"
+        ],
+        "decorators": []
+      },
+      {
+        "kind": "class",
+        "name": "AdPlanPromptRewriteRequest",
+        "bases": [
+          "BaseModel"
+        ],
+        "decorators": []
+      },
+      {
+        "kind": "class",
+        "name": "AdVoicePreviewRequest",
+        "bases": [
+          "BaseModel"
+        ],
+        "decorators": []
+      },
+      {
+        "kind": "class",
+        "name": "AdFinalEditRequest",
+        "bases": [
+          "BaseModel"
+        ],
+        "decorators": []
+      },
+      {
+        "kind": "class",
+        "name": "AdFinalCopyRequest",
+        "bases": [
+          "BaseModel"
+        ],
+        "decorators": []
+      },
+      {
+        "kind": "class",
+        "name": "AdSegmentReview",
+        "bases": [
+          "BaseModel"
+        ],
+        "decorators": []
+      },
+      {
+        "kind": "class",
+        "name": "AdTransitionDecision",
+        "bases": [
+          "BaseModel"
+        ],
+        "decorators": []
+      },
+      {
+        "kind": "def",
+        "name": "get_generation",
+        "signature": "get_generation(generation_id: str) -> dict[str, Any]",
+        "decorators": []
+      },
+      {
+        "kind": "assign",
+        "name": "AD_VOICES",
+        "value": "[{'id': 'zh-CN-XiaoxiaoNeural', 'name': '晓晓', 'label': '女声 / 亲和自然'}, {'id': 'zh-CN-XiaoyiNeural', 'name': '晓伊', 'label': '女声 / 活力促销'}, {'id': 'zh-CN-YunxiNeural', 'name': '云希', 'label': '男声 / 年轻清晰'}, {'id': 'zh-CN-YunjianNeural', 'name': '云 …"
+      },
+      {
+        "kind": "def",
+        "name": "ad_segment_count",
+        "signature": "ad_segment_count(duration_seconds: int, *, minimum_seconds: int=2, preferred_seconds: int | None=None, one_shot_max_seconds: int | None=None) -> int",
+        "decorators": []
+      },
+      {
+        "kind": "def",
+        "name": "provider_frame_spec",
+        "signature": "provider_frame_spec(provider: VideoProvider) -> tuple[int, int, int]",
+        "decorators": []
+      },
+      {
+        "kind": "def",
+        "name": "provider_continuation_tail_frames",
+        "signature": "provider_continuation_tail_frames(provider: VideoProvider) -> int",
+        "decorators": []
+      },
+      {
+        "kind": "def",
+        "name": "cloud_continuation_skip_seconds",
+        "signature": "cloud_continuation_skip_seconds(provider: VideoProvider) -> float",
+        "decorators": []
+      },
+      {
+        "kind": "def",
+        "name": "ad_video_frame_count",
+        "signature": "ad_video_frame_count(duration_seconds: float, fps: int, provider: VideoProvider) -> int",
+        "decorators": []
+      },
+      {
+        "kind": "def",
+        "name": "ad_segment_duration_bounds",
+        "signature": "ad_segment_duration_bounds(provider: VideoProvider, fps: int) -> tuple[int, int, float]",
+        "decorators": []
+      },
+      {
+        "kind": "def",
+        "name": "ad_preferred_segment_seconds",
+        "signature": "ad_preferred_segment_seconds(provider: VideoProvider, minimum_seconds: int, maximum_seconds: int) -> int",
+        "decorators": []
+      },
+      {
+        "kind": "def",
+        "name": "ad_one_shot_max_seconds",
+        "signature": "ad_one_shot_max_seconds(provider: VideoProvider, maximum_seconds: int, native_clip_seconds: float) -> int",
+        "decorators": []
+      },
+      {
+        "kind": "def",
+        "name": "ad_voiceover_duration_guidance",
+        "signature": "ad_voiceover_duration_guidance(duration_seconds: int) -> dict[str, Any]",
+        "decorators": []
+      },
+      {
+        "kind": "def",
+        "name": "ad_asset_image_paths",
+        "signature": "ad_asset_image_paths(project: dict[str, Any], asset_indexes: list[int] | None=None) -> list[Path]",
+        "decorators": []
+      },
+      {
+        "kind": "async def",
+        "name": "ad_reference_video_frame_paths",
+        "signature": "ad_reference_video_frame_paths(project: dict[str, Any]) -> list[Path]",
+        "decorators": []
+      },
+      {
+        "kind": "def",
+        "name": "split_ad_duration",
+        "signature": "split_ad_duration(duration_seconds: int, segment_count: int) -> list[int]",
+        "decorators": []
+      },
+      {
+        "kind": "def",
+        "name": "ad_plan_total_duration_bounds",
+        "signature": "ad_plan_total_duration_bounds(target_duration: int | float) -> tuple[float, float]",
+        "decorators": []
+      },
+      {
+        "kind": "def",
+        "name": "rebalance_ad_durations",
+        "signature": "rebalance_ad_durations(durations: list[int], target_duration: int, *, minimum_seconds: int=2, maximum_seconds: int=15) -> list[int]",
+        "decorators": []
+      },
+      {
+        "kind": "def",
+        "name": "normalize_ad_visual_bible",
+        "signature": "normalize_ad_visual_bible(value: Any) -> dict[str, list[str] | str]",
+        "decorators": []
+      },
+      {
+        "kind": "def",
+        "name": "visual_bible_prompt",
+        "signature": "visual_bible_prompt(plan: dict[str, Any]) -> str",
+        "decorators": []
+      },
+      {
+        "kind": "def",
+        "name": "ad_generation_prompt",
+        "signature": "ad_generation_prompt(plan: dict[str, Any], shot_prompt: str) -> str",
+        "decorators": []
+      },
+      {
+        "kind": "def",
+        "name": "ad_negative_prompt",
+        "signature": "ad_negative_prompt(plan: dict[str, Any]) -> str",
+        "decorators": []
+      },
+      {
+        "kind": "def",
+        "name": "voiceover_beats_for_segments",
+        "signature": "voiceover_beats_for_segments(script: str, segments: list[dict[str, Any]]) -> list[str]",
+        "decorators": []
+      },
+      {
+        "kind": "def",
+        "name": "normalize_ad_plan",
+        "signature": "normalize_ad_plan(plan: dict[str, Any], project: dict[str, Any], asset_count: int) -> dict[str, Any]",
+        "decorators": []
+      },
+      {
+        "kind": "def",
+        "name": "ad_project_detail",
+        "signature": "ad_project_detail(project_id: str) -> dict[str, Any]",
+        "decorators": []
+      },
+      {
+        "kind": "def",
+        "name": "completed_ad_segments_for_plan",
+        "signature": "completed_ad_segments_for_plan(project: dict[str, Any], plan_record: dict[str, Any]) -> list[dict[str, Any]]",
+        "decorators": []
+      },
+      {
+        "kind": "async def",
+        "name": "broadcast_ad_project",
+        "signature": "broadcast_ad_project(project_id: str) -> None",
+        "decorators": []
+      },
+      {
+        "kind": "async def",
+        "name": "set_ad_project_state",
+        "signature": "set_ad_project_state(project_id: str, status: str, *, error_message: str | None=None, final_output_path: str | None=None) -> None",
+        "decorators": []
+      },
+      {
+        "kind": "async def",
+        "name": "add_ad_run",
+        "signature": "add_ad_run(project_id: str, stage: str, progress: float, details: dict[str, Any] | None=None) -> str",
+        "decorators": []
+      },
+      {
+        "kind": "async def",
+        "name": "complete_ad_run",
+        "signature": "complete_ad_run(run_id: str, *, error: str | None=None) -> None",
+        "decorators": []
+      },
+      {
+        "kind": "async def",
+        "name": "set_generation_state",
+        "signature": "set_generation_state(generation_id: str, status: str, *, progress: float | None=None, error_message: str | None=None, output_path: str | None=None, comfy_prompt_id: str | None=None) -> None",
+        "decorators": []
+      },
+      {
+        "kind": "def",
+        "name": "copy_to_comfy_input",
+        "signature": "copy_to_comfy_input(provider: VideoProvider, source: Path, prefix: str) -> str",
+        "decorators": []
+      },
+      {
+        "kind": "def",
+        "name": "read_workflow",
+        "signature": "read_workflow(name: str) -> dict[str, Any]",
+        "decorators": []
+      },
+      {
+        "kind": "def",
+        "name": "replace_placeholder",
+        "signature": "replace_placeholder(value: Any, replacements: dict[str, str]) -> Any",
+        "decorators": []
+      },
+      {
+        "kind": "def",
+        "name": "configure_workflow",
+        "signature": "configure_workflow(provider: VideoProvider, generation: dict[str, Any], source_input_name: str | None=None) -> dict[str, Any]",
+        "decorators": []
+      },
+      {
+        "kind": "async def",
+        "name": "release_comfy_models",
+        "signature": "release_comfy_models(client: httpx.AsyncClient, provider: VideoProvider) -> None",
+        "decorators": []
+      },
+      {
+        "kind": "async def",
+        "name": "interrupt_comfy_provider",
+        "signature": "interrupt_comfy_provider(provider: VideoProvider) -> None",
+        "decorators": []
+      },
+      {
+        "kind": "def",
+        "name": "agnes_frame_count",
+        "signature": "agnes_frame_count(length: int) -> int",
+        "decorators": []
+      },
+      {
+        "kind": "def",
+        "name": "agnes_task_id",
+        "signature": "agnes_task_id(payload: dict[str, Any]) -> str",
+        "decorators": []
+      },
+      {
+        "kind": "def",
+        "name": "agnes_result",
+        "signature": "agnes_result(payload: dict[str, Any]) -> tuple[bool, str | None, str | None]",
+        "decorators": []
+      },
+      {
+        "kind": "def",
+        "name": "generation_error_message",
+        "signature": "generation_error_message(error: Exception) -> str",
+        "decorators": []
+      },
+      {
+        "kind": "async def",
+        "name": "agnes_request",
+        "signature": "agnes_request(client: httpx.AsyncClient, method: str, url: str, **kwargs: Any) -> httpx.Response",
+        "decorators": []
+      },
+      {
+        "kind": "async def",
+        "name": "run_agnes_generation",
+        "signature": "run_agnes_generation(provider: VideoProvider, generation: dict[str, Any]) -> None",
+        "decorators": []
+      },
+      {
+        "kind": "def",
+        "name": "wanx_task_id",
+        "signature": "wanx_task_id(payload: dict[str, Any]) -> str",
+        "decorators": []
+      },
+      {
+        "kind": "def",
+        "name": "wanx_task_result",
+        "signature": "wanx_task_result(payload: dict[str, Any]) -> tuple[bool, str | None, str | None]",
+        "decorators": []
+      },
+      {
+        "kind": "async def",
+        "name": "wanx_get_with_retry",
+        "signature": "wanx_get_with_retry(client: httpx.AsyncClient, url: str, *, operation: str, headers: dict[str, str] | None=None, attempts: int=3) -> httpx.Response",
+        "decorators": []
+      },
+      {
+        "kind": "def",
+        "name": "ensure_wanx_response_success",
+        "signature": "ensure_wanx_response_success(response: httpx.Response, operation: str) -> None",
+        "decorators": []
+      },
+      {
+        "kind": "def",
+        "name": "wanx_image_data_url",
+        "signature": "wanx_image_data_url(path: Path) -> str",
+        "decorators": []
+      },
+      {
+        "kind": "def",
+        "name": "prepare_wanx_reference_image",
+        "signature": "prepare_wanx_reference_image(source: Path, target: Path) -> Path",
+        "decorators": []
+      },
+      {
+        "kind": "def",
+        "name": "wanx_size",
+        "signature": "wanx_size(config: dict[str, Any]) -> str",
+        "decorators": []
+      },
+      {
+        "kind": "def",
+        "name": "wanx_duration_seconds",
+        "signature": "wanx_duration_seconds(config: dict[str, Any]) -> int",
+        "decorators": []
+      },
+      {
+        "kind": "def",
+        "name": "wanx_ratio",
+        "signature": "wanx_ratio(config: dict[str, Any]) -> str",
+        "decorators": []
+      },
+      {
+        "kind": "def",
+        "name": "wanx_duration_for_provider",
+        "signature": "wanx_duration_for_provider(provider: VideoProvider, config: dict[str, Any]) -> int",
+        "decorators": []
+      },
+      {
+        "kind": "def",
+        "name": "wanx_model",
+        "signature": "wanx_model(provider: VideoProvider, mode: str, config: dict[str, Any]) -> str",
+        "decorators": []
+      },
+      {
+        "kind": "async def",
+        "name": "run_wanx_generation",
+        "signature": "run_wanx_generation(provider: VideoProvider, generation: dict[str, Any]) -> None",
+        "decorators": []
+      },
+      {
+        "kind": "async def",
+        "name": "unload_ollama_model",
+        "signature": "unload_ollama_model() -> None",
+        "decorators": []
+      },
+      {
+        "kind": "def",
+        "name": "start_generation_task",
+        "signature": "start_generation_task(generation_id: str) -> None",
+        "decorators": []
+      },
+      {
+        "kind": "async def",
+        "name": "request_edit_spec",
+        "signature": "request_edit_spec(instruction: str) -> dict[str, list[str]]",
+        "decorators": []
+      },
+      {
+        "kind": "async def",
+        "name": "run_generation",
+        "signature": "run_generation(generation_id: str) -> None",
+        "decorators": []
+      },
+      {
+        "kind": "def",
+        "name": "make_generation",
+        "signature": "make_generation(*, mode: Literal['text', 'image', 'edit', 'continue'], prompt: str, negative_prompt: str, config: dict[str, Any], reference_asset_id: str | None=None, parent_generation_id: str | None=None, edit_spec: dict[str, Any] | None=None) -> dict[str, Any]",
+        "decorators": []
+      },
+      {
+        "kind": "async def",
+        "name": "analyze_reference_video",
+        "signature": "analyze_reference_video(source: Path, frame_dir: Path, *, project_id: str | None=None) -> dict[str, Any]",
+        "decorators": []
+      },
+      {
+        "kind": "async def",
+        "name": "write_ad_final_copy",
+        "signature": "write_ad_final_copy(project: dict[str, Any], plan: dict[str, Any], instruction: str) -> dict[str, Any]",
+        "decorators": []
+      },
+      {
+        "kind": "def",
+        "name": "ad_cloud_output_dimensions",
+        "signature": "ad_cloud_output_dimensions(resolution: str | None) -> tuple[int, int]",
+        "decorators": []
+      },
+      {
+        "kind": "def",
+        "name": "ad_output_settings",
+        "signature": "ad_output_settings(project: dict[str, Any]) -> tuple[int, int, int | None]",
+        "decorators": []
+      },
+      {
+        "kind": "def",
+        "name": "ad_transition_specs",
+        "signature": "ad_transition_specs(project: dict[str, Any], clips: list[Path]) -> list[dict[str, Any]]",
+        "decorators": []
+      },
+      {
+        "kind": "def",
+        "name": "ad_timeline_segment_durations",
+        "signature": "ad_timeline_segment_durations(source_paths: list[Path], transitions: list[dict[str, Any]], target_durations: list[float] | None=None) -> list[float]",
+        "decorators": []
+      },
+      {
+        "kind": "def",
+        "name": "ad_segment_records_for_source_paths",
+        "signature": "ad_segment_records_for_source_paths(project: dict[str, Any], source_paths: list[Path]) -> list[dict[str, Any] | None]",
+        "decorators": []
+      },
+      {
+        "kind": "async def",
+        "name": "wait_for_generation",
+        "signature": "wait_for_generation(generation_id: str) -> dict[str, Any]",
+        "decorators": []
+      },
+      {
+        "kind": "async def",
+        "name": "review_ad_segment",
+        "signature": "review_ad_segment(project: dict[str, Any], plan: dict[str, Any], segment: dict[str, Any], frames: list[Path], *, current_duration_seconds: float, continuation_count: int) -> dict[str, Any]",
+        "decorators": []
+      },
+      {
+        "kind": "async def",
+        "name": "persist_ad_segment_review",
+        "signature": "persist_ad_segment_review(*, project: dict[str, Any], plan: dict[str, Any], segment: dict[str, Any], frames: list[Path], current_duration_seconds: float, continuation_count: int, metadata: dict[str, Any] | None=None) -> None",
+        "decorators": []
+      },
+      {
+        "kind": "def",
+        "name": "start_ad_segment_review_task",
+        "signature": "start_ad_segment_review_task(*, project: dict[str, Any], plan: dict[str, Any], segment: dict[str, Any], frames: list[Path], current_duration_seconds: float, continuation_count: int, metadata: dict[str, Any] | None=None) -> None",
+        "decorators": []
+      },
+      {
+        "kind": "async def",
+        "name": "plan_ad_segment_transition",
+        "signature": "plan_ad_segment_transition(project: dict[str, Any], plan: dict[str, Any], previous_segment: dict[str, Any], next_segment: dict[str, Any], previous_frames: list[Path], *, cloud_tail_candidates: bool=False, require_continuation: bool=False) -> dict[str, Any]",
+        "decorators": []
+      },
+      {
+        "kind": "def",
+        "name": "continuation_candidate_urls",
+        "signature": "continuation_candidate_urls(candidate_paths: list[Path]) -> list[str]",
+        "decorators": []
+      },
+      {
+        "kind": "def",
+        "name": "continuation_candidate_paths",
+        "signature": "continuation_candidate_paths(review: dict[str, Any]) -> list[Path]",
+        "decorators": []
+      },
+      {
+        "kind": "async def",
+        "name": "wait_for_ad_continuation_confirmation",
+        "signature": "wait_for_ad_continuation_confirmation(*, project_id: str, segment_id: str, candidate_paths: list[Path], prompt: str, transition: dict[str, Any]) -> dict[str, Any]",
+        "decorators": []
+      },
+      {
+        "kind": "async def",
+        "name": "ensure_ad_master",
+        "signature": "ensure_ad_master(project_id: str, source_paths: list[Path]) -> str",
+        "decorators": []
+      },
+      {
+        "kind": "async def",
+        "name": "compose_ad_project",
+        "signature": "compose_ad_project(project_id: str, plan: dict[str, Any], source_paths: list[Path]) -> str",
+        "decorators": []
+      },
+      {
+        "kind": "async def",
+        "name": "run_ad_project",
+        "signature": "run_ad_project(project_id: str) -> None",
+        "decorators": []
+      },
+      {
+        "kind": "def",
+        "name": "start_ad_project_task",
+        "signature": "start_ad_project_task(project_id: str) -> None",
+        "decorators": []
+      },
+      {
+        "kind": "def",
+        "name": "recover_ad_segments_after_review_validation",
+        "signature": "recover_ad_segments_after_review_validation(project: dict[str, Any], plan_record: dict[str, Any]) -> int",
+        "decorators": []
+      },
+      {
+        "kind": "async def",
+        "name": "recover_ad_wanx_segments",
+        "signature": "recover_ad_wanx_segments(project: dict[str, Any], plan_record: dict[str, Any]) -> int",
+        "decorators": []
+      },
+      {
+        "kind": "async def",
+        "name": "run_ad_recompose",
+        "signature": "run_ad_recompose(project_id: str) -> None",
+        "decorators": []
+      },
+      {
+        "kind": "def",
+        "name": "start_ad_recompose_task",
+        "signature": "start_ad_recompose_task(project_id: str) -> None",
+        "decorators": []
+      },
+      {
+        "kind": "def",
+        "name": "reconcile_interrupted_work",
+        "signature": "reconcile_interrupted_work() -> None",
+        "decorators": []
+      },
+      {
+        "kind": "def",
+        "name": "resume_confirmed_ad_checkpoints",
+        "signature": "resume_confirmed_ad_checkpoints() -> None",
+        "decorators": []
+      },
+      {
+        "kind": "async def",
+        "name": "lifespan",
+        "signature": "lifespan(_: FastAPI)",
+        "decorators": [
+          "asynccontextmanager"
+        ]
+      },
+      {
+        "kind": "assign",
+        "name": "app",
+        "value": "FastAPI(title='SK2 Local Video Studio', lifespan=lifespan)"
+      },
+      {
+        "kind": "Expr",
+        "name": "",
+        "value": "app.add_middleware(CORSMiddleware, allow_origins=['http://localhost:5173', 'http://127.0.0.1:5173', 'http://localhost:5174', 'http://127.0.0.1:5174'], allow_credentials=True, allow_methods=['*'], allow_headers=['*'])"
+      },
+      {
+        "kind": "Expr",
+        "name": "",
+        "value": "app.mount('/media', StaticFiles(directory=MEDIA_DIR), name='media')"
+      },
+      {
+        "kind": "async def",
+        "name": "provider_availability",
+        "signature": "provider_availability() -> dict[str, bool]",
+        "decorators": []
+      },
+      {
+        "kind": "async def",
+        "name": "health",
+        "signature": "health() -> dict[str, Any]",
+        "decorators": [
+          "app.get('/api/health')"
+        ]
+      },
+      {
+        "kind": "async def",
+        "name": "list_providers",
+        "signature": "list_providers() -> dict[str, Any]",
+        "decorators": [
+          "app.get('/api/providers')"
+        ]
+      },
+      {
+        "kind": "async def",
+        "name": "get_ad_model_settings",
+        "signature": "get_ad_model_settings() -> dict[str, Any]",
+        "decorators": [
+          "app.get('/api/ad-settings')"
+        ]
+      },
+      {
+        "kind": "async def",
+        "name": "stop_all_operations",
+        "signature": "stop_all_operations() -> dict[str, Any]",
+        "decorators": [
+          "app.post('/api/stop')"
+        ]
+      },
+      {
+        "kind": "async def",
+        "name": "create_ad_project",
+        "signature": "create_ad_project(request: CreateAdProjectRequest) -> dict[str, Any]",
+        "decorators": [
+          "app.post('/api/ad-projects')"
+        ]
+      },
+      {
+        "kind": "async def",
+        "name": "ad_project_history",
+        "signature": "ad_project_history() -> dict[str, Any]",
+        "decorators": [
+          "app.get('/api/ad-projects/history')"
+        ]
+      },
+      {
+        "kind": "def",
+        "name": "remove_project_path",
+        "signature": "remove_project_path(root: Path, target: Path) -> None",
+        "decorators": []
+      },
+      {
+        "kind": "async def",
+        "name": "delete_ad_project",
+        "signature": "delete_ad_project(project_id: str) -> dict[str, Any]",
+        "decorators": [
+          "app.delete('/api/ad-projects/{project_id}')"
+        ]
+      },
+      {
+        "kind": "async def",
+        "name": "ad_project",
+        "signature": "ad_project(project_id: str) -> dict[str, Any]",
+        "decorators": [
+          "app.get('/api/ad-projects/{project_id}')"
+        ]
+      },
+      {
+        "kind": "async def",
+        "name": "upload_ad_assets",
+        "signature": "upload_ad_assets(project_id: str, files: list[UploadFile]=File(...)) -> dict[str, Any]",
+        "decorators": [
+          "app.post('/api/ad-projects/{project_id}/assets')"
+        ]
+      },
+      {
+        "kind": "async def",
+        "name": "upload_reference_video",
+        "signature": "upload_reference_video(project_id: str, file: UploadFile=File(...)) -> dict[str, Any]",
+        "decorators": [
+          "app.post('/api/ad-projects/{project_id}/reference-video')"
+        ]
+      },
+      {
+        "kind": "async def",
+        "name": "create_ad_plan_version",
+        "signature": "create_ad_plan_version(project_id: str, *, feedback: str | None=None, from_segment: int | None=None) -> dict[str, Any]",
+        "decorators": []
+      },
+      {
+        "kind": "async def",
+        "name": "create_ad_plan",
+        "signature": "create_ad_plan(project_id: str) -> dict[str, Any]",
+        "decorators": [
+          "app.post('/api/ad-projects/{project_id}/plan')"
+        ]
+      },
+      {
+        "kind": "async def",
+        "name": "revise_ad_plan",
+        "signature": "revise_ad_plan(project_id: str, request: AdPlanFeedbackRequest) -> dict[str, Any]",
+        "decorators": [
+          "app.post('/api/ad-projects/{project_id}/plan-feedback')"
+        ]
+      },
+      {
+        "kind": "async def",
+        "name": "revise_ad_plan_from_segment",
+        "signature": "revise_ad_plan_from_segment(project_id: str, request: AdPlanFromSegmentRequest) -> dict[str, Any]",
+        "decorators": [
+          "app.post('/api/ad-projects/{project_id}/plan-from-segment')"
+        ]
+      },
+      {
+        "kind": "async def",
+        "name": "update_ad_plan_prompts",
+        "signature": "update_ad_plan_prompts(project_id: str, request: AdPlanPromptUpdateRequest) -> dict[str, Any]",
+        "decorators": [
+          "app.post('/api/ad-projects/{project_id}/plan-prompts')"
+        ]
+      },
+      {
+        "kind": "async def",
+        "name": "rewrite_ad_segment_prompt",
+        "signature": "rewrite_ad_segment_prompt(project_id: str, request: AdSegmentPromptRewriteRequest) -> dict[str, Any]",
+        "decorators": [
+          "app.post('/api/ad-projects/{project_id}/plan-prompt-rewrite')"
+        ]
+      },
+      {
+        "kind": "async def",
+        "name": "rewrite_ad_plan_prompts",
+        "signature": "rewrite_ad_plan_prompts(project_id: str, request: AdPlanPromptRewriteRequest) -> dict[str, Any]",
+        "decorators": [
+          "app.post('/api/ad-projects/{project_id}/plan-prompts-rewrite')"
+        ]
+      },
+      {
+        "kind": "async def",
+        "name": "approve_ad_plan",
+        "signature": "approve_ad_plan(project_id: str, request: AdPlanApprovalRequest) -> dict[str, Any]",
+        "decorators": [
+          "app.post('/api/ad-projects/{project_id}/plan-approve')"
+        ]
+      },
+      {
+        "kind": "async def",
+        "name": "generate_approved_ad",
+        "signature": "generate_approved_ad(project_id: str, request: AdGenerationRequest) -> dict[str, Any]",
+        "decorators": [
+          "app.post('/api/ad-projects/{project_id}/generate')"
+        ]
+      },
+      {
+        "kind": "async def",
+        "name": "confirm_ad_continuation",
+        "signature": "confirm_ad_continuation(project_id: str, segment_id: str, request: AdContinuationConfirmationRequest) -> dict[str, Any]",
+        "decorators": [
+          "app.post('/api/ad-projects/{project_id}/segments/{segment_id}/continuation-confirm')"
+        ]
+      },
+      {
+        "kind": "async def",
+        "name": "recover_ad_cloud_output",
+        "signature": "recover_ad_cloud_output(project_id: str) -> dict[str, Any]",
+        "decorators": [
+          "app.post('/api/ad-projects/{project_id}/recover-cloud-output')"
+        ]
+      },
+      {
+        "kind": "async def",
+        "name": "list_ad_voices",
+        "signature": "list_ad_voices(project_id: str) -> dict[str, Any]",
+        "decorators": [
+          "app.get('/api/ad-projects/{project_id}/voices')"
+        ]
+      },
+      {
+        "kind": "async def",
+        "name": "create_ad_voice_preview",
+        "signature": "create_ad_voice_preview(project_id: str, request: AdVoicePreviewRequest) -> dict[str, Any]",
+        "decorators": [
+          "app.post('/api/ad-projects/{project_id}/voice-preview')"
+        ]
+      },
+      {
+        "kind": "async def",
+        "name": "list_project_bgm",
+        "signature": "list_project_bgm(project_id: str) -> dict[str, Any]",
+        "decorators": [
+          "app.get('/api/ad-projects/{project_id}/bgm')"
+        ]
+      },
+      {
+        "kind": "async def",
+        "name": "project_bgm_audio",
+        "signature": "project_bgm_audio(project_id: str, bgm_id: str) -> FileResponse",
+        "decorators": [
+          "app.get('/api/ad-projects/{project_id}/bgm/{bgm_id:path}/audio')"
+        ]
+      },
+      {
+        "kind": "async def",
+        "name": "rewrite_ad_final_copy",
+        "signature": "rewrite_ad_final_copy(project_id: str, request: AdFinalCopyRequest) -> dict[str, Any]",
+        "decorators": [
+          "app.post('/api/ad-projects/{project_id}/final-copy')"
+        ]
+      },
+      {
+        "kind": "async def",
+        "name": "edit_ad_final",
+        "signature": "edit_ad_final(project_id: str, request: AdFinalEditRequest) -> dict[str, Any]",
+        "decorators": [
+          "app.post('/api/ad-projects/{project_id}/final-edit')"
+        ]
+      },
+      {
+        "kind": "async def",
+        "name": "stop_ad_project",
+        "signature": "stop_ad_project(project_id: str) -> dict[str, Any]",
+        "decorators": [
+          "app.post('/api/ad-projects/{project_id}/stop')"
+        ]
+      },
+      {
+        "kind": "async def",
+        "name": "return_ad_project_to_plan",
+        "signature": "return_ad_project_to_plan(project_id: str) -> dict[str, Any]",
+        "decorators": [
+          "app.post('/api/ad-projects/{project_id}/return-to-plan')"
+        ]
+      },
+      {
+        "kind": "async def",
+        "name": "list_generations",
+        "signature": "list_generations() -> list[dict[str, Any]]",
+        "decorators": [
+          "app.get('/api/generations')"
+        ]
+      },
+      {
+        "kind": "async def",
+        "name": "generation_detail",
+        "signature": "generation_detail(generation_id: str) -> dict[str, Any]",
+        "decorators": [
+          "app.get('/api/generations/{generation_id}')"
+        ]
+      },
+      {
+        "kind": "async def",
+        "name": "create_asset",
+        "signature": "create_asset(file: UploadFile=File(...)) -> dict[str, Any]",
+        "decorators": [
+          "app.post('/api/assets')"
+        ]
+      },
+      {
+        "kind": "async def",
+        "name": "create_generation",
+        "signature": "create_generation(request: CreateGenerationRequest) -> dict[str, Any]",
+        "decorators": [
+          "app.post('/api/generations')"
+        ]
+      },
+      {
+        "kind": "async def",
+        "name": "edit_generation",
+        "signature": "edit_generation(generation_id: str, request: EditGenerationRequest) -> dict[str, Any]",
+        "decorators": [
+          "app.post('/api/generations/{generation_id}/edits')"
+        ]
+      },
+      {
+        "kind": "async def",
+        "name": "continue_generation",
+        "signature": "continue_generation(generation_id: str, request: ContinueGenerationRequest) -> dict[str, Any]",
+        "decorators": [
+          "app.post('/api/generations/{generation_id}/continuations')"
+        ]
+      },
+      {
+        "kind": "async def",
+        "name": "events",
+        "signature": "events(websocket: WebSocket) -> None",
+        "decorators": [
+          "app.websocket('/api/events')"
+        ]
+      }
+    ],
+    "apps/api/media.py": [
+      {
+        "kind": "Expr",
+        "name": "",
+        "value": "'媒体域:FFmpeg/FFprobe 纯函数库 —— 探针 / 抽帧 / 拼接 / 字幕 / 配音 / BGM。\\n\\n自 main.py 单体拆出(T2 工单 S4,行为不变,代码原样搬运):\\n- 定位 —— ffmpeg/ffprobe 可执行文件解析(ffmpeg_executable / ffprobe_executable);\\n- 探针 —— 视频时长 / 音轨存在 / 图片尺寸(probe_video_duration / has_audio_stream  …"
+      },
+      {
+        "kind": "import",
+        "name": "import asyncio"
+      },
+      {
+        "kind": "import",
+        "name": "import json"
+      },
+      {
+        "kind": "import",
+        "name": "import os"
+      },
+      {
+        "kind": "import",
+        "name": "import shutil"
+      },
+      {
+        "kind": "import",
+        "name": "import subprocess"
+      },
+      {
+        "kind": "import",
+        "name": "from pathlib import Path"
+      },
+      {
+        "kind": "import",
+        "name": "from typing import Any"
+      },
+      {
+        "kind": "import",
+        "name": "import edge_tts"
+      },
+      {
+        "kind": "import",
+        "name": "from data import ROOT_DIR"
+      },
+      {
+        "kind": "def",
+        "name": "ffmpeg_executable",
+        "signature": "ffmpeg_executable() -> str",
+        "decorators": []
+      },
+      {
+        "kind": "def",
+        "name": "ffprobe_executable",
+        "signature": "ffprobe_executable() -> str",
+        "decorators": []
+      },
+      {
+        "kind": "def",
+        "name": "probe_video_duration",
+        "signature": "probe_video_duration(path: Path) -> float",
+        "decorators": []
+      },
+      {
+        "kind": "def",
+        "name": "has_audio_stream",
+        "signature": "has_audio_stream(path: Path) -> bool",
+        "decorators": []
+      },
+      {
+        "kind": "def",
+        "name": "probe_image_dimensions",
+        "signature": "probe_image_dimensions(path: Path) -> tuple[int, int]",
+        "decorators": []
+      },
+      {
+        "kind": "def",
+        "name": "extract_video_tail",
+        "signature": "extract_video_tail(source: Path, target: Path, *, tail_frames: int, width: int, height: int) -> None",
+        "decorators": []
+      },
+      {
+        "kind": "def",
+        "name": "extract_video_last_frame",
+        "signature": "extract_video_last_frame(source: Path, target: Path) -> None",
+        "decorators": []
+      },
+      {
+        "kind": "def",
+        "name": "extract_ad_keyframes",
+        "signature": "extract_ad_keyframes(source: Path, target_dir: Path) -> list[Path]",
+        "decorators": []
+      },
+      {
+        "kind": "def",
+        "name": "extract_cloud_continuation_candidates",
+        "signature": "extract_cloud_continuation_candidates(source: Path, target_dir: Path) -> list[Path]",
+        "decorators": []
+      },
+      {
+        "kind": "def",
+        "name": "extract_reference_video_frames",
+        "signature": "extract_reference_video_frames(source: Path, target_dir: Path) -> list[Path]",
+        "decorators": []
+      },
+      {
+        "kind": "def",
+        "name": "join_continuation_video",
+        "signature": "join_continuation_video(parent: Path, continuation: Path, target: Path, *, overlap_seconds: float, width: int, height: int, fps: int) -> None",
+        "decorators": []
+      },
+      {
+        "kind": "def",
+        "name": "trim_continuation_lead",
+        "signature": "trim_continuation_lead(source: Path, target: Path, *, skip_seconds: float) -> None",
+        "decorators": []
+      },
+      {
+        "kind": "def",
+        "name": "ad_transition_overlap",
+        "signature": "ad_transition_overlap(transition_type: str, previous_duration: float, next_duration: float) -> float",
+        "decorators": []
+      },
+      {
+        "kind": "def",
+        "name": "normalize_ad_clip",
+        "signature": "normalize_ad_clip(source: Path, target: Path, *, width: int, height: int, fps: int | None, duration_seconds: float | None=None, transition_tail_seconds: float=0.0) -> None",
+        "decorators": []
+      },
+      {
+        "kind": "def",
+        "name": "concat_ad_clips",
+        "signature": "concat_ad_clips(clips: list[Path], target: Path, work_dir: Path, transitions: list[dict[str, Any]] | None=None) -> None",
+        "decorators": []
+      },
+      {
+        "kind": "def",
+        "name": "ass_timestamp",
+        "signature": "ass_timestamp(seconds: float) -> str",
+        "decorators": []
+      },
+      {
+        "kind": "def",
+        "name": "write_ad_subtitles",
+        "signature": "write_ad_subtitles(beats: list[str], segment_durations: list[float], target: Path, *, width: int, height: int) -> None",
+        "decorators": []
+      },
+      {
+        "kind": "async def",
+        "name": "render_ad_voiceover_track",
+        "signature": "render_ad_voiceover_track(project_dir: Path, *, script: str, target_duration_seconds: float, voice_id: str) -> Path | None",
+        "decorators": []
+      },
+      {
+        "kind": "def",
+        "name": "ad_bgm_directory",
+        "signature": "ad_bgm_directory() -> Path",
+        "decorators": []
+      },
+      {
+        "kind": "def",
+        "name": "list_ad_bgm",
+        "signature": "list_ad_bgm() -> list[dict[str, str]]",
+        "decorators": []
+      },
+      {
+        "kind": "def",
+        "name": "resolve_ad_bgm",
+        "signature": "resolve_ad_bgm(bgm_id: str) -> Path | None",
+        "decorators": []
+      }
+    ]
+  }
+}

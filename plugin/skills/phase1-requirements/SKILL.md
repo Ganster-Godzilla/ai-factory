@@ -5,7 +5,9 @@ description: Phase 1 需求分析。当用户要求写 PRD/功能清单/需求�
 
 # Phase 1 — 需求分析
 
-## 产物(根目录 = stack-profile paths.requirements/{模块}/01_需求分析/)
+## 产物(根目录 = stack-profile paths.requirements/<工单号>-<需求短名>/01_需求分析/)
+> 布局口径(T-2026-0830-001):需求产物一律按工单文件夹归档,短名纯人读;
+> 编排器闸门按 <工单号>- 前缀 glob 解析。扁平 <id>-prd.md 混排已废弃。
 - PRD.md(Why / What / 非功能需求 / 验收标准)
 - 功能清单.md(条目 + 优先级)
 - 歧义澄清记录.md

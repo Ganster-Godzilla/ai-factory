@@ -164,8 +164,12 @@ def run_dev_tasks(pool: Path, ticket, adapter: HarnessAdapter,
                   project_dir: Path, cfg: dict | None = None,
                   consult_adapter: HarnessAdapter | None = None) -> str:
     if not ticket.tasks:
-        # 架构师产物 lazy-load:docs/specs/<ticket.id>-tasks.yaml → ticket.tasks
-        spec = project_dir / "docs" / "specs" / f"{ticket.id}-tasks.yaml"
+        # 架构师产物 lazy-load:统一解析器定位 02_设计文档/tasks.yaml(T-2026-0830-001 F6)
+        from orchestrator.daemon.artifacts import resolve_artifact_path
+        rel = resolve_artifact_path(
+            project_dir, "document/business/{tid_dir}/02_设计文档/tasks.yaml",
+            ticket.id)
+        spec = project_dir / rel if rel else project_dir / "__none__"
         if spec.exists():
             try:
                 ticket.tasks = load_task_list(spec)

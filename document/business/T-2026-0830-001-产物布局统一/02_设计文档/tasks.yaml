@@ -1,0 +1,30 @@
+# 任务切片-T-2026-0830-001: 产物布局统一(工单文件夹化)
+# 设计依据:document/business/T-2026-0830-001-产物布局统一/02_设计文档/design.md
+- id: G1
+  title: "manifest 全路径 {tid_dir} 化 + resolve_artifact_path 统一解析器(artifacts.py)"
+  acceptance_cmd: "python -m pytest tests/orchestrator/test_artifacts_manifest.py -q"
+  depends_on: []
+  status: done
+  attempts: 1
+  verify: passed
+- id: G2
+  title: "gates/runner 走统一解析器 + 测试改新路径 + glob 用例"
+  acceptance_cmd: "python -m pytest tests/orchestrator/test_gates.py tests/orchestrator/test_gate_enforcement.py tests/orchestrator/test_routing.py -q"
+  depends_on: [G1]
+  status: done
+  attempts: 1
+  verify: passed
+- id: G3
+  title: "两仓存量迁移(document/business + docs/specs 扁平件 git mv 进工单文件夹)与引用同步"
+  acceptance_cmd: "python scripts/check-pool-load.py"
+  depends_on: [G1]
+  status: done
+  attempts: 1
+  verify: passed
+- id: G4
+  title: "模板与文档口径同步(phase1-requirements 技能文/CLAUDE.md/使用指南)"
+  acceptance_cmd: "python -m orchestrator.daemon.doccheck CLAUDE.md --require-content 工单号 --require-content 01_需求分析"
+  depends_on: [G1]
+  status: done
+  attempts: 1
+  verify: passed
