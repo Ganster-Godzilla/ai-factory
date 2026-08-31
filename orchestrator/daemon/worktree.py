@@ -20,12 +20,36 @@ def _git(project: Path, *args: str) -> str:
     return r.stdout
 
 
+def _registered(project: Path, wt: Path) -> bool:
+    """wt 是否在 git worktree 注册表内(porcelain 路径分隔符与大小写规整)。"""
+    want = os.path.normcase(os.path.normpath(str(wt)))
+    out = _git(project, "worktree", "list", "--porcelain")
+    for line in out.splitlines():
+        if line.startswith("worktree "):
+            have = os.path.normcase(os.path.normpath(line[len("worktree "):].strip()))
+            if have == want:
+                return True
+    return False
+
+
 def ensure_worktree(project: Path, name: str, base: str = "main") -> Path:
     wt = project / ".orc-worktrees" / name
     if wt.exists():
-        return wt
+        # 僵尸残骸防线(T-2026-0901-002 续):回收半途被锁文件打断时,目录残留但
+        # git 已注销——直接复用会带上过期 .orc-base,scope 闸把基线后的所有
+        # 提交全判越界(003-S6 三连败实证)。未注册即 wipe 重建。
+        if _registered(project, wt):
+            return wt
+        shutil.rmtree(wt, ignore_errors=True)
+        if wt.exists():
+            raise RuntimeError(f"工位残骸清不掉(文件被占用?): {wt}")
     wt.parent.mkdir(parents=True, exist_ok=True)
-    _git(project, "worktree", "add", str(wt), "-b", f"orc/{name}", base)
+    branch = f"orc/{name}"
+    if branch in _git(project, "branch", "--list", branch):
+        # 僵尸分支(工位没了分支还在,可能带未合并提交):复用而非删除,不丢工作
+        _git(project, "worktree", "add", str(wt), branch)
+    else:
+        _git(project, "worktree", "add", str(wt), "-b", branch, base)
     # R7 scope 越界检查:创建时把当前 HEAD 落盘为 .orc-base,
     # runner 事后用 `git diff --name-only <base>` 找出已提交的越界改动。
     # 该文件是编排器记号而非 dev 产物,收集改动清单时会排除。
@@ -108,4 +132,12 @@ def recycle_worktree(project: Path, name: str) -> None:
         # 上半程已摘掉注册(如首次带 junction 删除失败后的残骸):目录直接清
         if wt.exists():
             shutil.rmtree(wt, ignore_errors=True)
-    _git(project, "branch", "-D", f"orc/{name}")
+    # 回收必须验尸(003-S6 教训):Windows 锁文件会让 remove/rmtree 半途而废,
+    # 留下未注册残骸毒化下一次 ensure(过期 .orc-base → scope 闸全越界)
+    if wt.exists():
+        shutil.rmtree(wt, ignore_errors=True)
+    if wt.exists():
+        raise RuntimeError(f"工位回收不净(文件被占用?): {wt}")
+    # 分支可能已在早前失败的回收中删过(zombie 场景),不存在不视为错误
+    if f"orc/{name}" in _git(project, "branch", "--list", f"orc/{name}"):
+        _git(project, "branch", "-D", f"orc/{name}")
