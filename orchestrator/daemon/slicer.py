@@ -81,4 +81,7 @@ def make_packet(task: dict, ticket, workdir: Path, design_excerpt: str,
         )
     return TaskPacket(role="dev", prompt=prompt, workdir=workdir,
                       acceptance_cmd=task["acceptance_cmd"], budget=ticket.budget,
-                      model=model)
+                      model=model,
+                      # task.timeout 分级(G8 决议的接线缺口,003-S8 实证):
+                      # 前端等大切片 1800s 不够,任务可显式声明,上限 7200
+                      timeout=min(int(task.get("timeout", 1800)), 7200))
