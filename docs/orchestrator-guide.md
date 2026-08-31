@@ -69,6 +69,18 @@ python -m orchestrator.daemon.cli advance <id> . --fake --consult-fake  # 失败
 - DeepSeek/GLM 由 dsh 直连,不经过网关
 - 换模型:编辑 `orchestrator.yaml` 的 `models:` 段(如 dev 切 glm-5.3-flash 做对照)
 
+### Zen 兜底(T-2026-0901-001)
+
+- **是什么**:relay 的第三后端 `zen-kimi`(OpenCode Zen,付费)。k3 双 key 全部 429/冷却时,流量**自动溢出**到 Zen 的 Kimi 模型,k3 链路不断流;k3 恢复(30 分钟冷却探测)后自动切回,无需操作。
+- **key**:`D:\Tool\keys\opencode.env`(Zen 控制台创建,粘贴进 `KEY=`)。改 key 后须重启 relay 生效(杀 8787 进程 → `wscript D:\Tool\kimi-relay.vbs`)。
+- **手动钉选**(调试/压测用):`curl -X POST http://127.0.0.1:8787/__use/zen-kimi`;恢复自动:`/__use/auto`。
+- **计费**:Zen 消耗**不占** k3 周水位闸(闸只合计 kimi* 后端);按 `rates.opencode`(¥4.3/¥21.6 per 1M)周对账入台账:
+  ```bash
+  python scripts/zen-usage-ledger.py            # 每周一次,幂等(同周不重复入账)
+  python scripts/zen-usage-ledger.py --dry-run  # 先看金额再决定
+  ```
+  复审日(明放 review_after)连同 estimated 条目一起对账。Zen 余额与实时价格以其控制台为准。
+
 ## 成本刹车(自动,无需操作)
 
 | 刹车 | 触发 | 结果 |

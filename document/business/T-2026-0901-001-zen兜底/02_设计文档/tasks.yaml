@@ -1,0 +1,23 @@
+- id: Z1
+  title: "relay: opencode.env 占位 + BACKENDS 加 zen-kimi + relay-zen.test.js"
+  acceptance_cmd: "cd /d/Tool && node --test test/"
+  scope: ["D:/Tool/kimi-relay.js", "D:/Tool/keys/opencode.env", "D:/Tool/test/relay-zen.test.js"]
+- id: Z2
+  title: "gateway.py 水位只计 kimi* 后端 + pytest"
+  acceptance_cmd: "cd /d/workspace/ai-factory && python -m pytest tests/orchestrator/test_gateway.py -q"
+  scope: ["orchestrator/daemon/gateway.py", "tests/orchestrator/test_gateway.py"]
+  depends_on: []
+- id: Z3
+  title: "orchestrator.yaml rates.opencode + scripts/zen-usage-ledger.py + pytest"
+  acceptance_cmd: "cd /d/workspace/ai-factory && python -m pytest tests/orchestrator/test_zen_ledger.py -q"
+  scope: ["orchestrator.yaml", "scripts/zen-usage-ledger.py", "tests/orchestrator/test_zen_ledger.py"]
+  depends_on: [Z2]
+- id: Z4
+  title: "guide 文档 Zen 兜底一节 + 全量验证(pytest/pyflakes/check-pool-load)+ 合 main"
+  acceptance_cmd: "cd /d/workspace/ai-factory && python -m pytest tests/ -q && python scripts/check-pool-load.py"
+  scope: ["docs/orchestrator-guide.md"]
+  depends_on: [Z1, Z2, Z3]
+- id: Z5
+  title: "用户填 key 后:重启 relay + 钉选实测 + 水位隔离断言 + 台账 dry-run + claude 真实链路"
+  acceptance_cmd: "curl -s http://127.0.0.1:8787/__status"
+  depends_on: [Z4]
