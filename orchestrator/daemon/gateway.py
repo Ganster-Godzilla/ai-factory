@@ -10,11 +10,16 @@ from orchestrator.daemon.ledger import k3_week_tokens
 
 
 def gateway_week_tokens(url: str, timeout: float = 5.0) -> int | None:
+    """k3 共享池周水位:只合计 kimi* 后端。
+
+    zen-kimi 等付费兜底后端(T-2026-0901-001)走现金台账对账,
+    不计入 k3 共享池水位——否则兜底一承接就污染 150M 预算闸(T-001 类误触)。
+    """
     try:
         with urllib.request.urlopen(f"{url}/__stats", timeout=timeout) as r:
             stats = json.loads(r.read().decode("utf-8"))
         return sum(int(v.get("weekInputTokens", 0)) + int(v.get("weekOutputTokens", 0))
-                   for v in stats.values())
+                   for k, v in stats.items() if k.startswith("kimi"))
     except Exception:
         return None
 

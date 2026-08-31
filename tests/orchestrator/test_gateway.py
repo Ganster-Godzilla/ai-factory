@@ -14,6 +14,8 @@ def fake_gateway():
             body = json.dumps({
                 "kimi1": {"weekInputTokens": 700, "weekOutputTokens": 200},
                 "kimi2": {"weekInputTokens": 90, "weekOutputTokens": 10},
+                # T-2026-0901-001:付费兜底后端的周 tokens 不得计入 k3 水位
+                "zen-kimi": {"weekInputTokens": 9000, "weekOutputTokens": 800},
             }).encode()
             self.send_response(200)
             self.send_header("content-type", "application/json")
@@ -27,7 +29,27 @@ def fake_gateway():
 
 
 def test_gateway_week_tokens(fake_gateway):
-    assert gateway_week_tokens(fake_gateway) == 1000
+    assert gateway_week_tokens(fake_gateway) == 1000   # 含 zen-kimi 9800,过滤后不计
+
+
+def test_gateway_zen_only_returns_zero():
+    # 极端情形:stats 里只剩 zen 后端(如 kimi 后端被摘除),水位应为 0 而非 zen 的量
+    class H(BaseHTTPRequestHandler):
+        def do_GET(self):
+            body = json.dumps({
+                "zen-kimi": {"weekInputTokens": 5000, "weekOutputTokens": 500},
+            }).encode()
+            self.send_response(200)
+            self.send_header("content-type", "application/json")
+            self.end_headers()
+            self.wfile.write(body)
+        def log_message(self, *a): pass
+    srv = HTTPServer(("127.0.0.1", 0), H)
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    try:
+        assert gateway_week_tokens(f"http://127.0.0.1:{srv.server_port}") == 0
+    finally:
+        srv.shutdown()
 
 
 def test_gateway_unreachable_returns_none():
