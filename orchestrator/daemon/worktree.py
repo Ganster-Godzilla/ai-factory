@@ -1,8 +1,15 @@
 """开发角色的工位:每任务一个 git worktree,崩了最多损失一个。"""
 from __future__ import annotations
 
+import os
+import shutil
 import subprocess
 from pathlib import Path
+
+# 工位依赖目录(T-2026-0901-002):验收命令以工位内相对路径执行
+# (apps/api/.venv/Scripts/python.exe ...),新 worktree 没有这些目录,
+# 验收在 runner 内必败——003/004 全部切片此前因此只能手工验收。
+_DEP_DIR_NAMES = (".venv", "node_modules")
 
 
 def _git(project: Path, *args: str) -> str:
@@ -24,7 +31,55 @@ def ensure_worktree(project: Path, name: str, base: str = "main") -> Path:
     # 该文件是编排器记号而非 dev 产物,收集改动清单时会排除。
     head = _git(wt, "rev-parse", "HEAD").strip()
     (wt / ".orc-base").write_text(head + "\n", encoding="utf-8")
+    _link_dep_dirs(project, wt)
     return wt
+
+
+def _find_dep_dirs(project: Path) -> list[Path]:
+    """主仓 <=2 层内的依赖目录(.venv/node_modules),不深入其内部,秒级返回。"""
+    hits: list[Path] = []
+
+    def scan(d: Path, depth: int) -> None:
+        if depth > 2:
+            return
+        try:
+            children = [c for c in d.iterdir() if c.is_dir()]
+        except OSError:
+            return
+        for c in children:
+            if c.name in {".git", ".orc-worktrees"}:
+                continue
+            if c.name in _DEP_DIR_NAMES:
+                hits.append(c)
+                continue
+            scan(c, depth + 1)
+
+    scan(project, 0)
+    return hits
+
+
+def _junction(link: Path, target: Path) -> None:
+    link.parent.mkdir(parents=True, exist_ok=True)
+    # Windows 目录联接免管理员;symlink 要开发者权限,不用
+    r = subprocess.run(["cmd", "/c", "mklink", "/J", str(link), str(target)],
+                       capture_output=True, text=True)
+    if r.returncode != 0:
+        raise RuntimeError(
+            f"mklink /J {link} -> {target}: {(r.stderr or r.stdout).strip()}")
+
+
+def _link_dep_dirs(project: Path, wt: Path) -> None:
+    """把主仓依赖目录接进工位:junction(免管理员)指回主仓,.env 复制不链接
+    (工位内写入不回流主仓)。非 Windows 暂无需求,跳过。"""
+    if os.name != "nt":
+        return
+    for dep in _find_dep_dirs(project):
+        dst = wt / dep.relative_to(project)
+        if not dst.exists():
+            _junction(dst, dep)
+    env = project / ".env"
+    if env.exists() and not (wt / ".env").exists():
+        shutil.copy2(env, wt / ".env")
 
 
 def list_worktrees(project: Path) -> list[str]:
@@ -35,5 +90,22 @@ def list_worktrees(project: Path) -> list[str]:
 
 
 def recycle_worktree(project: Path, name: str) -> None:
-    _git(project, "worktree", "remove", "--force", str(project / ".orc-worktrees" / name))
+    wt = project / ".orc-worktrees" / name
+    if wt.exists():
+        # 先摘掉依赖目录 junction:git 递归删除不认目录联接(Invalid argument);
+        # junction 上 os.rmdir 只删联接本身不伤主仓;若是真实非空目录 rmdir 自然
+        # 失败跳过,交给下面 git --force 删(T-2026-0901-002)
+        for dep in _find_dep_dirs(project):
+            try:
+                os.rmdir(wt / dep.relative_to(project))
+            except OSError:
+                pass
+    try:
+        _git(project, "worktree", "remove", "--force", str(wt))
+    except RuntimeError as e:
+        if "not a working tree" not in str(e):
+            raise
+        # 上半程已摘掉注册(如首次带 junction 删除失败后的残骸):目录直接清
+        if wt.exists():
+            shutil.rmtree(wt, ignore_errors=True)
     _git(project, "branch", "-D", f"orc/{name}")
