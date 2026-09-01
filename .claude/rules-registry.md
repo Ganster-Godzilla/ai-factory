@@ -13,4 +13,4 @@
 | R7 | ai-init 后必须验证根 stack-profile.yaml 已实例化,否则 lint/test 闸空转 | E1 | 自觉 | 2026-08-29 | 本周期实测空转,已补建 |
 | R8 | 任何分支合 main 前,必须用 main 线代码加载真实 pool 全部工单(数据-代码 schema 偏斜会让全站 500,cherry-pick 干净基线也躲不掉) | E2 | scripts/check-pool-load.py | 2026-08-29 | 源于 2026-08-29 p1_round 事故:integration 线写的字段 main 线 Ticket 没有,load 即 TypeError |
 | R9 | 配额/现金闸可以放开,但必须"明放":闸 warn-only 需在配置显式标注磨合期+复审日期;台账必须照记(无精确值就估算),禁止记 0;闸可松、账不可瞎 | E1 | 自觉(orchestrator.yaml 标注 + 复审日期) | 2026-08-29 | 源于 boss 决策:dsh 磨合期允许临时放开;修订方向 T-2026-0829-003 |
-| R10 | 凡产生代码/文档变更的任务必建编排工单(双轨融合:工单=系统账本,技能包=过程闸,执行可 runner 可交互);轻量例外(纯问答/typo 级)须显式说明免单 | E1 | 自觉;违背时按 mistake-retro 复盘 | 2026-08-29 | 源于 Dashboard v2 纯技能包流实证代价:台账断流 + p1_round 事故绕开发布闸 |
+| R10 | 凡产生代码/文档变更的任务必建编排工单,且**账本随执行全程同步**(双轨融合:工单=系统账本,技能包=过程闸,执行可 runner 可交互);交互式执行四步:p2_approved 即灌 tasks → 推进 p3 → 逐任务 done+verify → 按门禁走完 p4/p5;轻量例外(纯问答/typo 级)须显式说明免单 | E2 | scripts/check-pool-load.py:p3+ 状态 tasks 非空;p2_approved/p3_queued 挂 *_commit 即 FAIL;违背时按 mistake-retro 复盘 | 2026-08-29 | 源于 Dashboard v2 台账断流;**2026-09-01 E1→E2 晋升**:同日两起"建单后脱钩执行"(T-2026-0901-001 过门禁后 tasks 空跑完开发;T-2026-0901-002 hotfix done 但 tasks 空),触发"同 E1 违反 2 次必晋升" |

@@ -4,7 +4,7 @@
 
 ## 双轨融合(R10,2026-08-29 定)
 
-- **编排工单 = 系统账本**:凡产生代码/文档变更的任务,先建 pool 工单;产物挂 `ticket.artifacts`,门禁/状态变化写事件流,成本入台账。哪怕执行是交互式会话,工单也必须在。
+- **编排工单 = 系统账本**:凡产生代码/文档变更的任务,先建 pool 工单;产物挂 `ticket.artifacts`,门禁/状态变化写事件流,成本入台账。哪怕执行是交互式会话,工单也必须在,且**账本随执行同步**:p2_approved 即灌 tasks → 推进 p3 → 逐任务 done+verify → 按门禁走完 p4/p5(2026-09-01 R10 晋升 E2,check-pool-load 拦截"建单后脱钩执行")。
 - **技能包 = 过程闸**:`/ai-factory:phase0-proposal` → `phase1-requirements` → `phase2-design` → `phase3-implement`(TDD)→ `phase4-verify` → `phase5-release`;phase 间走 `/ai-factory:gate-check`(刚性,产物不齐禁止推进)。
 - **执行 = 可替换**:适合自动化 → runner(k3/dsh adapter);需要 boss 在环决策 → 交互式。执行方式不影响工单与门禁的存在。
 - **轻量例外**:纯问答、typo 级修改可免单,但须显式说明,不得默认免单。
