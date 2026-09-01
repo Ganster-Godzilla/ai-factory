@@ -396,6 +396,14 @@ def handle_deploy_failure(pool: Path, ticket, project_dir: str | Path,
     不静默放行。results=冒烟结果留痕;detail=失败详情文本;rollback=回滚说明
     (缺省按 conf 自动生成 rollback_plan;版本未知时占位符,人工补齐)。"""
     inc = create_incident(pool, ticket, f"部署/冒烟失败:{ticket.id} {ticket.summary}")
+    # 失败必须响亮(007 实证:此前只写记录不打印,CLI 静默 exit 1 无法定位)
+    if detail:
+        print(f"[deploy] FAIL: {detail}", file=sys.stderr)
+    if results:
+        fails = [r for r in results if not getattr(r, "ok", False)]
+        for r in fails:
+            print(f"[deploy] smoke FAIL: {r}", file=sys.stderr)
+    print(f"[deploy] 事故单已建: {inc.id}(详见发布记录)", file=sys.stderr)
     blocks = [
         f"## {SECTION_FAILURE}",
         f"- 事故单:`{inc.id}`(type=incident, related_ticket 回链原单 `{ticket.id}`)",
@@ -425,9 +433,14 @@ def _local_run(cmd: str, cwd: str | Path | None = None) -> str:
     不真跑 tar/scp/ssh。"""
     proc = subprocess.run(cmd, shell=True,
                           cwd=str(cwd) if cwd is not None else None,
-                          capture_output=True, text=True)
+                          capture_output=True, text=True,
+                          # 显式 UTF-8:Windows 本机 locale=GBK 时 text=True 默认
+                          # 用 GBK 解码 npm/vite 的 UTF-8 输出必炸(007 部署实证)
+                          encoding="utf-8", errors="replace")
     if proc.returncode != 0:
-        raise RuntimeError(f"本地命令失败(exit={proc.returncode}): {cmd}")
+        # stderr 一并抛出:部署失败定位高度依赖它(tar/ssh 的真实死因都在 stderr)
+        tail = (proc.stderr or "")[-300:]
+        raise RuntimeError(f"本地命令失败(exit={proc.returncode}): {cmd} | {tail}")
     return proc.stdout.strip()
 
 
@@ -472,18 +485,40 @@ def _run_remote(pool: Path, conf: dict, ticket, project_dir: str | Path,
             raise RuntimeError(
                 f"构建产物目录不存在: {pd / conf['dist_dir']}(先跑 build_cmd 或核对 dist_dir)")
 
-        # 2. tar.gz 打包:整仓快照(排除 .git),dist+后端代码同包(design §2.1)
-        bundle = Path(tempfile.gettempdir()) / f"orc-deploy-{ticket.project}-{ver}.tar.gz"
-        _local_run(f"tar -czf {bundle} -C {pd} --exclude=.git .")
+        # 2. tar.gz 打包:代码+构建产物快照(design §2.1;007 实证补排除清单——
+        #    整仓 2.1GB 且 junction/venv/node_modules/数据/密钥 本就不该上服务器)
+        #    包放 .orc-local(已排除子目录):相对名防盘符冒号远程主机歧义,
+        #    且包不在归档树内生长,防 "file changed as we read it"(007 二连实证)
+        bundle_name = f"orc-deploy-{ticket.project}-{ver}.tar.gz"
+        (pd / ".orc-local").mkdir(exist_ok=True)
+        excludes = " ".join([
+            "--exclude=.git", "--exclude=./.orc-worktrees",
+            "--exclude=.venv", "--exclude=node_modules", "--exclude=__pycache__",
+            "--exclude=./data", "--exclude=./.runtime", "--exclude=./.env",
+            "--exclude=./.orc-local", "--exclude=*.tar.gz",
+        ])
+        _local_run(f"tar -czf .orc-local/{bundle_name} {excludes} .", cwd=pd)
+        bundle = pd / ".orc-local" / bundle_name
 
         # 3. 上传 + 远端解包留版 + chown uid 归一(F2 坑:属主归一为发布账号)
         _ssh_run(key, host, f"mkdir -p {app}/releases")
-        _local_run(f"scp -i {key} {bundle} {host}:{app}/releases/{ver}.tar.gz")
+        try:
+            _local_run(f"scp -i {key} {bundle} {host}:{app}/releases/{ver}.tar.gz")
+        finally:
+            bundle.unlink(missing_ok=True)   # 本地包即用即弃,不留仓库残渣
         _ssh_run(key, host,
                  f"mkdir -p {app}/releases/{ver} && "
                  f"tar -xzf {app}/releases/{ver}.tar.gz -C {app}/releases/{ver} && "
                  f"rm -f {app}/releases/{ver}.tar.gz && "
                  f"chown -R \"$(id -u):$(id -g)\" {app}/releases/{ver}")
+
+        # 3.5 持久件软链(007 实证缺口):.env/数据目录属服务器运行时状态,release
+        #     内不存在——不挂链,翻转后应用读到空 .env + 全新空库(生产数据隐形)。
+        #     persist 配置项逐个:app 根存在才挂;.env 缺失不建(差异检查会报)
+        for item in conf.get("persist", []):
+            _ssh_run(key, host,
+                     f"test -e {app}/{item} && "
+                     f"ln -sfn {app}/{item} {app}/releases/{ver}/{item} || true")
 
         # 4. 依赖差异前置检查(design §2.3):本地 requirements 哈希 vs 远端
         #    releases/current/.requirements.sha;不一致即中止 FAIL,除非显式放行
