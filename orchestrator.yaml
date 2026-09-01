@@ -24,7 +24,7 @@ deploy:
     target: local
     processes:                               # 合并后自动重启的长驻进程清单(F7)
       - {name: dashboard, pidfile: ".orc-local/dashboard.pid",
-         start_cmd: "python -m orchestrator.dashboard.app"}
+         start_cmd: "python -m orchestrator.daemon.cli dashboard --port 8765"}
     smoke: ["http://127.0.0.1:8765/"]
 thresholds:
   concurrent_max: 2
