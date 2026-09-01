@@ -6,8 +6,11 @@ G2 交付:冒烟检查器(smoke/smoke_passed)+ 差异检查
          (env_key_diff 仅 key 名 / requirements_sha + requirements_changed 哈希差异);
 G3 交付:发布记录章节写入(部署清单/冒烟结果/回滚方案)+ 冒烟失败自动建 incident
          工单+回链+非零退出(design §4,成功/失败/未登记三路径);
-其余(remote/local 流水线、CLI)按 design §接口契约 占位(G4/G5 实现,
-签名与语义先钉死)。
+G4 交付:remote 流水线(design §2):本地构建→tar+ssh 上传→解包留版 chown 归一→
+         依赖/.env 前置→current 回切→restart_cmd→冒烟→发布记录章节写入;
+         CLI __main__(python -m orchestrator.daemon.deploy <tid> [--allow-deps-change]);
+         local 流水线由 G5(test_deploy_local)实现(run_deploy 分发到位,local 暂抛
+         NotImplementedError,签名与语义先钉死)。
 
 deploy target 抽象(design Architecture):target 只有 local/remote 两形态,
 差异全部沉淀为 orchestrator.yaml `deploy:` 段配置值,代码零分支判断凭证/权限形态。
@@ -16,8 +19,12 @@ sudo 卡点不进入代码:配置里就是一行 restart_cmd,决策只改编排�
 from __future__ import annotations
 
 import hashlib
+import subprocess
+import sys
+import tempfile
 import time
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import TYPE_CHECKING
 from urllib import error as _urlerror
@@ -397,23 +404,198 @@ def handle_deploy_failure(pool: Path, ticket, project_dir: str | Path,
     return EXIT_DEPLOY_FAILED
 
 
-# --- 以下为后续切片占位(design §接口契约;G4-G5 实现) -----------------------------
+# --- G4 交付:remote 流水线 + CLI(design §2 / §接口契约) -------------------------
+
+# 依赖差异显式放行后,发布记录必写的 venv 重建说明(服务器不现场装依赖,歧义澄清已定)
+DEPS_CHANGE_NOTE = ("依赖有差异,已按 --allow-deps-change 显式放行;"
+                    "需在发布机重建 venv 并随包上传,服务器不现场装依赖")
+
+
+def _local_run(cmd: str, cwd: str | Path | None = None) -> str:
+    """本地命令执行(返回 stdout,非零退出抛 RuntimeError)。
+    命令序列统一走本函数:G4 单测以 fake runner monkeypatch 记录并断言,
+    不真跑 tar/scp/ssh。"""
+    proc = subprocess.run(cmd, shell=True,
+                          cwd=str(cwd) if cwd is not None else None,
+                          capture_output=True, text=True)
+    if proc.returncode != 0:
+        raise RuntimeError(f"本地命令失败(exit={proc.returncode}): {cmd}")
+    return proc.stdout.strip()
+
+
+def _ssh_run(ssh_key: str, host: str, remote_cmd: str) -> str:
+    """远端命令执行(ssh -i key host <cmd>;BatchMode 免交互、accept-new 首连),
+    返回 stdout;非零退出抛 RuntimeError。单测同样以 fake runner monkeypatch。"""
+    args = ["ssh", "-i", str(Path(ssh_key).expanduser()),
+            "-o", "BatchMode=yes",
+            "-o", "StrictHostKeyChecking=accept-new",
+            host, remote_cmd]
+    proc = subprocess.run(args, capture_output=True, text=True)
+    if proc.returncode != 0:
+        raise RuntimeError(f"远端命令失败(exit={proc.returncode}): {remote_cmd}")
+    return proc.stdout.strip()
+
+
+def _git_describe(project_dir: str | Path) -> str:
+    """版本号(design §2):项目仓 `git describe --tags --always`,空输出判异常。"""
+    out = _local_run("git describe --tags --always", cwd=project_dir)
+    if not out:
+        raise RuntimeError("git describe 无输出,无法确定发布版本")
+    return out
+
+
+def _run_remote(pool: Path, conf: dict, ticket, project_dir: str | Path,
+                allow_deps_change: bool) -> int:
+    """remote 流水线(design §2):本地构建→tar+ssh 上传→解包留版 chown 归一→
+    依赖/.env 前置→current 回切→restart_cmd→冒烟→发布记录章节写入。
+
+    返回 0=全绿;任一步骤失败(含依赖差异未放行、冒烟非全绿)自动建 incident
+    工单+回链并返回 EXIT_DEPLOY_FAILED(不静默放行)。"""
+    pd = Path(project_dir)
+    app = conf["app_dir"].rstrip("/")
+    key, host, restart = conf["ssh_key"], conf["host"], conf["restart_cmd"]
+    try:
+        ver = _git_describe(pd)
+
+        # 1. 本地构建(build_cmd 可选:纯后端项目无前端构建;dist_dir 产物存在性检查)
+        if conf.get("build_cmd"):
+            _local_run(conf["build_cmd"], cwd=pd)
+        if conf.get("dist_dir") and not (pd / conf["dist_dir"]).is_dir():
+            raise RuntimeError(
+                f"构建产物目录不存在: {pd / conf['dist_dir']}(先跑 build_cmd 或核对 dist_dir)")
+
+        # 2. tar.gz 打包:整仓快照(排除 .git),dist+后端代码同包(design §2.1)
+        bundle = Path(tempfile.gettempdir()) / f"orc-deploy-{ticket.project}-{ver}.tar.gz"
+        _local_run(f"tar -czf {bundle} -C {pd} --exclude=.git .")
+
+        # 3. 上传 + 远端解包留版 + chown uid 归一(F2 坑:属主归一为发布账号)
+        _ssh_run(key, host, f"mkdir -p {app}/releases")
+        _local_run(f"scp -i {key} {bundle} {host}:{app}/releases/{ver}.tar.gz")
+        _ssh_run(key, host,
+                 f"mkdir -p {app}/releases/{ver} && "
+                 f"tar -xzf {app}/releases/{ver}.tar.gz -C {app}/releases/{ver} && "
+                 f"rm -f {app}/releases/{ver}.tar.gz && "
+                 f"chown -R \"$(id -u):$(id -g)\" {app}/releases/{ver}")
+
+        # 4. 依赖差异前置检查(design §2.3):本地 requirements 哈希 vs 远端
+        #    releases/current/.requirements.sha;不一致即中止 FAIL,除非显式放行
+        remote_sha = _ssh_run(key, host,
+                              f"test -f {app}/releases/current/.requirements.sha "
+                              f"&& cat {app}/releases/current/.requirements.sha || echo ''")
+        local_sha = requirements_sha(pd / conf["requirements"])
+        deps_changed = requirements_changed(pd / conf["requirements"], remote_sha or None)
+        if deps_changed and not allow_deps_change:
+            detail = (f"依赖差异中止:本地 {conf['requirements']} sha={local_sha} 与远端 "
+                      f"releases/current/.requirements.sha={remote_sha or '<无基准>'} 不一致。"
+                      f"处置:发布单显式声明依赖变更处置(发布机重建 venv 随包上传,"
+                      f"服务器不现场装依赖)后以 --allow-deps-change 放行;或先单独更新依赖。")
+            return handle_deploy_failure(pool, ticket, pd, conf, detail=detail)
+
+        # 5. 记录本次发布依赖基准(下次部署以本版为准比对)
+        _ssh_run(key, host, f"echo {local_sha} > {app}/releases/{ver}/.requirements.sha")
+
+        # 6. .env 差异检查(design §2.4):远端只回传 key 名(cut -d= -f1),
+        #    值不出远端/输出/记录(R9 密钥不落库)
+        remote_keys = _ssh_run(key, host,
+                               f"test -f {conf['remote_env']} "
+                               f"&& cut -d= -f1 {conf['remote_env']} || echo ''")
+        env_diff = env_key_diff(pd / conf["env_example"], _parse_env_keys(remote_keys))
+
+        # 7. 回滚基准:回切前记下 current 指向的上一版(首装无 current → 占位符)
+        cur = _ssh_run(key, host,
+                       f"test -L {app}/current && readlink {app}/current || echo ''")
+        prev_version = Path(cur).name if cur else None
+
+        # 8. current 回切 + 执行 restart_cmd(design §2.5)
+        _ssh_run(key, host, f"ln -sfn releases/{ver} {app}/current && {restart}")
+
+        # 9. 冒烟(design §3)
+        results = smoke(conf["smoke"])
+        if not smoke_passed(results):
+            # 失败记录的回滚说明带上具体上一版(回切前已读到),可照抄执行
+            rollback = rollback_plan(conf, prev_version=prev_version, restart_cmd=restart)
+            return handle_deploy_failure(pool, ticket, pd, conf, results=results,
+                                         rollback=rollback)
+
+        # 10. 发布记录章节写入(design §4 成功路径):部署清单/冒烟结果/回滚方案
+        deps_note = (DEPS_CHANGE_NOTE if deps_changed and allow_deps_change
+                     else "无差异(与 releases/current 基准一致)")
+        manifest = render_deploy_manifest(
+            version=ver, target="remote", when=datetime.now(timezone.utc).isoformat(),
+            deps_note=deps_note, env_diff=env_diff)
+        rollback = rollback_plan(conf, prev_version=prev_version, restart_cmd=restart)
+        record = release_record_path(pd, ticket.id)
+        if record is not None:
+            write_release_record(record,
+                                 [manifest, render_smoke_section(results), rollback],
+                                 title=f"发布记录:{ticket.id}")
+        return 0
+    except Exception as e:  # noqa: BLE001 — 构建/打包/上传/ssh 任一环节失败:不静默
+        return handle_deploy_failure(pool, ticket, pd, conf, detail=str(e))
 
 
 def run_deploy(pool, cfg: dict, ticket, project_dir: str | Path,
                allow_deps_change: bool = False) -> int:
-    """部署入口(design §2/§5,G4/G5 实现):按 ticket.project 的 deploy 配置执行
-    remote/local 流水线 + 冒烟 + 发布记录章节写入;返回 0=全绿;
-    失败自动建 incident 工单+回链并**非零退出**(不静默放行)。"""
-    raise NotImplementedError("由 G4/G5(test_deploy_remote/test_deploy_local)实现")
+    """部署入口(design §2/§5):按 ticket.project 的 deploy 配置执行 remote/local
+    流水线 + 冒烟 + 发布记录章节写入;返回 0=全绿;失败自动建 incident 工单+回链并
+    **非零退出**(不静默放行)。未登记 deploy 配置:部署清单章节写显式声明
+    '未登记 deploy,本单纯代码交付' 并返回 0(纯代码交付,语义由审批人复核)。"""
+    conf = load_deploy_config(cfg, ticket.project, project_dir=project_dir)
+    if conf is None:
+        record = release_record_path(project_dir, ticket.id)
+        if record is not None:
+            write_release_record(record, [render_unregistered_deploy()],
+                                 title=f"发布记录:{ticket.id}")
+        return 0
+    if conf["target"] == "remote":
+        return _run_remote(pool, conf, ticket, project_dir, allow_deps_change)
+    raise NotImplementedError("local 流水线由 G5(test_deploy_local)实现")
+
+
+def _load_cfg() -> dict:
+    """CLI 配置加载(orchestrator.yaml,与 cli.py 同约定);单测 monkeypatch 注入测试配置。"""
+    import yaml
+    return yaml.safe_load(Path("orchestrator.yaml").read_text(encoding="utf-8"))
 
 
 def main(argv: list[str] | None = None) -> int:
-    """CLI(G4 实现):python -m orchestrator.daemon.deploy <tid> [--allow-deps-change];
-    release 角色与人工共用同一入口。"""
-    raise NotImplementedError("由 G4(test_deploy_remote)实现")
+    """CLI(design §接口契约):python -m orchestrator.daemon.deploy <tid> [--allow-deps-change];
+    release 角色与人工共用同一入口,返回部署退出码(0=全绿)。"""
+    import argparse
+    from orchestrator.daemon.gates import project_dir_for
+    from orchestrator.daemon.ticket import load_ticket
+
+    p = argparse.ArgumentParser(
+        prog="python -m orchestrator.daemon.deploy",
+        description="按 ticket.project 的 deploy 配置执行部署+冒烟(T-2026-0901-004)")
+    p.add_argument("tid", help="工单 id(T-YYYY-MMDD-NNN)")
+    p.add_argument("--allow-deps-change", action="store_true",
+                   help="依赖差异显式放行:发布记录必写 venv 重建说明"
+                        "(服务器不现场装依赖,歧义澄清已定)")
+    args = p.parse_args(argv)
+
+    cfg = _load_cfg()
+    pool = Path(cfg.get("pool", "pool"))
+    try:
+        ticket = load_ticket(pool, args.tid)
+    except Exception as e:  # noqa: BLE001 — 工单缺失/损坏:CLI 报错退出,不 traceback
+        print(f"error: 加载工单 {args.tid} 失败: {e}", file=sys.stderr)
+        return 1
+    pd = project_dir_for(cfg, ticket.project)
+    if pd is None:
+        print(f"error: 项目 {ticket.project} 未在 orchestrator.yaml projects 登记,无法部署",
+              file=sys.stderr)
+        return 1
+    try:
+        return run_deploy(pool, cfg, ticket, pd,
+                          allow_deps_change=args.allow_deps_change)
+    except NotImplementedError as e:  # local 形态 G5 交付前显式报错
+        print(f"error: {e}", file=sys.stderr)
+        return 1
+    except ValueError as e:  # 配置非法等:响亮报错
+        print(f"error: {e}", file=sys.stderr)
+        return 1
 
 
 if __name__ == "__main__":
-    import sys
     sys.exit(main())
