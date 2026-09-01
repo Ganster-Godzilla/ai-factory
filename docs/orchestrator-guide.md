@@ -73,6 +73,7 @@ python -m orchestrator.daemon.cli advance <id> . --fake --consult-fake  # 失败
 
 - **是什么**:relay 的第三后端 `zen-kimi`(OpenCode Zen,付费)。k3 双 key 全部 429/冷却时,流量**自动溢出**到 Zen 的 Kimi 模型,k3 链路不断流;k3 恢复(30 分钟冷却探测)后自动切回,无需操作。
 - **key**:`D:\Tool\keys\opencode.env`(Zen 控制台创建,粘贴进 `KEY=`)。改 key 后须重启 relay 生效(杀 8787 进程 → `wscript D:\Tool\kimi-relay.vbs`)。
+- **前置:Zen 账户须有余额**(0 余额时 zen-kimi 全 401 → 冷却,兜底形同虚设;免费模型亦需在控制台启用)。余额是 Zen 侧状态,充值后**无需重启 relay**,兜底自动生效。
 - **手动钉选**(调试/压测用):`curl -X POST http://127.0.0.1:8787/__use/zen-kimi`;恢复自动:`/__use/auto`。
 - **计费**:Zen 消耗**不占** k3 周水位闸(闸只合计 kimi* 后端);按 `rates.opencode`(¥4.3/¥21.6 per 1M)周对账入台账:
   ```bash
