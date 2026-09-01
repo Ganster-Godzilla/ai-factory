@@ -416,16 +416,44 @@ def test_run_deploy_unregistered_writes_explicit_note(pool, tmp_path):
     assert "本单纯代码交付" in text
 
 
-def test_run_deploy_local_deferred_to_g5(pool, tmp_path):
+def test_run_deploy_local_now_dispatches_pipeline(pool, tmp_path, monkeypatch):
+    """G5 交付后 local 不再 NotImplemented:run_deploy 按 local 流水线执行并全绿
+    (边界验证;细节覆盖在 test_deploy_local.py)。"""
     pd = _project(tmp_path)
     t = new_ticket(pool, project="ai-factory", summary="local", created_by="test")
+    tid_dir = pd / "document" / "business" / f"{t.id}-local测试"
+    (tid_dir / "05_部署交付").mkdir(parents=True)
     local_cfg = {"deploy": {"ai-factory": {
         "target": "local",
         "processes": [{"name": "x", "pidfile": "x.pid", "start_cmd": "echo x"}],
         "smoke": ["http://127.0.0.1:9/"],
     }}, "projects": {"ai-factory": str(pd)}}
-    with pytest.raises(NotImplementedError, match="G5"):
-        run_deploy(pool, local_cfg, t, pd)
+    # 不真杀进程/不发 HTTP:注入 fake 进程操作与冒烟(首启分支:无旧 pid)
+    calls: list[tuple] = []
+    monkeypatch.setattr(deploy, "_read_pid", lambda pf: None)
+    monkeypatch.setattr(deploy, "_pid_alive", lambda pid: True)
+    monkeypatch.setattr(deploy, "_terminate_pid",
+                        lambda pid: calls.append(("term", pid)))
+    monkeypatch.setattr(deploy, "_spawn_process",
+                        lambda cmd, cwd=None, log_path=None: (
+                            calls.append(("spawn", cmd, str(cwd))), 9999)[1])
+    monkeypatch.setattr(deploy, "_write_pid",
+                        lambda pf, pid: calls.append(("write", pid)))
+    monkeypatch.setattr(deploy, "_local_run",
+                        lambda cmd, cwd=None: "v1.2.3" if "describe" in cmd else "")
+    monkeypatch.setattr(deploy, "smoke",
+                        lambda urls, *a, **k: [SmokeResult(url=urls[0], status=200,
+                                                           elapsed_ms=1, ok=True)])
+
+    code = run_deploy(pool, local_cfg, t, pd)
+
+    assert code == 0
+    assert [c[0] for c in calls] == ["spawn", "write"]   # 首启:无 terminate
+    record = release_record_path(pd, t.id)
+    assert record is not None and record.is_file()
+    text = record.read_text(encoding="utf-8")
+    assert f"## {SECTION_DEPLOY}" in text and "`local`" in text
+    assert f"## {SECTION_SMOKE}" in text and "全绿" in text
 
 
 # --- CLI __main__(design §接口契约) ----------------------------------------------

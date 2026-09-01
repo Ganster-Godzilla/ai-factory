@@ -74,10 +74,14 @@ ARTIFACT_MANIFEST: dict[str, dict] = {
         "artifacts": [{
             "path": "document/business/{tid_dir}/05_部署交付/发布记录.md",
             "role": "release",
-            "require_sections": ["合并清单", "版本", "回滚方案"],
+            # T-2026-0901-004 扩三章:部署清单/冒烟结果/回滚方案(release 契约补"部署"环节)。
+            # 前三章由发布员写(合并清单/版本),部署三章由 deploy 脚本写入
+            # (orchestrator/daemon/deploy.py SECTION_DEPLOY/SECTION_SMOKE/SECTION_ROLLBACK
+            # 与本节名字面对齐,勿改字面;未登记 deploy 的项目也写部署清单显式声明)。
+            "require_sections": ["合并清单", "版本", "部署清单", "冒烟结果", "回滚方案"],
             "require_content": [],
         }],
-        "human_checklist": ["回滚方案可执行"],
+        "human_checklist": ["回滚方案可执行", "部署清单语义合理(含未登记 deploy 的显式声明)"],
     },
     "P5_MONITOR": {
         "gate_edge": ("monitoring", "done"),
