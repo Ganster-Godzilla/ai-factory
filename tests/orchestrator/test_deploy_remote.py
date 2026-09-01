@@ -133,8 +133,9 @@ def fake_smoke(monkeypatch):
     return install
 
 
-def _bundle(ver: str) -> Path:
-    return Path(tempfile.gettempdir()) / f"orc-deploy-sk-video-studio-{ver}.tar.gz"
+def _bundle(pd: Path, ver: str) -> Path:
+    # 打包落项目根(相对包名,防盘符冒号被 GNU tar 当远程主机歧义,007 实证)
+    return pd / ".orc-local" / f"orc-deploy-sk-video-studio-{ver}.tar.gz"
 
 
 def _unpack_cmd(ver: str) -> str:
@@ -162,16 +163,17 @@ def test_remote_full_green_sequence_and_record(pool, tmp_path, monkeypatch, fake
     code = run_deploy(pool, _cfg(pd), t, pd)
 
     assert code == 0
-    # 本地命令序列:git describe → 构建 → tar 打包 → scp 上传
-    bundle = _bundle(ver)
+    # 本地命令序列:git describe → 构建 → tar 打包(相对包名,防盘符冒歧义)→ scp 上传
+    bundle = _bundle(pd, ver)
     assert [c for c, _ in runner.local] == [
         "git describe --tags --always",
         "npm run build --prefix apps/web",
-        f"tar -czf {bundle} -C {pd} --exclude=.git .",
+        f"tar -czf .orc-local/orc-deploy-sk-video-studio-{ver}.tar.gz --exclude=.git --exclude=./.orc-worktrees --exclude=.venv --exclude=node_modules --exclude=__pycache__ --exclude=./data --exclude=./.runtime --exclude=./.env --exclude=./.orc-local --exclude=*.tar.gz .",
         f"scp -i {KEY} {bundle} {HOST}:{APP}/releases/{ver}.tar.gz",
     ]
     assert runner.local[0][1] == str(pd)  # git describe 在项目 checkout 下执行
     assert runner.local[1][1] == str(pd)  # 构建在项目 checkout 下执行
+    assert runner.local[2][1] == str(pd)  # tar 在项目根打包(相对包名)
     # 远端命令序列:mkdir → 解包留版+chown 归一 → 依赖前置 → sha 落档 →
     # .env key 名 → readlink → 回切+重启
     assert [c for _, _, c in runner.ssh] == [
@@ -219,10 +221,10 @@ def test_remote_without_build_cmd_skips_build(pool, tmp_path, monkeypatch, fake_
     code = run_deploy(pool, cfg, t, pd)
 
     assert code == 0
-    bundle = _bundle(ver)
+    bundle = _bundle(pd, ver)
     assert [c for c, _ in runner.local] == [
         "git describe --tags --always",
-        f"tar -czf {bundle} -C {pd} --exclude=.git .",
+        f"tar -czf .orc-local/orc-deploy-sk-video-studio-{ver}.tar.gz --exclude=.git --exclude=./.orc-worktrees --exclude=.venv --exclude=node_modules --exclude=__pycache__ --exclude=./data --exclude=./.runtime --exclude=./.env --exclude=./.orc-local --exclude=*.tar.gz .",
         f"scp -i {KEY} {bundle} {HOST}:{APP}/releases/{ver}.tar.gz",
     ]
 

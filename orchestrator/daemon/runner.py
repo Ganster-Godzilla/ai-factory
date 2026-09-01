@@ -369,11 +369,10 @@ def advance_once(pool: Path, ticket_id: str, adapter: HarnessAdapter,
         if t.state == "p5_releasing":
             suspend(pool, t, actor="system", reason=f"发布失败: {result.status}",
                     reason_code="release_failed")
-            from orchestrator.daemon.ticket import new_ticket as _nt
-            inc = _nt(pool, t.project, f"发布失败: {t.id} {t.summary}",
-                      created_by="system", type="incident", related_ticket=t.id)
-            # 原单事件流回链:从事故单 related_ticket 与原单 incident_created 双向可查
-            append_event(pool, t.id, "system", "incident_created", incident=inc.id)
+            # 事故单收口到 incident.create_incident(T-2026-0901-021 去重:
+            # 已有未关闭 incident 时复用,重试循环不再雪崩建单);双向留痕不变
+            from orchestrator.daemon.incident import create_incident as _ci
+            _ci(pool, t, f"发布失败: {t.id} {t.summary}")
         else:
             suspend(pool, t, actor="system", reason=f"{role} 执行失败: {result.status}",
                     reason_code=ROLE_SUSPEND_CODE.get(t.state))

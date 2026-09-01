@@ -1,0 +1,9 @@
+- id: D1
+  title: "incident.py 去重 create_incident + 单测三态"
+  acceptance_cmd: "cd /d/workspace/ai-factory && python -m pytest tests/orchestrator/test_incident.py -q"
+  scope: ["orchestrator/daemon/incident.py", "tests/orchestrator/test_incident.py"]
+- id: D2
+  title: "deploy/runner 收口调用 + 全量验证 + 04/05 收尾"
+  acceptance_cmd: "cd /d/workspace/ai-factory && python -m pytest tests/ -q && python scripts/check-pool-load.py"
+  scope: ["orchestrator/daemon/deploy.py", "orchestrator/daemon/runner.py"]
+  depends_on: [D1]

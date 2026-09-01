@@ -19,6 +19,9 @@ deploy:
     env_example: ".env.example"              # 只比 key 名,值永不回传/入记录
     remote_env: "/data/apps/sk-video-studio/.env"
     restart_cmd: "sudo -n systemctl restart sk-api"  # sudo 白名单/User=deploy 二选一只改这里
+    # 持久件(007 实证):release 内不存在,部署时从 app 根软链挂入——.env 与
+    # 生产 SQLite/媒体库(data/),不挂则翻转后应用读到空配置+全新空库
+    persist: [".env", "data"]
     smoke: ["http://47.109.84.154/api/health", "http://47.109.84.154/"]
   ai-factory:
     target: local
