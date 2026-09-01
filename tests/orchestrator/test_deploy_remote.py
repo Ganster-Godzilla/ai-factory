@@ -13,7 +13,6 @@ restart_cmd→冒烟→发布记录章节写入;CLI __main__。
 - 未登记 deploy:显式声明"未登记 deploy,本单纯代码交付"
 - CLI __main__:tid 解析 / --allow-deps-change 透传 / 未知工单与未登记项目报错退出
 """
-import tempfile
 from pathlib import Path
 
 import pytest
