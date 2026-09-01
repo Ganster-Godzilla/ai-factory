@@ -75,6 +75,19 @@ def test_p4_p5_artifacts():
     assert p4["path"] == "document/business/{tid_dir}/04_测试/验收报告.md"
     assert set(p4["require_sections"]) == {"环境", "范围", "用例结果", "结论"}
     rel = ARTIFACT_MANIFEST["P5_RELEASE"]["artifacts"][0]
-    assert set(rel["require_sections"]) == {"合并清单", "版本", "回滚方案"}
+    assert set(rel["require_sections"]) == {"合并清单", "版本", "部署清单",
+                                            "冒烟结果", "回滚方案"}
     mon = ARTIFACT_MANIFEST["P5_MONITOR"]["artifacts"][0]
     assert set(mon["require_sections"]) == {"观察窗", "健康检查", "结论"}
+
+
+def test_p5_release_sections_sync_with_deploy():
+    """G6:门禁章节与 deploy.py 章节常量同源(勿改字面,契约同步)。
+
+    deploy.py 写"部署三章"(部署清单/冒烟结果/回滚方案),artifacts.py 门禁校验同名单;
+    任一改动漂移即此用例红。合并清单/版本由发布员写,不在此校验。"""
+    from orchestrator.daemon.deploy import (SECTION_DEPLOY, SECTION_ROLLBACK,
+                                            SECTION_SMOKE)
+    rel = ARTIFACT_MANIFEST["P5_RELEASE"]["artifacts"][0]
+    sections = set(rel["require_sections"])
+    assert {SECTION_DEPLOY, SECTION_SMOKE, SECTION_ROLLBACK} <= sections
