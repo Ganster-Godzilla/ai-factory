@@ -11,6 +11,7 @@
 ## Done
 | 日期 | 事项 |
 |---|---|
+| 2026-09-01 | **T-2026-0901-004 部署契约交付(发布 v1.0.0,进观察窗)**:release 契约补"部署"环节——发布=合并→tag→deploy 脚本→冒烟→记录五步,部署执行在脚本里不靠人记得;deploy.py 单模块 + orchestrator.yaml deploy 段(remote/local 双形态)、冒烟检查器(URL 重试全 200)、依赖/.env 差异前置(.env 只比 key 名)、失败自动建 incident+回滚方案可照抄、artifacts P5 扩三章+SKILL 五步契约+deploy-runbook 五坑;G7 本地演示+失败路径演示、G8 sk-video-studio 真机远程演示均留痕;P4 黑盒 8/8 全绿。发布员实跑全量 353 绿(5 失败为沙箱环境性存量,bash CreateFileMapping 被拒,基线同款已核);check-pool-load 0 bad;deploy local 流水线 exit 0 冒烟 200;tag v1.0.0(本仓首个),合 main 940d097 |
 | 2026-09-01 | **T-2026-0901-006 relay 翻译层 zen-k3 兜底(incident)交付,进观察窗**:k3 双 key 周额度耗尽双双冷却 502 断流,boss 当面指出方案 B 未覆盖核心诉求;relay 内置 Anthropic↔OpenAI 翻译(relay-translate.js 纯函数)+ zen-k3 第三后端,双 kimi 冷却自动切 kimi-k3;修 /v1/v1 404 与 gzip 爆解析两个集成 bug;node 14 绿(活集成 JSON/SSE/真实工具调用)+pytest 358 绿;claude -p 全程 zen 出字;relay c8d627a/factory 0f5cf00。成本警示:兜底单会话 ~¥10 输入价,救命通道非日常 |
 | 2026-09-01 | **T-2026-0901-001 模型网关接入 OpenCode Zen(方案 B)交付,进观察窗**:原 Anthropic 兜底方案实测证伪(/messages 全模型 500/disabled),boss 决策改 **zen 独立 OpenAI 路由组**(relay /zen/<path> 透传,独立计量不进 k3 水位,rates.opencode ¥21.6/108 周对账);修两个真 bug(/__use 连字符截断、gzip 绕过 token 统计);node 7 绿(活集成 kimi-k3 200)+pytest 11 绿+生产实测 200;relay e43aefc / factory 25f9b19。**R10 同日晋升 E2**(两起执行脱钩触发红线);事故:钉选未验证后端全停 8 分钟(入 ops-lessons#17)。遗留另立:F6 dsh provider 接线、F7 claude 兜底翻译层、F5 Zen 硬现金闸 |
 | 2026-08-30 | **T-2026-0830-001 产物布局统一交付**:全阶段产物工单文件夹化(00_提案/01_需求分析/02_设计文档/04_测试/05_部署交付),manifest 9 路径+resolve_artifact_path 统一解析器;两仓迁移(ai-factory 9 夹+sk 4 夹);本单全程新门禁 dogfood 通过,合 main,工单 done |
