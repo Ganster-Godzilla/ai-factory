@@ -63,7 +63,7 @@ python -m orchestrator.daemon.cli advance <id> . --fake --consult-fake  # 失败
 
 ## 密钥与网关
 
-- 全部 key 在 `D:\Tool\keys\`:k3-a.env / k3-b.env(k3 共享池)/ deepseek.env / glm.env
+- 全部 key 在 `D:\Tool\keys\`:k3-a.env / k3-b.env / k3-c.env(k3 共享池三账号)/ opencode.env(Zen 兜底)/ deepseek.env / glm.env
 - **不要在任何项目目录、git 仓库、聊天里放 key**
 - 网关(D:\Tool\kimi-relay.js,端口 8787)管 k3 双 key  failover 和周水位;`/__stats` 看用量
 - DeepSeek/GLM 由 dsh 直连,不经过网关
