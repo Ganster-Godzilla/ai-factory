@@ -1,0 +1,9 @@
+- id: K1
+  title: "BACKENDS 加 kimi3 + 测试断言 4 后端"
+  acceptance_cmd: "cd /d/Tool && node --test test/relay-keys.test.js test/relay-stats.test.js test/relay-translate.test.js test/relay-zen.test.js"
+  scope: ["D:/Tool/kimi-relay.js", "D:/Tool/test/relay-keys.test.js", "D:/Tool/test/relay-zen.test.js"]
+- id: K2
+  title: "guide 密钥清单 + 生产验证(钉选 200/auto 恢复)+ 04/05 文档收尾"
+  acceptance_cmd: "curl -s http://127.0.0.1:8787/__status"
+  scope: ["docs/orchestrator-guide.md"]
+  depends_on: [K1]
