@@ -26,8 +26,8 @@ def fake_relay():
         def do_GET(self):
             body = json.dumps({
                 "kimi1": {"weekInputTokens": 700, "weekOutputTokens": 200},
-                "zen-kimi": {"weekId": "2026-W36",
-                             "weekInputTokens": 1_000_000, "weekOutputTokens": 100_000},
+                "zen": {"weekId": "2026-W36",
+                        "weekInputTokens": 1_000_000, "weekOutputTokens": 100_000},
             }).encode()
             self.send_response(200)
             self.send_header("content-type", "application/json")

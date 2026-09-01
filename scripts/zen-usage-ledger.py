@@ -1,7 +1,7 @@
 #!/usr/bin/env python
-"""Zen 兜底消耗周对账(T-2026-0901-001,R9 账不可瞎)。
+"""Zen 消耗周对账(T-2026-0901-001 方案 B,R9 账不可瞎)。
 
-读 relay /__stats 的 zen-kimi 周 tokens,按 orchestrator.yaml rates.opencode
+读 relay /__stats 的 zen 路由组周 tokens,按 orchestrator.yaml rates.opencode
 折算 CNY 入 ledger(estimated=true,复审对账用)。幂等:同一 ISO 周已入过账则跳过。
 用法:
   python scripts/zen-usage-ledger.py            # 入账(本周未入过才写)
@@ -31,10 +31,10 @@ def iso_week_id(d: date | None = None) -> str:
 
 
 def fetch_zen_week(url: str, timeout: float = 5.0) -> dict | None:
-    """relay /__stats → zen-kimi 的 {weekId, input, output};不可达/无此后端 → None。"""
+    """relay /__stats → zen 路由组的 {weekId, input, output};不可达/无此路由 → None。"""
     with urllib.request.urlopen(f"{url}/__stats", timeout=timeout) as r:
         stats = json.loads(r.read().decode("utf-8"))
-    b = stats.get("zen-kimi")
+    b = stats.get("zen")
     if not b:
         return None
     return {"weekId": b.get("weekId") or iso_week_id(),
@@ -83,7 +83,7 @@ def main(argv: list[str] | None = None) -> int:
         print("/__stats 无 zen-kimi 后端,无需对账")
         return 0
     cost = week_cost_cny(week, rates)
-    print(f"zen-kimi {week['weekId']}: input={week['input']} output={week['output']} "
+    print(f"zen {week['weekId']}: input={week['input']} output={week['output']} "
           f"→ ¥{cost}(rates {rates.get('input_per_m')}/{rates.get('output_per_m')} per 1M)")
     if week["input"] == 0 and week["output"] == 0:
         print("本周无消耗,不入账")

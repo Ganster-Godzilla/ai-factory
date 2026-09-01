@@ -8,16 +8,17 @@
 
 ## What
 
-1. relay 新增第三后端 zen-kimi(base=https://opencode.ai/zen,model 重写为 Zen 上 Kimi 模型 id),K1/K2 冷却时自动溢出;恢复靠现有 30min 冷却探测
-2. k3 周水位闸只合计 kimi* 后端,zen-kimi 不污染 150M 预算(防 T-001 类闸误触)
-3. orchestrator.yaml rates.opencode(¥4.3/¥21.6 per 1M tokens,汇率假设注释);scripts/zen-usage-ledger.py 读 /__stats 的 zen-kimi 周 tokens 折算 CNY 入 ledger(estimated=true)
-4. guide 文档新增「Zen 兜底」一节:语义、钉选 /__use/zen-kimi、对账脚本用法
+1. relay 新增 **zen 独立 OpenAI 路由组**:`/zen/<path>` 透传 `opencode.ai/zen/v1/<path>`,key 注入,模型客户端自选,独立计量(2026-09-01 变更:原"Anthropic 兜底后端"方案被实测证伪,Zen /messages 对本账号全部 500/disabled)
+2. k3 周水位闸只合计 kimi* 后端,zen 计量不污染 150M 预算(防 T-001 类闸误触)
+3. orchestrator.yaml rates.opencode(kimi-k3 ¥21.6/¥108 per 1M tokens,汇率假设注释);scripts/zen-usage-ledger.py 读 /__stats 的 zen 周 tokens 折算 CNY 入 ledger(estimated=true)
+4. guide 文档「Zen 路由组」一节:用法、计量、对账
 
 ## 验收标准
 
-- `cd /d/Tool && node --test test/` 全绿(含新增 zen 用例:3 后端、钉选、model 重写)
-- `pytest tests/orchestrator/test_gateway.py` 等全绿:stats 含 zen-kimi 时水位不含其 tokens
-- 重启 relay 后 /__status 显示 3 后端;钉选 zen-kimi 发 claude 格式 /v1/messages 得 200
-- /__stats 中 zen-kimi 周 tokens 增长且 k3_effective_week_tokens 不含 zen 部分
-- zen-usage-ledger.py dry-run 产出 estimated=true 台账条目
-- claude -p 经 relay 真实调用成功(主走 kimi,zen 仅冷却时承接)
+- `cd /d/Tool && node --test test/relay-*.test.js` 全绿(failover 组双 kimi 不动;活集成:真实 key 下 /zen/chat/completions kimi-k3 → 200 + OpenAI 形状 + stats 落账)
+- `pytest tests/orchestrator/test_gateway.py tests/orchestrator/test_zen_ledger.py` 等全绿:stats 含非 kimi 键时水位不计
+- 生产 relay 重启后 /__status 双 kimi + routes.zen;实测 /zen/chat/completions 200
+- /__stats 中 zen 周 tokens 独立增长,kimi 水位不变
+- zen-usage-ledger.py --dry-run 产出估算金额;正式入账 estimated=true
+- kimi 主链路回归:claude -p 经 relay 成功(不受影响)
+- **变更留痕**:Anthropic 方案证伪的实测数据与决策记入 design.md 变更记录与本单事件流
