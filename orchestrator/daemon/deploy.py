@@ -4,8 +4,10 @@
 G1 交付:模块骨架 + 配置 schema 加载校验(load_deploy_config);
 G2 交付:冒烟检查器(smoke/smoke_passed)+ 差异检查
          (env_key_diff 仅 key 名 / requirements_sha + requirements_changed 哈希差异);
-其余(remote/local 流水线、发布记录章节写入、失败建 incident、CLI)按
-design §接口契约 占位(G3-G5 逐切片实现,签名与语义先钉死)。
+G3 交付:发布记录章节写入(部署清单/冒烟结果/回滚方案)+ 冒烟失败自动建 incident
+         工单+回链+非零退出(design §4,成功/失败/未登记三路径);
+其余(remote/local 流水线、CLI)按 design §接口契约 占位(G4/G5 实现,
+签名与语义先钉死)。
 
 deploy target 抽象(design Architecture):target 只有 local/remote 两形态,
 差异全部沉淀为 orchestrator.yaml `deploy:` 段配置值,代码零分支判断凭证/权限形态。
@@ -17,8 +19,15 @@ import hashlib
 import time
 from dataclasses import dataclass
 from pathlib import Path
+from typing import TYPE_CHECKING
 from urllib import error as _urlerror
 from urllib import request as _urlrequest
+
+from orchestrator.daemon.artifacts import ARTIFACT_MANIFEST
+from orchestrator.daemon.events import append_event
+
+if TYPE_CHECKING:  # 仅类型标注,避免运行期依赖(events/ticket 无反向依赖)
+    from orchestrator.daemon.ticket import Ticket
 
 # --- 配置 schema(T-2026-0901-004 design §1) ---
 
@@ -240,7 +249,155 @@ def requirements_changed(local_path: str | Path, remote_sha: str | None) -> bool
     return not baseline or local != baseline
 
 
-# --- 以下为后续切片占位(design §接口契约;G3-G5 实现) -----------------------------
+# --- G3 交付:发布记录章节写入 + 失败建 incident(design §4;F4/F5) ------------------
+
+# 发布记录文件路径模板:与 artifacts.py P5_RELEASE 同源(单一事实源,门禁口径一致)。
+# 未登记 deploy 的项目也写"部署清单"章节(design §4:章节仍在,语义由审批人复核)。
+_RELEASE_RECORD_TEMPLATE = ARTIFACT_MANIFEST["P5_RELEASE"]["artifacts"][0]["path"]
+
+# 发布记录章节名(与 P5_RELEASE require_sections 对齐,勿改字面)
+SECTION_DEPLOY = "部署清单"
+SECTION_SMOKE = "冒烟结果"
+SECTION_ROLLBACK = "回滚方案"
+SECTION_FAILURE = "部署失败"
+
+# 部署/冒烟失败退出码:非零即判负,release 角色(dsh)走既有 release_failed 挂起,
+# 不静默放行(design §4)。
+EXIT_DEPLOY_FAILED = 1
+
+# 未登记 deploy 配置项目的显式声明文本(design §4)
+UNREGISTERED_DEPLOY_NOTE = "未登记 deploy,本单纯代码交付"
+
+
+def release_record_path(project_dir: str | Path, ticket_id: str) -> Path | None:
+    """发布记录文件路径(design §4):复用 artifacts.P5_RELEASE 路径模板解析
+    {tid_dir}(工单文件夹多匹配取字典序首个,与门禁解析同源);
+    工单文件夹未建/解析失败 → None(调用方按"记录不可写"处理,失败路径不因此中断)。"""
+    from orchestrator.daemon.artifacts import resolve_artifact_path
+    rel = resolve_artifact_path(Path(project_dir), _RELEASE_RECORD_TEMPLATE, ticket_id)
+    return Path(project_dir) / rel if rel else None
+
+
+def write_release_record(path: str | Path, sections: list[str],
+                         title: str = "发布记录") -> Path:
+    """发布记录章节写入(design §4):把 sections(部署清单/冒烟结果/回滚方案等
+    markdown 章节文本)追加写入发布记录文件;文件不存在先写标题行再追加
+    (发布员先写合并清单/版本、deploy 脚本补部署三章,先后顺序不敏感)。
+    返回写入路径。"""
+    p = Path(path)
+    p.parent.mkdir(parents=True, exist_ok=True)
+    new_file = not p.exists()
+    with p.open("a", encoding="utf-8", newline="\n") as f:
+        if new_file:
+            f.write(f"# {title}\n\n")
+        for section in sections:
+            f.write(section.rstrip("\n") + "\n\n")
+    return p
+
+
+def render_deploy_manifest(*, version: str, target: str, when: str,
+                           deps_note: str | None = None,
+                           env_diff: list[str] | None = None) -> str:
+    """部署清单章节(design §4 成功路径):版本/目标/时间 + 依赖与 .env 差异清单。
+    env_diff 仅 key 名(值永不入记录/输出,R9 密钥不落库);None=未检查(省略该行)。"""
+    lines = [f"## {SECTION_DEPLOY}", "",
+             f"- 版本:`{version}`",
+             f"- 目标:`{target}`",
+             f"- 时间:`{when}`"]
+    if deps_note is not None:
+        lines.append(f"- 依赖差异:{deps_note}")
+    if env_diff is not None:
+        if env_diff:
+            lines.append(f"- .env 差异(仅 key 名):`{', '.join(sorted(env_diff))}`")
+        else:
+            lines.append("- .env 差异:无")
+    return "\n".join(lines) + "\n"
+
+
+def render_unregistered_deploy() -> str:
+    """未登记 deploy 配置项目的部署清单章节(design §4):显式声明
+    '未登记 deploy,本单纯代码交付',章节仍在,语义由审批人复核。"""
+    return f"## {SECTION_DEPLOY}\n\n- {UNREGISTERED_DEPLOY_NOTE}\n"
+
+
+def render_smoke_section(results: list[SmokeResult]) -> str:
+    """冒烟结果章节(design §3):每个 URL 的状态码/耗时全量留痕 + 总体判定
+    (任一非 200 即整体失败)。"""
+    lines = [f"## {SECTION_SMOKE}", ""]
+    for r in results:
+        status = str(r.status) if r.status is not None else "连接失败"
+        verdict = "PASS" if r.ok else "FAIL"
+        lines.append(f"- `{r.url}` → {status}, {r.elapsed_ms}ms → {verdict}")
+    verdict = "全绿,发布成功" if smoke_passed(results) else "存在失败,发布失败"
+    lines += ["", f"**总体判定:{verdict}**"]
+    return "\n".join(lines) + "\n"
+
+
+def rollback_plan(conf: dict, prev_version: str | None = None,
+                  restart_cmd: str | None = None) -> str:
+    """回滚方案章节(design §4):自动生成可照抄命令。
+    remote=回切上一版包 + 重启:`ln -sfn releases/<上一版> current && <restart_cmd>`
+    (上一版包逐版留存于 releases/,回滚不依赖远端在否);
+    local=git tag 回切 + 长驻进程逐条重启。版本未知用占位符,人工补齐即可照抄。"""
+    target = conf.get("target")
+    if target == "remote":
+        prev = prev_version or "<上一版>"
+        cmd = restart_cmd or conf.get("restart_cmd") or "<restart_cmd>"
+        lines = [f"## {SECTION_ROLLBACK}", "",
+                 "1. 回切上一版包并重启(命令可照抄):",
+                 f"   `ln -sfn releases/{prev} current && {cmd}`",
+                 "2. 按部署冒烟清单复验,全 200 才算回滚成功"]
+    else:
+        prev = prev_version or "<上一 tag>"
+        lines = [f"## {SECTION_ROLLBACK}", "",
+                 f"1. git tag 回切(命令可照抄):`git checkout {prev}`",
+                 "2. 重启长驻进程(逐条可照抄):"]
+        for proc in conf.get("processes", []):
+            lines.append(f"   - {proc.get('name', '?')}:`{proc.get('start_cmd')}`")
+        lines.append("3. 按部署冒烟清单复验,全 200 才算回滚成功")
+    return "\n".join(lines) + "\n"
+
+
+def create_incident(pool: Path, ticket, summary: str) -> "Ticket":
+    """冒烟/部署失败自动建 incident 工单(design §4):new_ticket(type=incident,
+    related_ticket=原单) + 原单事件流 incident_created 回链——与 runner.py
+    release 判负同模式:事故单 related_ticket 与原单 incident_created 双向可查。
+    返回新事故单。"""
+    from orchestrator.daemon.ticket import new_ticket
+    inc = new_ticket(pool, ticket.project, summary,
+                     created_by="system", type="incident",
+                     related_ticket=ticket.id)
+    append_event(pool, ticket.id, "system", "incident_created", incident=inc.id)
+    return inc
+
+
+def handle_deploy_failure(pool: Path, ticket, project_dir: str | Path,
+                          conf: dict, *, results: list[SmokeResult] | None = None,
+                          detail: str | None = None,
+                          rollback: str | None = None) -> int:
+    """失败处置(design §4):自动建 incident 工单(related_ticket=原单)+ 原单
+    incident_created 回链 + 发布记录写失败详情与回滚说明;返回非零退出码
+    EXIT_DEPLOY_FAILED——release 角色(dsh)判负走既有 release_failed 挂起,
+    不静默放行。results=冒烟结果留痕;detail=失败详情文本;rollback=回滚说明
+    (缺省按 conf 自动生成 rollback_plan;版本未知时占位符,人工补齐)。"""
+    inc = create_incident(pool, ticket, f"部署/冒烟失败:{ticket.id} {ticket.summary}")
+    blocks = [
+        f"## {SECTION_FAILURE}",
+        f"- 事故单:`{inc.id}`(type=incident, related_ticket 回链原单 `{ticket.id}`)",
+    ]
+    if detail:
+        blocks.append(detail)
+    if results:
+        blocks.append(render_smoke_section(results))
+    blocks.append(rollback if rollback is not None else rollback_plan(conf))
+    record = release_record_path(project_dir, ticket.id)
+    if record is not None:
+        write_release_record(record, blocks,
+                             title=f"发布记录:{ticket.id}(部署失败)")
+    return EXIT_DEPLOY_FAILED
+
+
+# --- 以下为后续切片占位(design §接口契约;G4-G5 实现) -----------------------------
 
 
 def run_deploy(pool, cfg: dict, ticket, project_dir: str | Path,
