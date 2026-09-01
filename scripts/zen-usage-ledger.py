@@ -95,7 +95,7 @@ def main(argv: list[str] | None = None) -> int:
         print("dry-run:不写台账")
         return 0
     entry = append_ledger(pool, "opencode", cost, "cny", "ops-zen-reconcile", "sre",
-                          "kimi-k2.5",
+                          "kimi-k3",
                           tokens={"weekId": week["weekId"],
                                   "input": week["input"], "output": week["output"]},
                           calls=0, estimated=True)

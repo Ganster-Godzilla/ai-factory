@@ -34,13 +34,14 @@ rates:
     input_per_m: 0.0
     cache_hit_per_m: 0.0
     output_per_m: 0.0
-  # OpenCode Zen 兜底(T-2026-0901-001):Kimi K2.5 官网 $0.60/$3.00 per 1M(2026-08 价),
-  # 按汇率 7.2 折算 ¥4.3/¥21.6;改价/换模型改这里。消耗走 scripts/zen-usage-ledger.py
-  # 周对账入账(estimated=true),不占 k3_week_token_budget(那是共享池水位闸)
+  # OpenCode Zen 兜底(T-2026-0901-001):kimi-k3 官网 $3.00/$15.00 per 1M(2026-08 价,
+  # cache read $0.30),按汇率 7.2 折算;改价/换模型改这里。消耗走 scripts/zen-usage-ledger.py
+  # 周对账入账(estimated=true;relay 只记 input/output 总量,未拆 cache,宁高估不低估),
+  # 不占 k3_week_token_budget(那是共享池水位闸)
   opencode:
-    input_per_m: 4.3
-    cache_hit_per_m: 0.0
-    output_per_m: 21.6
+    input_per_m: 21.6
+    cache_hit_per_m: 2.16
+    output_per_m: 108.0
 gateway:
   url: http://127.0.0.1:8787
 keys_dir: D:/Tool/keys
