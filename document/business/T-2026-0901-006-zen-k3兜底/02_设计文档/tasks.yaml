@@ -1,0 +1,13 @@
+- id: T1
+  title: "relay-translate.js 翻译纯函数 + 单测(文本/system/tools/tool_result/SSE)"
+  acceptance_cmd: "cd /d/Tool && node --test test/relay-translate.test.js"
+  scope: ["D:/Tool/relay-translate.js", "D:/Tool/test/relay-translate.test.js"]
+- id: T2
+  title: "kimi-relay.js failover 组加 zen-k3 + 翻译管线接入 + 活集成"
+  acceptance_cmd: "cd /d/Tool && node --test test/relay-keys.test.js test/relay-stats.test.js test/relay-zen.test.js test/relay-translate.test.js"
+  scope: ["D:/Tool/kimi-relay.js", "D:/Tool/test/relay-zen.test.js"]
+  depends_on: [T1]
+- id: T3
+  title: "生产验证:重启+钉选 curl/claude -p 实测+auto 恢复+主链路回归+工单收尾"
+  acceptance_cmd: "curl -s http://127.0.0.1:8787/__status"
+  depends_on: [T2]
