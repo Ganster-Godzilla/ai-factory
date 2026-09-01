@@ -71,7 +71,13 @@ python -m orchestrator.daemon.cli advance <id> . --fake --consult-fake  # 失败
 
 ### Zen 路由组(T-2026-0901-001,方案 B)
 
-- **是什么**:relay 上的独立 OpenAI 路由——`http://127.0.0.1:8787/zen/<path>` 透传到 `opencode.ai/zen/v1/<path>`,key 由 relay 注入,模型客户端自选(如 kimi-k3)。给 dsh、脚本、任何 OpenAI 兼容工具用。**注意:zen 不在 kimi failover 组里**,claude CLI 流量不会走它(Zen Anthropic 端点实测不可用,2026-09-01 证伪留档)。
+- **是什么**:relay 上的独立 OpenAI 路由——`http://127.0.0.1:8787/zen/<path>` 透传到 `opencode.ai/zen/v1/<path>`,key 由 relay 注入,模型客户端自选(如 kimi-k3)。给 dsh、脚本、任何 OpenAI 兼容工具用。
+
+### zen-k3 兜底(T-2026-0901-006)
+
+- **是什么**:relay failover 组的第三后端。**k3 双 key 周额度耗尽(双双冷却)时,claude 流量自动切到 Zen 的 kimi-k3**,链路不断流;kimi 恢复(30 分钟冷却探测)后自动切回,无需操作。原理:relay 内置 Anthropic↔OpenAI 翻译层(Zen Anthropic 端点不可用,2026-09-01 实测留档)。
+- **成本警示**:兜底走 Zen 计费(kimi-k3 $3/$15 per 1M),而 claude 会话输入极大(系统提示+缓存,实测单会话 ~45 万 input ≈ ¥10)——**兜底是救命通道,不是日常通道**;余额烧完 zen-k3 自动冷却,行为回到断流前。
+- **手动钉选**(调试):`/__use/zen-k3`;恢复 `/__use/auto`。
 - **key**:`D:\Tool\keys\opencode.env`(Zen 控制台创建,粘贴进 `KEY=`)。改 key 后须重启 relay 生效(杀 8787 进程 → `wscript D:\Tool\kimi-relay.vbs`)。
 - **前置:Zen 账户须有余额**(0 余额=401;免费模型亦需在控制台启用)。余额是 Zen 侧状态,充值后无需重启 relay。
 - **用法示例**:

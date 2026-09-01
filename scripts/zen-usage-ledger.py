@@ -32,15 +32,17 @@ def iso_week_id(d: date | None = None) -> str:
 
 
 def fetch_zen_week(url: str, timeout: float = 5.0) -> dict | None:
-    """relay /__stats → zen 路由组的 {weekId, input, output};不可达/无此路由 → None。"""
+    """relay /__stats → zen 系(路由组 zen + 翻译兜底 zen-k3)合计 {weekId, input, output}。"""
     with urllib.request.urlopen(f"{url}/__stats", timeout=timeout) as r:
         stats = json.loads(r.read().decode("utf-8"))
-    b = stats.get("zen")
-    if not b:
+    keys = [k for k in ("zen", "zen-k3") if k in stats]
+    if not keys:
         return None
-    return {"weekId": b.get("weekId") or iso_week_id(),
-            "input": int(b.get("weekInputTokens", 0)),
-            "output": int(b.get("weekOutputTokens", 0))}
+    week_id = next((stats[k].get("weekId") for k in keys if stats[k].get("weekId")),
+                   iso_week_id())
+    return {"weekId": week_id,
+            "input": sum(int(stats[k].get("weekInputTokens", 0)) for k in keys),
+            "output": sum(int(stats[k].get("weekOutputTokens", 0)) for k in keys)}
 
 
 def week_cost_cny(week: dict, rates: dict) -> float:
