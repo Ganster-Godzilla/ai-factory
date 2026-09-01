@@ -17,6 +17,7 @@ from datetime import date
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))  # 脚本直跑也能 import 包
+sys.stdout.reconfigure(encoding="utf-8", errors="replace")       # GBK 控制台打印 ¥ 不炸
 
 import yaml  # noqa: E402
 
