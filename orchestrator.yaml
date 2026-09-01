@@ -3,6 +3,29 @@ projects:
   orc-e2e: d:/workspace/tmp/orc-e2e   # M4 e2e 验收项目(T7 登记)
   sk-video-studio: d:/workspace/sk-video-studio   # 商K视频工具(2026-08-27 接入;首个全流程测试项目)
   ai-factory: d:/workspace/ai-factory   # 平台自身(2026-08-28 登记;编排器改进工单走自身流程,吃狗粮)
+# deploy 段(T-2026-0901-004):release 契约补"部署"环节,按项目名登记部署配置。
+# target 只有 local/remote 两形态,差异全部沉淀为配置值(代码零分支判断凭证/权限);
+# 校验规则(target/必填键/路径存在性)在加载时完成,见 orchestrator/daemon/deploy.py。
+deploy:
+  sk-video-studio:
+    target: remote
+    host: "deploy@47.109.84.154"
+    ssh_key: "~/.ssh/sk-aliyun-47"
+    app_dir: "/opt/sk-video-studio"          # 其下 releases/<版本> 逐版留存 + current 软链
+    service: "sk-api"
+    build_cmd: "npm run build --prefix apps/web"   # 前端本地构建 dist(服务器不装 node);实际前端在 apps/web
+    dist_dir: "apps/web/dist"
+    requirements: "apps/api/requirements.txt"      # 依赖差异前置检查基准(实际文件在 apps/api 下)
+    env_example: ".env.example"              # 只比 key 名,值永不回传/入记录
+    remote_env: "/opt/sk-video-studio/.env"
+    restart_cmd: "sudo -n systemctl restart sk-api"  # sudo 白名单/User=deploy 二选一只改这里
+    smoke: ["http://47.109.84.154/api/health", "http://47.109.84.154/"]
+  ai-factory:
+    target: local
+    processes:                               # 合并后自动重启的长驻进程清单(F7)
+      - {name: dashboard, pidfile: ".orc-local/dashboard.pid",
+         start_cmd: "python -m orchestrator.dashboard.app"}
+    smoke: ["http://127.0.0.1:8765/"]
 thresholds:
   concurrent_max: 2
 budgets:
