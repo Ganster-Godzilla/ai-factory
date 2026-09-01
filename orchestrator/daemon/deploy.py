@@ -25,7 +25,6 @@ import shlex
 import signal
 import subprocess
 import sys
-import tempfile
 import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -35,7 +34,6 @@ from urllib import error as _urlerror
 from urllib import request as _urlrequest
 
 from orchestrator.daemon.artifacts import ARTIFACT_MANIFEST
-from orchestrator.daemon.events import append_event
 
 if TYPE_CHECKING:  # 仅类型标注,避免运行期依赖(events/ticket 无反向依赖)
     from orchestrator.daemon.ticket import Ticket
@@ -374,16 +372,11 @@ def rollback_plan(conf: dict, prev_version: str | None = None,
 
 
 def create_incident(pool: Path, ticket, summary: str) -> "Ticket":
-    """冒烟/部署失败自动建 incident 工单(design §4):new_ticket(type=incident,
-    related_ticket=原单) + 原单事件流 incident_created 回链——与 runner.py
-    release 判负同模式:事故单 related_ticket 与原单 incident_created 双向可查。
-    返回新事故单。"""
-    from orchestrator.daemon.ticket import new_ticket
-    inc = new_ticket(pool, ticket.project, summary,
-                     created_by="system", type="incident",
-                     related_ticket=ticket.id)
-    append_event(pool, ticket.id, "system", "incident_created", incident=inc.id)
-    return inc
+    """兼容包装:实现已收口到 orchestrator.daemon.incident(T-2026-0901-021,
+    去重:重试循环重复失败复用同一张未关闭 incident,不再雪崩建单)。
+    保留本函数仅为既有调用点/测试的导入路径不破。"""
+    from orchestrator.daemon.incident import create_incident as _ci
+    return _ci(pool, ticket, summary)
 
 
 def handle_deploy_failure(pool: Path, ticket, project_dir: str | Path,
