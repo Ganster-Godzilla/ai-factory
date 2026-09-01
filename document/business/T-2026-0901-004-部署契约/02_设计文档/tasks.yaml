@@ -1,0 +1,43 @@
+# 任务切片-T-2026-0901-004: release 契约补"部署"环节(local/remote 双形态)
+# 设计依据:document/business/T-2026-0901-004-部署契约/02_设计文档/design.md
+- id: G1
+  title: "deploy.py 骨架 + 配置 schema 加载校验 + orchestrator.yaml 登记双形态配置(sk remote / ai-factory local)"
+  acceptance_cmd: "python -m pytest tests/orchestrator/test_deploy_config.py -q"
+  depends_on: []
+  scope: ["orchestrator/daemon/deploy.py", "orchestrator.yaml", "tests/orchestrator/test_deploy_config.py"]
+- id: G2
+  title: "冒烟检查器 + 差异检查(smoke URL 重试全 200 判定;.env 仅 key 名差异;requirements 哈希差异)"
+  acceptance_cmd: "python -m pytest tests/orchestrator/test_deploy_smoke.py -q"
+  depends_on: [G1]
+  scope: ["orchestrator/daemon/deploy.py", "tests/orchestrator/test_deploy_smoke.py"]
+- id: G3
+  title: "发布记录章节写入(部署清单/冒烟结果/回滚方案)+ 冒烟失败自动建 incident 工单+回链+非零退出"
+  acceptance_cmd: "python -m pytest tests/orchestrator/test_deploy_record.py -q"
+  depends_on: [G1]
+  scope: ["orchestrator/daemon/deploy.py", "tests/orchestrator/test_deploy_record.py"]
+- id: G4
+  title: "remote 流水线:本地构建→tar+ssh 上传→解包留版 chown 归一→依赖/.env 前置→current 回切→restart_cmd→冒烟(fake runner 断言命令序列)+ CLI __main__"
+  acceptance_cmd: "python -m pytest tests/orchestrator/test_deploy_remote.py -q"
+  depends_on: [G1, G2, G3]
+  scope: ["orchestrator/daemon/deploy.py", "tests/orchestrator/test_deploy_remote.py"]
+- id: G5
+  title: "local 流水线:pidfile 长驻进程重启清单 + 本地冒烟(治合并后忘重启)"
+  acceptance_cmd: "python -m pytest tests/orchestrator/test_deploy_local.py -q"
+  depends_on: [G1, G2, G3]
+  scope: ["orchestrator/daemon/deploy.py", "tests/orchestrator/test_deploy_local.py"]
+- id: G6
+  title: "门禁与契约同步:artifacts.py P5_RELEASE 扩三章 + phase5-release SKILL 契约条款 + release 提示词修路径 + docs/deploy-runbook.md 五坑沉淀(F10)"
+  acceptance_cmd: "python -m pytest tests/orchestrator/test_artifacts_manifest.py -q && python -m orchestrator.daemon.doccheck docs/deploy-runbook.md --require-section sudo --require-section venv --require-section nginx --require-section .env"
+  depends_on: [G4, G5]
+  scope: ["orchestrator/daemon/artifacts.py", "plugin/skills/phase5-release/SKILL.md", "orchestrator/roles/prompts/release.md", "docs/deploy-runbook.md", "tests/**"]
+- id: G7
+  title: "local 形态演示 + 失败路径演示:CLI 重启 dashboard 冒烟全绿;登记 404 冒烟 URL 验证 incident 自动建成+回滚说明可照抄,留痕演示记录"
+  acceptance_cmd: "python -m orchestrator.daemon.doccheck document/business/T-2026-0901-004-部署契约/05_部署交付/演示记录.md --require-section 本地演示 --require-section 失败路径演示"
+  depends_on: [G6]
+  scope: ["document/business/T-2026-0901-004-部署契约/**", "orchestrator.yaml"]
+- id: G8
+  title: "remote 形态演示(sk-video-studio):构建→上传→重启→/api/health 与关键路由冒烟 200→前端 200,留痕演示记录(前置:boss 决策 restart_cmd 凭证形态)"
+  acceptance_cmd: "python -m orchestrator.daemon.doccheck document/business/T-2026-0901-004-部署契约/05_部署交付/演示记录.md --require-section 远程演示 --require-section 冒烟结果"
+  depends_on: [G6]
+  scope: ["document/business/T-2026-0901-004-部署契约/**", "orchestrator.yaml"]
+  timeout: 3600
