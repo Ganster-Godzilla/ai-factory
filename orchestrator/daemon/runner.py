@@ -242,8 +242,12 @@ def run_dev_tasks(pool: Path, ticket, adapter: HarnessAdapter,
                 f"--- harness 输出(截断) ---\n{result.output[:500]}"
             )
     if result.status == "done" and task.get("acceptance_cmd"):
+        # 验收超时独立分级(009-S6 实证):回归链 33 段 ~1000s+,固定 600s 必超时误判。
+        # task.acceptance_timeout 优先,缺省跟随 task.timeout,再缺省 600,上限 7200
+        acc_timeout = min(int(task.get("acceptance_timeout")
+                              or task.get("timeout") or 600), 7200)
         try:
-            r = _run_acceptance(task["acceptance_cmd"], wt)
+            r = _run_acceptance(task["acceptance_cmd"], wt, timeout=acc_timeout)
         except subprocess.TimeoutExpired:
             verify = "failed"
             result.status = "failed"
