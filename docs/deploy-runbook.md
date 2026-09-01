@@ -60,3 +60,9 @@ deploy 脚本对依赖差异做前置检查,不一致即中止;显式声明处�
 2. **部署后从非部署机真实浏览器验证**:curl 200 验不出白屏——只证明 HTTP 通,
    不证明页面渲染。冒烟清单除 `/api/health` 与关键新路由外,前端入口必须由
    非部署机的真实浏览器验证。
+3. **current 软链是服役命门(2026-09-01 手工换装事故实证)**:systemd unit 的
+   WorkingDirectory 指向 `current/apps/api`,nginx root 指向 `current/apps/web/dist`
+   ——任何手工换装(绕开契约直接覆盖目录)必须同步维护 `current` 软链,
+   软链悬空 = 服务 CHDIR 死循环。冒烟清单加:部署后 `systemctl status <service>`
+   (Active=active 且进程 cwd 经 `readlink /proc/<pid>/cwd` 指向 releases/<ver>)
+   + curl 双查;事故恢复=`ln -sfn . current` 回兜底或指回上一 releases/<prev>。
