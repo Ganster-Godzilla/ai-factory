@@ -28,6 +28,9 @@ def fake_relay():
                 "kimi1": {"weekInputTokens": 700, "weekOutputTokens": 200},
                 "zen": {"weekId": "2026-W36",
                         "weekInputTokens": 1_000_000, "weekOutputTokens": 100_000},
+                # T-2026-0901-006:翻译兜底后端同样计费,合计入账
+                "zen-k3": {"weekId": "2026-W36",
+                           "weekInputTokens": 500_000, "weekOutputTokens": 50_000},
             }).encode()
             self.send_response(200)
             self.send_header("content-type", "application/json")
@@ -45,7 +48,7 @@ def sandbox(tmp_path, monkeypatch, fake_relay):
     """tmp ROOT:最小 orchestrator.yaml + 空 pool,指向假 relay。"""
     (tmp_path / "orchestrator.yaml").write_text(
         f"pool: pool\ngateway:\n  url: {fake_relay}\n"
-        "rates:\n  opencode:\n    input_per_m: 4.3\n    output_per_m: 21.6\n",
+        "rates:\n  opencode:\n    input_per_m: 21.6\n    output_per_m: 108.0\n",
         encoding="utf-8")
     (tmp_path / "pool").mkdir()
     monkeypatch.setattr(zul, "ROOT", tmp_path)
@@ -55,19 +58,20 @@ def sandbox(tmp_path, monkeypatch, fake_relay):
 def test_fetch_zen_week(sandbox):
     week = zul.fetch_zen_week(zul.yaml.safe_load(
         (sandbox / "orchestrator.yaml").read_text(encoding="utf-8"))["gateway"]["url"])
-    assert week == {"weekId": "2026-W36", "input": 1_000_000, "output": 100_000}
+    # zen + zen-k3 合计
+    assert week == {"weekId": "2026-W36", "input": 1_500_000, "output": 150_000}
 
 
 def test_week_cost_cny():
-    # 1M in × ¥4.3 + 0.1M out × ¥21.6 = 4.3 + 2.16
-    assert zul.week_cost_cny({"input": 1_000_000, "output": 100_000},
-                             {"input_per_m": 4.3, "output_per_m": 21.6}) == 6.46
+    # 1.5M in × ¥21.6 + 0.15M out × ¥108 = 32.4 + 16.2
+    assert zul.week_cost_cny({"input": 1_500_000, "output": 150_000},
+                             {"input_per_m": 21.6, "output_per_m": 108.0}) == 48.6
 
 
 def test_dry_run_writes_nothing(sandbox, capsys):
     assert zul.main(["--dry-run"]) == 0
     assert not (sandbox / "pool" / "ledger.jsonl").exists()
-    assert "¥6.46" in capsys.readouterr().out
+    assert "¥48.6" in capsys.readouterr().out
 
 
 def test_record_then_idempotent(sandbox, capsys):
@@ -77,7 +81,7 @@ def test_record_then_idempotent(sandbox, capsys):
     assert len(entries) == 1
     e = entries[0]
     assert e["resource"] == "opencode" and e["unit"] == "cny"
-    assert e["amount"] == 6.46 and e["estimated"] is True
+    assert e["amount"] == 48.6 and e["estimated"] is True
     assert e["tokens"]["weekId"] == "2026-W36"
     # 同周再跑:幂等跳过
     assert zul.main([]) == 0
