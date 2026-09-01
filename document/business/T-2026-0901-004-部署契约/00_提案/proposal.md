@@ -65,6 +65,23 @@ merge+tag 后:项目有 deploy 配置 → 执行 scripts/deploy.py → 健康检
 3. 冒烟失败路径演示一次:incident 自动建 + 回滚说明可用
 4. pytest 全绿 + check-pool-load 0 bad
 
+## 实战情报(首次部署 2026-09-01,workspace-8d 一线回传,设计必须消化)
+
+1. **sudo 卡点**:sk-api 以 root 跑、deploy 无免密 sudo → 契约二选一:
+   sudoers 白名单(`systemctl restart sk-api` 单条 NOPASSWD,推荐)或服务改 User=deploy
+2. **uid 穿透**:本机 tar 保留 uid=197609,服务器 deploy 不可写 → 发布脚本必须
+   `chown -R deploy`(或 tar 加 --owner 部署时归一)
+3. **venv 策略**:服务器 python3-venv/ensurepip 缺失,新 venv 建不了——本次靠
+   "零新依赖设计"复用旧 venv 得救。契约写明:①依赖变更必须在 PRD 阶段声明
+   (服务器不能现场装);②需要新依赖时发布单含 venv 重建步骤(本机构建上传)
+4. **.env 差异清单**(本次实测缺口,部署单必带):
+   `SK2_AD_LLM_BASE_URL`/`SK2_AD_LLM_MODEL`(豆包接入点 ep-20260829191419-cjp68)、
+   `SK2_ADMIN_*`(admin 口令)、`SK2_AD_DEFAULT_VIDEO_PROVIDER_ID`
+   (无 ALI key,默认须 volcengine-seedance)——契约加一条:.env.example 与服务器
+   .env 的差异检查进部署冒烟
+5. **nginx**:已有 SPA try_files,新版前端路由 /login /admin /mix 零改动兼容——
+   前端新增路由免 nginx 变更,写入部署常识
+
 ## 非目标
 
 - 不做通用 CI/CD 平台(GitHub Actions/Jenkins 不引入)
