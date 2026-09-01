@@ -219,6 +219,9 @@ def run_dev_tasks(pool: Path, ticket, adapter: HarnessAdapter,
         packet.prompt = retry_prompt(task, packet.prompt, task.get("last_error", ""))
     result = adapter.run(packet)
     task["attempts"] += 1
+    # 累计计数(T-2026-0901-003):修复重跑会清零 attempts,看板失真
+    # (003-S6 实败 23 次显示 1)——attempts_total 只增不减,事件流之外的快查口
+    task["attempts_total"] = int(task.get("attempts_total", 0)) + 1
     if result.usage_missing:
         # 明放(T-2026-0829-004):无 trailer 按 returncode 推进+估算入账,事件留痕供审计
         append_event(pool, ticket.id, "dev", "usage_missing", task=task["id"],

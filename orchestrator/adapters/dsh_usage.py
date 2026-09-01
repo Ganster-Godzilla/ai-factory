@@ -119,15 +119,8 @@ def _to_int(v) -> int:
     raise TypeError(f"非法 token 值: {v!r}")
 
 
-def read_session_usage(path: Path, since_ms: float) -> dict | None:
-    """汇总 since_ms 以来的 usage:按 (turn,step) 去重取末条。
-    坏行跳过;全零汇总(键名漂移,如 GLM promptTokens)→ None(落双缺);
-    解析失败 → None(调用方按"会话源不可用"处理)。"""
-    if path is None:
-        return None
-    text = _read_frames(Path(path))
-    if text is None:
-        return None
+def _collect_per_step(text: str, since_ms: float) -> dict[tuple, dict]:
+    """汇总 since_ms 以来的 usage:按 (turn,step) 去重取末条,保留时间戳供分时计价。"""
     per_step: dict[tuple, dict] = {}
     for line in text.splitlines():
         if '"usage"' not in line:
@@ -148,6 +141,7 @@ def read_session_usage(path: Path, since_ms: float) -> dict | None:
             if not isinstance(u, dict):
                 continue
             per_step[(d["turn"], d["step"])] = {
+                "time": t,
                 "input": _to_int(u.get("inputTokens") or 0),
                 "output": _to_int(u.get("outputTokens") or 0),
                 "cache_read": _to_int(u.get("cacheReadTokens") or 0),
@@ -155,6 +149,19 @@ def read_session_usage(path: Path, since_ms: float) -> dict | None:
         except (json.JSONDecodeError, KeyError, TypeError, ValueError,
                 AttributeError):
             continue
+    return per_step
+
+
+def read_session_usage(path: Path, since_ms: float) -> dict | None:
+    """汇总 since_ms 以来的 usage:按 (turn,step) 去重取末条。
+    坏行跳过;全零汇总(键名漂移,如 GLM promptTokens)→ None(落双缺);
+    解析失败 → None(调用方按"会话源不可用"处理)。"""
+    if path is None:
+        return None
+    text = _read_frames(Path(path))
+    if text is None:
+        return None
+    per_step = _collect_per_step(text, since_ms)
     if not per_step:
         return None
     total = {
@@ -192,4 +199,53 @@ def estimate_cost(rate: dict, usage: dict) -> float:
     cost = (usage.get("input", 0) * _num("input_per_m")
             + usage.get("cache_read", 0) * _num("cache_hit_per_m")
             + usage.get("output", 0) * _num("output_per_m")) / 1e6
+    return round(cost, 4)
+
+
+# ---------- 峰谷分时计价(T-2026-0901-003) ----------
+
+def _rate_row_at(ms: float, rate: dict) -> dict:
+    """按时间戳取峰/谷费率行:命中 peak_hours(本地小时,[start,end) 区间)
+    用峰时价(顶层),否则用 off_peak 子表;off_peak 缺省回落顶层(平价)。"""
+    import datetime
+    off = (rate or {}).get("off_peak")
+    if not isinstance(off, dict):
+        return rate or {}
+    hours = rate.get("peak_hours") or []
+    h = datetime.datetime.fromtimestamp(ms / 1000).hour
+    for span in hours:
+        try:
+            start, end = int(span[0]), int(span[1])
+        except (TypeError, ValueError, IndexError):
+            continue
+        if start <= h < end:
+            return rate
+    return {**rate, **off}
+
+
+def price_session_usage(path: Path, since_ms: float, rate: dict) -> float | None:
+    """按步分时计价:每条 usage 按其时间戳取峰/谷价求和。
+    rate 无 off_peak → None(调用方回落 estimate_cost 平价);
+    会话源不可用/无 usage → None。"""
+    if path is None or not isinstance(rate, dict) or not rate.get("off_peak"):
+        return None
+    text = _read_frames(Path(path))
+    if text is None:
+        return None
+    per_step = _collect_per_step(text, since_ms)
+    if not per_step:
+        return None
+
+    def _num(row, k):
+        try:
+            return float((row or {}).get(k) or 0)
+        except (TypeError, ValueError):
+            return 0.0
+
+    cost = 0.0
+    for u in per_step.values():
+        row = _rate_row_at(u["time"], rate)
+        cost += (u["input"] * _num(row, "input_per_m")
+                 + u["cache_read"] * _num(row, "cache_hit_per_m")
+                 + u["output"] * _num(row, "output_per_m")) / 1e6
     return round(cost, 4)

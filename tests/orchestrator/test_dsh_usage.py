@@ -7,6 +7,7 @@ import zstandard
 from orchestrator.adapters.base import TaskPacket
 from orchestrator.adapters.dsh import DshAdapter
 from orchestrator.adapters.dsh_usage import (estimate_cost, find_session_file,
+                                             price_session_usage,
                                              read_session_usage)
 
 RATES = {"deepseek": {"input_per_m": 2.0, "cache_hit_per_m": 0.5,
@@ -109,6 +110,55 @@ def test_estimate_cost_glm_zero():
     cost = estimate_cost(RATES["glm"], {"input": 10**6, "output": 10**6,
                                         "cache_read": 10**6})
     assert cost == 0.0
+
+
+# ---------- 峰谷分时计价(T-2026-0901-003) ----------
+
+TIMED_RATE = {"input_per_m": 3.0, "cache_hit_per_m": 0.10, "output_per_m": 9.0,
+              "off_peak": {"input_per_m": 1.5, "cache_hit_per_m": 0.05,
+                           "output_per_m": 4.5},
+              "peak_hours": [[9, 12], [14, 18]]}
+
+
+def _ms(hour, minute=0):
+    import datetime
+    return datetime.datetime(2026, 9, 1, hour, minute).timestamp() * 1000
+
+
+def test_price_session_peak_vs_offpeak(tmp_path):
+    # 同量 usage 两条:谷时(02:00) + 峰时(10:00)——峰时价应约为谷时 2 倍
+    f = _mk_session(tmp_path / "s", [
+        _header("x"),
+        _usage(1, 1, _ms(2), inp=100000, out=10000, cache=1000000),
+        _usage(1, 2, _ms(10), inp=100000, out=10000, cache=1000000),
+    ])
+    cost = price_session_usage(f, since_ms=0, rate=TIMED_RATE)
+    # 谷:0.1M×1.5 + 1M×0.05 + 0.01M×4.5 = 0.15+0.05+0.045 = 0.245
+    # 峰:0.1M×3.0 + 1M×0.10 + 0.01M×9.0 = 0.30+0.10+0.09 = 0.49
+    assert cost == round(0.245 + 0.49, 4)
+
+
+def test_price_session_no_offpeak_returns_none(tmp_path):
+    f = _mk_session(tmp_path / "s", [_header("x"), _usage(1, 1, _ms(2))])
+    assert price_session_usage(f, since_ms=0, rate=RATES["deepseek"]) is None
+
+
+def test_price_session_no_usage_returns_none(tmp_path):
+    f = _mk_session(tmp_path / "s", [_header("x")])
+    assert price_session_usage(f, since_ms=0, rate=TIMED_RATE) is None
+
+
+def test_price_session_dedup_and_since(tmp_path):
+    # 与 read_session_usage 同口径:(turn,step) 去重取末条 + since_ms 过滤
+    f = _mk_session(tmp_path / "s", [
+        _header("x"),
+        _usage(1, 1, _ms(1), inp=10**6),                 # 早于 since → 滤掉
+        _usage(1, 2, _ms(2), inp=100000, out=0, cache=0),  # 旧值
+        _usage(1, 2, _ms(2, 30), inp=200000, out=0, cache=0),  # 同键取末
+    ])
+    cost = price_session_usage(f, since_ms=_ms(1, 30), rate=TIMED_RATE)
+    # 只剩谷时 0.2M×1.5 = 0.3
+    assert cost == 0.3
 
 
 # ---------- adapter 优先级链(F5/F7) ----------

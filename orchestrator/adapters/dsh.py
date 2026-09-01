@@ -57,11 +57,14 @@ class DshAdapter(HarnessAdapter):
         self.rates = rates
         self.sessions_dir = Path(sessions_dir) if sessions_dir else None
 
-    def _session_usage(self, workdir, since_ms: float):
-        """会话源:定位+解析,全链路容错(不可用→None)。"""
+    def _session_usage(self, workdir, since_ms: float, model: str | None = None):
+        """会话源:定位+解析,全链路容错(不可用→None)。
+        费率行含 off_peak 时附挂分时计价结果(timed_cost_cny,T-2026-0901-003)。"""
         try:
             from orchestrator.adapters.dsh_usage import (DEFAULT_SESSIONS_DIR,
                                                          find_session_file,
+                                                         price_session_usage,
+                                                         rates_for,
                                                          read_session_usage)
         except ImportError as e:
             # 依赖缺失≠无会话:留诊断,否则故障表现为流程停摆难定位(评审)
@@ -72,7 +75,16 @@ class DshAdapter(HarnessAdapter):
         try:
             sd = self.sessions_dir or DEFAULT_SESSIONS_DIR
             f = find_session_file(sd, workdir, since_ms)
-            return read_session_usage(f, since_ms) if f else None
+            if not f:
+                return None
+            usage = read_session_usage(f, since_ms)
+            if usage is not None:
+                rate = rates_for(model, self.rates)
+                if rate:
+                    timed = price_session_usage(f, since_ms, rate)
+                    if timed is not None:
+                        usage["timed_cost_cny"] = timed
+            return usage
         except Exception:   # noqa: BLE001 — 解析失败=会话源不可用
             return None
 
@@ -84,6 +96,8 @@ class DshAdapter(HarnessAdapter):
         rate = rates_for(model, self.rates)
         if rate is None:
             return None
+        # 分时计价优先(T-2026-0901-003);无 off_peak 配置时回落平价
+        timed = usage.pop("timed_cost_cny", None)
         # 剥离 trailer 标记行:残缺 trailer 不许污染正文(评审)
         body = "\n".join(ln for ln in output.splitlines()
                          if not ln.strip().startswith(USAGE_TRAILER))
@@ -91,7 +105,7 @@ class DshAdapter(HarnessAdapter):
             status=status, output=body, estimated=False, usage_missing=False,
             tokens={"input_tokens": usage["input"],
                     "output_tokens": usage["output"]},
-            cost_cny=estimate_cost(rate, usage))
+            cost_cny=timed if timed is not None else estimate_cost(rate, usage))
 
     def _est_fallback(self, status: str, output: str) -> HarnessResult:
         """双缺兜底:判负/超时但照估入账(R9 禁记 0)。"""
@@ -140,7 +154,7 @@ class DshAdapter(HarnessAdapter):
             return HarnessResult(status="failed", output="dsh 未安装(shutil.which 未找到)")
         except subprocess.TimeoutExpired:
             # 超时也烧了钱:先试会话真实计量(已完成 step 有 usage),双缺照估(评审 F1)
-            usage = self._session_usage(packet.workdir, run_start_ms)
+            usage = self._session_usage(packet.workdir, run_start_ms, packet.model)
             if usage:
                 real = self._real_result("timeout", usage, packet.model,
                                          f"timeout {packet.timeout}s")
@@ -151,7 +165,7 @@ class DshAdapter(HarnessAdapter):
         parsed = parse_usage_trailer(stdout)
         if parsed is None:
             # 优先级链(T-2026-0829-002):trailer > 会话文件真实计量 > 双缺硬判负照估
-            usage = self._session_usage(packet.workdir, run_start_ms)
+            usage = self._session_usage(packet.workdir, run_start_ms, packet.model)
             if usage:
                 body = (stdout + "\n" + stderr) if stderr else stdout
                 real = self._real_result(

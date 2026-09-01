@@ -27,9 +27,17 @@ budgets:
 # cache hit 单独计价(真实计费项,但不进 tokens 字段——防水位虚高)
 rates:
   deepseek:
-    input_per_m: 2.0
-    cache_hit_per_m: 0.5
-    output_per_m: 8.0
+    # deepseek-v4-flash 官网真实价(2026-08-17 涨价后,峰谷制;08-31 对账实证:
+    # 旧值 cache_hit 0.5 虚高 10 倍,003 台账 ¥69.87 vs 实扣 ¥17.55,T-2026-0901-003)
+    # 峰时(北京 9-12、14-18);谷时见 off_peak,按步时间戳计价(dsh_usage.price_session_usage)
+    input_per_m: 3.0
+    cache_hit_per_m: 0.10
+    output_per_m: 9.0
+    off_peak:
+      input_per_m: 1.5
+      cache_hit_per_m: 0.05
+      output_per_m: 4.5
+    peak_hours: [[9, 12], [14, 18]]
   glm:   # 免费期记 0,tokens 照记
     input_per_m: 0.0
     cache_hit_per_m: 0.0
