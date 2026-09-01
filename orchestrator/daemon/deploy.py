@@ -9,8 +9,9 @@ G3 交付:发布记录章节写入(部署清单/冒烟结果/回滚方案)+ 冒�
 G4 交付:remote 流水线(design §2):本地构建→tar+ssh 上传→解包留版 chown 归一→
          依赖/.env 前置→current 回切→restart_cmd→冒烟→发布记录章节写入;
          CLI __main__(python -m orchestrator.daemon.deploy <tid> [--allow-deps-change]);
-         local 流水线由 G5(test_deploy_local)实现(run_deploy 分发到位,local 暂抛
-         NotImplementedError,签名与语义先钉死)。
+G5 交付:local 流水线(design §5):按 processes 清单逐个 pidfile 重启(读 pid →
+         terminate → spawn start_cmd 并回写 pid)→ 本地冒烟 → 发布记录章节写入;
+         治"合并后忘重启"病根:重启动作在脚本里,不靠人记得。
 
 deploy target 抽象(design Architecture):target 只有 local/remote 两形态,
 差异全部沉淀为 orchestrator.yaml `deploy:` 段配置值,代码零分支判断凭证/权限形态。
@@ -19,6 +20,9 @@ sudo 卡点不进入代码:配置里就是一行 restart_cmd,决策只改编排�
 from __future__ import annotations
 
 import hashlib
+import os
+import shlex
+import signal
 import subprocess
 import sys
 import tempfile
@@ -304,9 +308,11 @@ def write_release_record(path: str | Path, sections: list[str],
 
 def render_deploy_manifest(*, version: str, target: str, when: str,
                            deps_note: str | None = None,
-                           env_diff: list[str] | None = None) -> str:
-    """部署清单章节(design §4 成功路径):版本/目标/时间 + 依赖与 .env 差异清单。
-    env_diff 仅 key 名(值永不入记录/输出,R9 密钥不落库);None=未检查(省略该行)。"""
+                           env_diff: list[str] | None = None,
+                           processes_note: str | None = None) -> str:
+    """部署清单章节(design §4 成功路径):版本/目标/时间 + 依赖与 .env 差异清单
+    (remote)+ 重启进程留痕(local)。env_diff 仅 key 名(值永不入记录/输出,
+    R9 密钥不落库);None=未检查(省略该行)。"""
     lines = [f"## {SECTION_DEPLOY}", "",
              f"- 版本:`{version}`",
              f"- 目标:`{target}`",
@@ -318,6 +324,8 @@ def render_deploy_manifest(*, version: str, target: str, when: str,
             lines.append(f"- .env 差异(仅 key 名):`{', '.join(sorted(env_diff))}`")
         else:
             lines.append("- .env 差异:无")
+    if processes_note is not None:
+        lines.append(f"- 重启进程:{processes_note}")
     return "\n".join(lines) + "\n"
 
 
@@ -534,6 +542,194 @@ def _run_remote(pool: Path, conf: dict, ticket, project_dir: str | Path,
         return handle_deploy_failure(pool, ticket, pd, conf, detail=str(e))
 
 
+# --- G5 交付:local 流水线(design §5;F7) -----------------------------------------
+
+# 长驻进程 graceful terminate 后等待退出的上限(秒);超时升级 SIGKILL。
+# 等退出而非立刻 spawn:旧进程未释放端口(如 dashboard 8765)时新进程会绑定失败。
+_LOCAL_TERMINATE_TIMEOUT = 5.0
+
+# 本地长驻进程运行时目录名(pidfile/日志落点;gitignore 已忽略,不脏仓库)。
+# pidfile 路径本身来自配置(相对项目 checkout 解析);日志固定落此目录 <name>.log。
+_LOCAL_RUNTIME_DIR = ".orc-local"
+
+
+def _local_runtime_dir(project_dir: str | Path) -> Path:
+    """本地长驻进程运行时目录(项目 checkout 下 .orc-local)。"""
+    return Path(project_dir) / _LOCAL_RUNTIME_DIR
+
+
+def _local_pidfile_path(project_dir: str | Path, pidfile: str) -> Path:
+    """pidfile 路径解析:绝对路径原样(配置即完整路径);相对路径按项目 checkout
+    解析(与部署配置同基准,design §1 路径约定)。"""
+    p = Path(pidfile).expanduser()
+    return p if p.is_absolute() else Path(project_dir) / p
+
+
+def _read_pid(pidfile: str | Path) -> int | None:
+    """读 pidfile:文件缺失/内容非纯数字 → None(首启无旧进程/陈旧内容,
+    静默跳过,不报错——deploy 重启语义是幂等起步)。"""
+    try:
+        text = Path(pidfile).read_text(encoding="utf-8").strip()
+    except OSError:
+        return None
+    return int(text) if text.isdigit() else None
+
+
+def _pid_alive(pid: int) -> bool:
+    """pid 是否存活(跨平台):posix kill(pid, 0);Windows OpenProcess 查询
+    退出码 == STILL_ACTIVE。进程不存在/句柄拿不到 → False(陈旧 pid 正常路径)。"""
+    if os.name == "nt":
+        return _pid_alive_windows(pid)
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True  # 存在但无权限查看:按存活处理(保守)
+    return True
+
+
+def _pid_alive_windows(pid: int) -> bool:
+    """Windows 存活判定:OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION) +
+    GetExitCodeProcess == STILL_ACTIVE(259);拿不到句柄即不存活。"""
+    import ctypes
+    PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
+    STILL_ACTIVE = 259
+    h = ctypes.windll.kernel32.OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION,
+                                           False, pid)
+    if not h:
+        return False
+    try:
+        code = ctypes.c_ulong()
+        if not ctypes.windll.kernel32.GetExitCodeProcess(h, ctypes.byref(code)):
+            return False
+        return code.value == STILL_ACTIVE
+    finally:
+        ctypes.windll.kernel32.CloseHandle(h)
+
+
+def _terminate_pid(pid: int, timeout: float = _LOCAL_TERMINATE_TIMEOUT) -> None:
+    """terminate 进程(pid):先 SIGTERM,timeout 内未退出升级 SIGKILL;Windows 上
+    TerminateProcess 即强杀,无 SIGTERM/SIGKILL 之分。进程不存在/已退出 →
+    幂等跳过(陈旧 pid 是正常路径,不报错)。"""
+    if not _pid_alive(pid):
+        return
+    if os.name == "nt":
+        _terminate_pid_windows(pid)
+    else:
+        try:
+            os.kill(pid, signal.SIGTERM)
+        except (ProcessLookupError, PermissionError, OSError):
+            return  # 竞态:刚退出/无权限,交由存活判定兜底
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if not _pid_alive(pid):
+            return
+        _sleep(0.1)
+    if os.name != "nt":  # posix 仍存活:升级 SIGKILL
+        try:
+            os.kill(pid, signal.SIGKILL)
+        except (ProcessLookupError, PermissionError, OSError):
+            pass
+
+
+def _terminate_pid_windows(pid: int) -> None:
+    """Windows 终止:OpenProcess(PROCESS_TERMINATE)+ TerminateProcess。
+    os.kill 内部 OpenProcess(PROCESS_ALL_ACCESS) 在受限令牌/沙箱下会被拒
+    (Access denied);最小权限句柄(PROCESS_TERMINATE)通常放行,等效强杀。"""
+    import ctypes
+    PROCESS_TERMINATE = 0x0001
+    h = ctypes.windll.kernel32.OpenProcess(PROCESS_TERMINATE, False, pid)
+    if not h:
+        return  # 句柄拿不到(刚退出/受限):幂等跳过,存活判定兜底
+    try:
+        ctypes.windll.kernel32.TerminateProcess(h, 15)
+    finally:
+        ctypes.windll.kernel32.CloseHandle(h)
+
+
+def _spawn_process(start_cmd: str, cwd: str | Path,
+                   log_path: str | Path | None = None) -> int:
+    """spawn start_cmd 为长驻进程(脱离父进程,stdout/stderr 落 log_path),
+    返回新 pid。命令按 shell 分词直接执行、不套 shell 包装:返回 pid 即真实
+    进程,后续 pidfile 重启可准确 terminate(需 shell 特性时由 start_cmd
+    自行包装,如 sh -c '...');分词失败(引号不成对)退化为 shell 原样执行。"""
+    try:
+        argv = shlex.split(start_cmd)
+    except ValueError:
+        argv = None  # 引号不成对:shell 原样执行(pid 为 shell 包装进程,重启语义降级)
+    log = Path(log_path) if log_path else None
+    if log is not None:
+        log.parent.mkdir(parents=True, exist_ok=True)
+    kwargs: dict = {}
+    if os.name == "nt":
+        kwargs["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP
+    else:
+        kwargs["start_new_session"] = True  # 脱离控制终端,父进程退出不影响
+    with (log.open("ab") if log is not None else open(os.devnull, "ab")) as out:
+        if argv is None:
+            proc = subprocess.Popen(start_cmd, shell=True, cwd=str(cwd),
+                                    stdin=subprocess.DEVNULL,
+                                    stdout=out, stderr=out, **kwargs)
+        else:
+            proc = subprocess.Popen(argv, cwd=str(cwd),
+                                    stdin=subprocess.DEVNULL,
+                                    stdout=out, stderr=out, **kwargs)
+    return proc.pid
+
+
+def _write_pid(pidfile: str | Path, pid: int) -> None:
+    """回写新 pid 到 pidfile(重启留痕;供下次 deploy 与人工查状态)。"""
+    p = Path(pidfile)
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text(f"{pid}\n", encoding="utf-8")
+
+
+def restart_local_process(project_dir: str | Path, proc: dict) -> dict:
+    """单条长驻进程重启(design §5,F7):pidfile 读 pid → 存活则 terminate
+    (等退出,超时 SIGKILL)→ spawn start_cmd(长驻,输出落 .orc-local/<name>.log)
+    → 回写新 pid。返回留痕 {name, old_pid, pid}(old_pid=None=首启/陈旧)。"""
+    name = proc["name"]
+    pidfile = _local_pidfile_path(project_dir, proc["pidfile"])
+    old_pid = _read_pid(pidfile)
+    if old_pid is not None and _pid_alive(old_pid):
+        _terminate_pid(old_pid)
+    new_pid = _spawn_process(proc["start_cmd"], cwd=project_dir,
+                             log_path=_local_runtime_dir(project_dir) / f"{name}.log")
+    _write_pid(pidfile, new_pid)
+    return {"name": name, "old_pid": old_pid, "pid": new_pid}
+
+
+def _run_local(pool, conf: dict, ticket, project_dir: str | Path) -> int:
+    """local 流水线(design §5):按 processes 清单逐个重启 → 本地冒烟 →
+    写发布记录(部署清单/冒烟结果/回滚方案)。治"合并后忘重启"病根:
+    重启动作在脚本里,不靠人记得。返回 0=全绿;进程重启或冒烟任一失败
+    自动建 incident 工单+回链并返回 EXIT_DEPLOY_FAILED(不静默放行)。"""
+    pd = Path(project_dir)
+    try:
+        ver = _git_describe(pd)
+        restarts = [restart_local_process(pd, proc) for proc in conf["processes"]]
+        results = smoke(conf["smoke"])
+        if not smoke_passed(results):
+            return handle_deploy_failure(pool, ticket, pd, conf, results=results)
+        processes_note = "; ".join(
+            f"{r['name']}({'旧 pid ' + str(r['old_pid']) if r['old_pid'] else '首启'}"
+            f" → 新 pid {r['pid']})" for r in restarts)
+        manifest = render_deploy_manifest(
+            version=ver, target="local",
+            when=datetime.now(timezone.utc).isoformat(),
+            processes_note=processes_note)
+        rollback = rollback_plan(conf)  # local 回滚 = git tag 回切 + 逐条重启(占位 tag 人工补齐)
+        record = release_record_path(pd, ticket.id)
+        if record is not None:
+            write_release_record(record,
+                                 [manifest, render_smoke_section(results), rollback],
+                                 title=f"发布记录:{ticket.id}")
+        return 0
+    except Exception as e:  # noqa: BLE001 — 版本/重启/冒烟任一环节失败:不静默
+        return handle_deploy_failure(pool, ticket, pd, conf, detail=str(e))
+
+
 def run_deploy(pool, cfg: dict, ticket, project_dir: str | Path,
                allow_deps_change: bool = False) -> int:
     """部署入口(design §2/§5):按 ticket.project 的 deploy 配置执行 remote/local
@@ -549,7 +745,7 @@ def run_deploy(pool, cfg: dict, ticket, project_dir: str | Path,
         return 0
     if conf["target"] == "remote":
         return _run_remote(pool, conf, ticket, project_dir, allow_deps_change)
-    raise NotImplementedError("local 流水线由 G5(test_deploy_local)实现")
+    return _run_local(pool, conf, ticket, project_dir)
 
 
 def _load_cfg() -> dict:
@@ -589,9 +785,6 @@ def main(argv: list[str] | None = None) -> int:
     try:
         return run_deploy(pool, cfg, ticket, pd,
                           allow_deps_change=args.allow_deps_change)
-    except NotImplementedError as e:  # local 形态 G5 交付前显式报错
-        print(f"error: {e}", file=sys.stderr)
-        return 1
     except ValueError as e:  # 配置非法等:响亮报错
         print(f"error: {e}", file=sys.stderr)
         return 1
