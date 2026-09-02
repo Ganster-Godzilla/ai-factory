@@ -25,6 +25,29 @@ def _pool() -> Path:
     return Path(_cfg()["pool"])
 
 
+def _cmd_guard(args) -> int:
+    """`orc guard pre-merge <project_dir>`:0=可合,2=拦,1=守卫自身失败。
+
+    拦截清单(他人未推送提交/脏树)打印到 stderr;守卫失败不等于可合,
+    git 异常(非仓/命令失败)也按失败收口,不让 loop 带着错误硬合。
+    """
+    from orchestrator.daemon.gitguard import check_pre_merge
+    if args.guard_cmd != "pre-merge":
+        print(f"error: 未知 guard 子命令: {args.guard_cmd}", file=sys.stderr)
+        return 1
+    try:
+        blockers = check_pre_merge(Path(args.project_dir))
+    except Exception as e:   # noqa: BLE001 —— CLI 兜底,守卫失败按不可合收口
+        print(f"error: guard 失败: {e}", file=sys.stderr)
+        return 1
+    if not blockers:
+        print("guard pre-merge: PASS")
+        return 0
+    for b in blockers:
+        print(f"GUARD-BLOCK [{b.kind}]\n{b.detail}", file=sys.stderr)
+    return 2
+
+
 def _project_dir(cfg: dict, ticket) -> Path | None:
     """工单项目名 → cfg projects 登记目录(共置 gates.project_dir_for,评审 R3-10)。"""
     from orchestrator.daemon.gates import project_dir_for
@@ -50,7 +73,15 @@ def main(argv: list[str] | None = None) -> int:
     c = sub.add_parser("dashboard"); c.add_argument("--port", type=int, default=8321)
     c.add_argument("--host", default="127.0.0.1",
                    help="默认 127.0.0.1 仅本机;局域网开放(0.0.0.0)+认证属 v2 决策")
+    c = sub.add_parser("guard", help="合 main 守卫(T-2026-0902-006)")
+    g = c.add_subparsers(dest="guard_cmd", required=True)
+    gc = g.add_parser("pre-merge", help="合 main 前检查:0=可合,2=拦")
+    gc.add_argument("project_dir", nargs="?", default=".",
+                    help="要守卫的 git 仓路径(缺省当前目录)")
     args = p.parse_args(argv)
+    if args.cmd == "guard":
+        # guard 不依赖工单池:任何目录可守卫任意仓,须在 pool 解析前分流
+        return _cmd_guard(args)
     pool = _pool()
 
     try:
