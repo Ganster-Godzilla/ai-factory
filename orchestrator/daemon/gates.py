@@ -21,14 +21,25 @@ def _fail(path: str, reason: str) -> str:
 # T-2026-0902-015 S1:QA 结论判定词表(基于现有验收报告真实措辞采样)。
 # 判定取"最靠前出现的判定词":结论开头是主判定(R6);
 # "不通过"作整体词,pass 匹配须剔除其子串(防"不通过"被误当"通过")。
-_VERDICT_FAIL = ("不通过", "no-go")
-_VERDICT_PASS = ("验收通过", "通过", "放行", "go")
+# 英文判定词 go/no-go 必须带词边界(\b),否则 "go" 会误中 good/google/ongoing
+# 等任何含 go 子串的正文(评审实测风险点);中文词按子串匹配。
+import re as _re
+_VERDICT_FAIL = ("不通过", _re.compile(r"\bno-go\b"))
+_VERDICT_PASS = ("验收通过", "通过", "放行", _re.compile(r"\bgo\b"))
 
 
 def _first_hit(body: str, words) -> int:
-    """词表中最早出现的位置(小写文本);无命中 → -1。"""
-    pos = [body.find(w) for w in words]
-    pos = [p for p in pos if p >= 0]
+    """词表中最早出现的位置(body 已小写);无命中 → -1。
+    词项为 str 用子串匹配;为编译正则(re.Pattern)用 search 取 start。"""
+    pos = []
+    for w in words:
+        if hasattr(w, "search"):          # 编译正则
+            m = w.search(body)
+            p = m.start() if m else -1
+        else:                             # 普通子串
+            p = body.find(w)
+        if p >= 0:
+            pos.append(p)
     return min(pos) if pos else -1
 
 

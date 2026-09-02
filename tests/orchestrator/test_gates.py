@@ -241,3 +241,13 @@ def test_parse_verdict_earliest_keyword_wins():
     # 判定词取最靠前者:放行在前的 pass;不通过在前的 fail
     assert parse_verdict("放行进入观察窗;此前不通过项已清。") == "pass"
     assert parse_verdict("不通过;放行暂缓。") == "fail"
+
+
+def test_parse_verdict_go_word_boundary():
+    # 英文 go 须词边界:"GO" 独立为 pass;含 go 子串的词(good/google/ongoing)不算
+    assert parse_verdict("GO") == "pass"
+    assert parse_verdict("结论:GO,可发布。") == "pass"
+    assert parse_verdict("no-go,阻塞未清") == "fail"
+    # 不含判定词,仅含 go 子串 → unknown(不误判 pass)
+    assert parse_verdict("ongoing investigation, good progress") == "unknown"
+    assert parse_verdict("结果尚可,google 一下便知") == "unknown"
