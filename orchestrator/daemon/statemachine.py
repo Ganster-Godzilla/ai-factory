@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from orchestrator.daemon.events import append_event
+from orchestrator.daemon.events import append_event, read_events
 from orchestrator.daemon.ticket import Ticket, save_ticket
 
 TRANSITIONS = {
@@ -110,12 +110,29 @@ def suspend(pool: Path, ticket: Ticket, actor: str, reason: str,
     return ticket
 
 
-def resume(pool: Path, ticket: Ticket, actor: str) -> Ticket:
+def resume(pool: Path, ticket: Ticket, actor: str, force: bool = False) -> Ticket:
+    """恢复挂起工单。T-2026-0902-016:同因幂等——本次挂起 reason_code 与上一次
+    相同(确定性根因未变)时,未带 force 拒绝恢复(防连撞,R12)。
+
+    同因判定:事件流最近两条 suspended 的 reason_code 相等且非 None。
+    仅一条(首次恢复)/reason_code 为 None(存量旧挂起)→ 不参与判定,放行。
+    """
     if ticket.state != "suspended" or not ticket.resume_state:
         raise IllegalTransition("非挂起状态,无法恢复")
+    codes = [e.get("reason_code") for e in read_events(pool, ticket.id)
+             if e.get("event") == "suspended"]
+    same_cause = (len(codes) >= 2 and codes[-1] is not None
+                  and codes[-1] == codes[-2])
+    if same_cause and not force:
+        raise IllegalTransition(
+            f"上次同因({codes[-1]})挂起,根因未变;直接 resume 大概率再撞同一闸。"
+            f"确认根因已修请加 --force / 勾选确认后强制恢复")
     target = ticket.resume_state
     ticket.state = target
     ticket.resume_state = None
     save_ticket(pool, ticket)
-    append_event(pool, ticket.id, actor, "resumed", to=target)
+    ev = {"to": target}
+    if force:
+        ev["forced"] = True   # 同因强制恢复留痕(R12 可审计)
+    append_event(pool, ticket.id, actor, "resumed", **ev)
     return ticket

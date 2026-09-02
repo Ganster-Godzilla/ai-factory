@@ -112,3 +112,61 @@ def test_old_ticket_yaml_loads_p1_round_zero(tmp_path):
     path = tmp_path / "legacy.yaml"
     path.write_text(yaml.safe_dump(legacy), encoding="utf-8")
     assert Ticket.load(path).p1_round == 0
+
+
+# --- T-2026-0902-016 S1:resume 同因幂等(force 参数 + 同因检测) ---
+def _suspend_again_same(pool, t, code):
+    """把工单拨回 resume_state 再以同一 reason_code 二次挂起(造 codes[-1]==codes[-2])。"""
+    from orchestrator.daemon.ticket import save_ticket
+    t.state = t.resume_state or "p0_proposed"
+    t.resume_state = None
+    save_ticket(pool, t)
+    suspend(pool, t, actor="system", reason="再次失败", reason_code=code)
+
+
+def test_resume_same_reason_without_force_blocks(pool):
+    t = new_ticket(pool, project="p", summary="x")
+    transition(pool, t, "p0_proposed", actor="pm")
+    suspend(pool, t, actor="system", reason="r1", reason_code="release_failed")
+    _suspend_again_same(pool, t, "release_failed")
+    with pytest.raises(IllegalTransition, match="同因"):
+        resume(pool, t, actor="boss")
+    assert t.state == "suspended"   # 未执行
+
+
+def test_resume_same_reason_with_force_passes(pool):
+    t = new_ticket(pool, project="p", summary="x")
+    transition(pool, t, "p0_proposed", actor="pm")
+    suspend(pool, t, actor="system", reason="r1", reason_code="release_failed")
+    _suspend_again_same(pool, t, "release_failed")
+    resume(pool, t, actor="boss", force=True)
+    assert t.state == "p0_proposed"
+    evs = [e for e in read_events(pool, t.id) if e["event"] == "resumed"]
+    assert evs[-1].get("forced") is True
+
+
+def test_resume_different_reason_passes(pool):
+    t = new_ticket(pool, project="p", summary="x")
+    transition(pool, t, "p0_proposed", actor="pm")
+    suspend(pool, t, actor="system", reason="r1", reason_code="release_failed")
+    _suspend_again_same(pool, t, "verify_failed")   # 本次 reason_code 与上次不同
+    resume(pool, t, actor="boss")
+    assert t.state == "p0_proposed"
+
+
+def test_resume_first_time_no_history_passes(pool):
+    t = new_ticket(pool, project="p", summary="x")
+    transition(pool, t, "p0_proposed", actor="pm")
+    suspend(pool, t, actor="system", reason="r1", reason_code="release_failed")
+    resume(pool, t, actor="boss")   # 仅一条 suspended,无"上一次"
+    assert t.state == "p0_proposed"
+
+
+def test_resume_none_reason_not_treated_same(pool):
+    # 存量旧挂起 reason_code=None:不参与同因判定,放行
+    t = new_ticket(pool, project="p", summary="x")
+    transition(pool, t, "p0_proposed", actor="pm")
+    suspend(pool, t, actor="system", reason="r1")          # 无 reason_code
+    _suspend_again_same(pool, t, None)
+    resume(pool, t, actor="boss")
+    assert t.state == "p0_proposed"
