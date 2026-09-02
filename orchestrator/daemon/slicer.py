@@ -11,6 +11,11 @@ from orchestrator.adapters.base import TaskPacket
 TDD_INSTRUCTION = (
     "严格遵守 TDD:先写一个失败的测试,再写最小实现让它通过,"
     "然后运行验收命令 `{cmd}` 直至退出码为 0。不许先写实现。"
+    # 规则#11 第四形态实证(003-S3/S5、0902-006-S1 多连败根因):
+    # dev 验收绿/写完活但不 git 提交,验收自检/合并拿空分支连环翻车
+    "**收工前必须 `git add -A && git commit`(签名首行用 `feat(T-工单号 Sx):` "
+    "或 `chore(Sx):` 前缀,gitguard 白名单认这两个;feat(Sx) 无前缀会被拦)**——"
+    "验收命令可能在工位上跑守卫,未提交的产物会被当脏树拦下,你的活白干。"
 )
 
 
