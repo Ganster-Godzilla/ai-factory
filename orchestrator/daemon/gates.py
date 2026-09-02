@@ -18,6 +18,29 @@ def _fail(path: str, reason: str) -> str:
     return f"FAIL: {path}: {reason}"
 
 
+# T-2026-0902-015 S1:QA 结论判定词表(基于现有验收报告真实措辞采样)。
+# fail 优先于 pass:"不通过"含"通过"子串,先判 fail 防误放(R6)。
+_VERDICT_FAIL = ("不通过", "no-go")
+_VERDICT_PASS = ("验收通过", "通过", "放行", "go")
+
+
+def parse_verdict(text: str) -> str:
+    """QA 验收报告"结论"章节正文 → "pass" | "fail" | "unknown"。
+
+    fail 优先:任一 fail 词命中即 fail(即使同含 pass 词);否则命中 pass 词为
+    pass;正文为空或两族都不命中 → unknown(调用方按 fail-closed 处理)。
+    纯函数:不读文件、不碰 pool,大小写不敏感。
+    """
+    body = (text or "").lower()
+    if not body.strip():
+        return "unknown"
+    if any(w in body for w in _VERDICT_FAIL):
+        return "fail"
+    if any(w in body for w in _VERDICT_PASS):
+        return "pass"
+    return "unknown"
+
+
 def project_dir_for(cfg: dict, project: str) -> Path | None:
     """项目名 → cfg projects 登记目录(cli/dashboard 共置,评审 R3-10);
     未登记 → None(legacy 单不需要;新单会在 transition 报开发错误)。"""

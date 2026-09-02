@@ -152,3 +152,39 @@ def test_biz_dir_glob_resolution(pool, tmp_path):
         "docs/specs/T-1-design.md"
     assert _resolve_rel(tmp_path,
                         "document/business/{tid_dir}/00_提案/提案.md", "T-9") is None
+
+
+# --- T-2026-0902-015 S1:parse_verdict 纯函数(fail 优先/pass 族/unknown) ---
+from orchestrator.daemon.gates import parse_verdict
+
+
+def test_parse_verdict_fail_plain():
+    assert parse_verdict("不通过,P4 挂起,退回处置。") == "fail"
+
+
+def test_parse_verdict_pass_simple():
+    assert parse_verdict("通过") == "pass"
+    assert parse_verdict("验收通过。遗留(sk T-005)已登记 backlog,不阻塞。") == "pass"
+
+
+def test_parse_verdict_pass_bold_with_count():
+    assert parse_verdict("**通过(8/8 验收命令全绿 + check-pool-load 0 bad)。**") == "pass"
+
+
+def test_parse_verdict_pass_release_wording():
+    assert parse_verdict("方案 B 全部验收用例通过,建议放行进入发布/观察窗。") == "pass"
+
+
+def test_parse_verdict_unknown_empty_and_vague():
+    assert parse_verdict("") == "unknown"
+    assert parse_verdict("见上文。") == "unknown"
+
+
+def test_parse_verdict_fail_wins_over_pass_substring():
+    # R6:"不通过"含"通过"子串,fail 必须优先,防误放
+    assert parse_verdict("不通过……后续可转通过") == "fail"
+
+
+def test_parse_verdict_nogo_is_fail():
+    assert parse_verdict("NO-GO:阻塞项未清") == "fail"
+    assert parse_verdict("no-go") == "fail"
