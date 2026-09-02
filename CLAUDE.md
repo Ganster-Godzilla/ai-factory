@@ -13,6 +13,7 @@
 
 - 规则登记与晋升:`.claude/rules-registry.md`(E1 自觉 → E2 检查脚本 → E3 hook 强制;同一 E1 违反 2 次必晋升)。
 - 合 main 前必跑 `python scripts/check-pool-load.py`(R8:防数据-代码 schema 偏斜)。
+- 合 main 前必跑 `python scripts/check-complexity.py`(T-2026-0903-003:圈复杂度闸 cc>15,基线豁免存量,只拦增量/恶化;基线 `scripts/complexity-baseline.txt`)。
 - 配额/现金闸放开只许"明放"(R9):warn-only 标注磨合期+复审日期,台账照记可估算,禁止记 0。
 - 测试:`pytest tests/`;lint:`python -m pyflakes {changed_files}`(stack-profile.yaml)。
 

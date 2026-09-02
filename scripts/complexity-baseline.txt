@@ -1,0 +1,11 @@
+# 复杂度基线(T-2026-0903-003):冻结 2026-09-03 现状 cc>15 函数,豁免存量。
+# 格式:rel_path::qualname::cc(一行一个)。基线内函数 cc 升高仍拦(恶化);
+# 基线外新增 cc>15 必拦。函数拆低(cc≤15)后可从本表移除。
+# 注:run_dev_tasks 已于 T-2026-0903-002 拆分(46→4),不在此列。
+orchestrator/adapters/dsh.py::DshAdapter.run::23
+orchestrator/daemon/cli.py::main::25
+orchestrator/daemon/deploy.py::load_deploy_config::21
+orchestrator/daemon/gates.py::check_gate::24
+orchestrator/daemon/watchdog.py::_helper_main::17
+orchestrator/dashboard/views.py::overview_data::16
+orchestrator/dashboard/views.py::ticket_list::19

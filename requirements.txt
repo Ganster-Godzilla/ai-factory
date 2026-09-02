@@ -4,3 +4,4 @@ pyyaml
 flask
 pytest
 zstandard   # T-2026-0829-002:dsh 会话文件 session.jsonl.zstd 解析
+radon       # T-2026-0903-003:圈复杂度闸 scripts/check-complexity.py(检查工具,与 pytest 同级)
