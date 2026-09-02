@@ -1,0 +1,29 @@
+# T-2026-0902-010 任务切片:runner 进程组墙钟看门狗(适配器无关)
+# 设计依据:document/business/T-2026-0902-010-进程组墙钟/02_设计文档/design.md
+# 契约:[{id,title,acceptance_cmd,depends_on}];改代码任务带 scope(R7)
+# 测试约定(D5):断言失败一律打印 `FAIL: <子句>` 行
+
+- id: S1
+  title: "watchdog.py 核心:guard(Popen 补丁+独立进程组+注册表)+ detached helper(按组终止/watchdog_killed 事件/父死判负落盘)+ 父活场景单测"
+  scope:
+    - "orchestrator/daemon/watchdog.py"
+    - "tests/test_watchdog.py"
+  acceptance_cmd: "pytest tests/test_watchdog.py -x -q"
+  depends_on: []
+
+- id: S2
+  title: "孤儿实证:杀父+短墙钟+sleep 复现 009 游荡场景,断言进程组被终止、watchdog_killed 事件字段齐(pid/墙钟/工单/任务)、任务按 timeout 判负"
+  scope:
+    - "tests/test_watchdog_orphan.py"
+    - "orchestrator/daemon/watchdog.py"
+  acceptance_cmd: "pytest tests/test_watchdog_orphan.py -x -q"
+  depends_on: [S1]
+
+- id: S3
+  title: "runner 三处接线(dev/consult/五角色)经 _run_with_watchdog 包装 + killed→timeout 判负改写 + 全角色路径冒烟 + 父活语义回归;适配器文件零改动"
+  scope:
+    - "orchestrator/daemon/runner.py"
+    - "tests/test_runner_watchdog.py"
+    - "tests/test_runner.py"
+  acceptance_cmd: "pytest tests/test_runner_watchdog.py tests/test_runner.py -x -q"
+  depends_on: [S1]
