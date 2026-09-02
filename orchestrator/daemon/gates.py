@@ -110,4 +110,32 @@ def check_gate(project_dir: Path, ticket, to_state: str) -> list[str]:
                 fails.append(_fail(f"task[{task.get('id')}]",
                                    "verify 留痕非 passed"
                                    "(补救:核实后手改 yaml 或 closed 重开)"))
+
+    # T-2026-0902-015 S2:P4 边(p4_verifying→p5_ready)追加 verdict 检查——
+    # QA 报告"结论"非通过(fail/unknown)即挂起退回,fail-closed。
+    # 报告缺失/无"结论"章节时,上方产物门禁已 FAIL(不重复判 verdict)。
+    if stage == "P4" and not any("验收报告" in f for f in fails):
+        report_rel = _resolve_rel(
+            Path(project_dir),
+            "document/business/{tid_dir}/04_测试/验收报告.md", ticket.id)
+        if report_rel is not None:
+            rpt = Path(project_dir) / report_rel
+            if rpt.is_file():
+                verdict = parse_verdict(_section_text(
+                    rpt.read_text(encoding="utf-8", errors="replace"), "结论"))
+                if verdict != "pass":
+                    fails.append(_fail(
+                        report_rel,
+                        f"QA 结论非通过(verdict={verdict}): 挂起退回"
+                        "(R11:状态机须读结论,不只认退出码)"))
     return fails
+
+
+def _section_text(text: str, section: str) -> str:
+    """取 `## <section>` 至下一 `## `(或文末)的正文;无该章节 → 空串。"""
+    m = re.search(rf"^##\s+{re.escape(section)}\s*$", text, flags=re.M)
+    if not m:
+        return ""
+    rest = text[m.end():]
+    nxt = re.search(r"^##\s", rest, flags=re.M)
+    return rest[:nxt.start()] if nxt else rest

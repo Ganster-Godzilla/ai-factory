@@ -129,3 +129,60 @@ def test_gate_failed_structured_fails(pool, tmp_path):
     with pytest.raises(GateFailed) as e:
         transition(pool, t, "p1_drafting", actor="boss", project_dir=tmp_path)
     assert e.value.fails and any("提案.md" in f for f in e.value.fails)
+
+
+# --- T-2026-0902-015 S2:P4 边 verdict 闸(fail/unknown→GateFailed,fail-closed) ---
+def _qa_report(proj, tid, conclusion):
+    _write(proj, f"document/business/{tid}-测试/04_测试/验收报告.md",
+           "# 验收报告\n## 环境\nx\n## 范围\nx\n## 用例结果\nx\n"
+           f"## 结论\n{conclusion}\n")
+
+
+def _p4_ticket(pool):
+    t = _new(pool)
+    t.state = "p4_verifying"
+    save_ticket(pool, t)
+    return t
+
+
+def test_p4_verdict_fail_blocks(pool, tmp_path):
+    t = _p4_ticket(pool)
+    _qa_report(tmp_path, t.id, "**不通过,P4 挂起,退回处置。**")
+    with pytest.raises(IllegalTransition) as e:
+        transition(pool, t, "p5_ready", actor="qa", project_dir=tmp_path)
+    assert "verdict=fail" in str(e.value)
+
+
+def test_p4_verdict_unknown_blocks(pool, tmp_path):
+    t = _p4_ticket(pool)
+    _qa_report(tmp_path, t.id, "见上文。")
+    with pytest.raises(IllegalTransition) as e:
+        transition(pool, t, "p5_ready", actor="qa", project_dir=tmp_path)
+    assert "verdict=unknown" in str(e.value)
+
+
+def test_p4_verdict_pass_releases(pool, tmp_path):
+    t = _p4_ticket(pool)
+    _qa_report(tmp_path, t.id, "**通过(3/3 全绿)。**")
+    transition(pool, t, "p5_ready", actor="qa", project_dir=tmp_path)
+    assert t.state == "p5_ready"
+
+
+def test_p4_missing_conclusion_reports_section_not_verdict(pool, tmp_path):
+    t = _p4_ticket(pool)
+    _write(tmp_path, f"document/business/{t.id}-测试/04_测试/验收报告.md",
+           "# 验收报告\n## 环境\nx\n## 范围\nx\n## 用例结果\nx\n")  # 无"结论"章节
+    with pytest.raises(IllegalTransition) as e:
+        transition(pool, t, "p5_ready", actor="qa", project_dir=tmp_path)
+    assert "结论" in str(e.value) and "verdict=" not in str(e.value)
+
+
+def test_non_p4_edge_no_verdict_check(pool, tmp_path):
+    # p3→p4 等其他边不触发 verdict 检查(验收报告即便写不通过也不管)
+    t = _new(pool)
+    t.state = "p3_running"
+    t.tasks = []  # P3 门禁:无 acceptance_cmd 任务,task_verify 不拦
+    save_ticket(pool, t)
+    _qa_report(tmp_path, t.id, "不通过")
+    transition(pool, t, "p4_verifying", actor="system", project_dir=tmp_path)
+    assert t.state == "p4_verifying"
