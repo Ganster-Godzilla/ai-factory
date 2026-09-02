@@ -154,7 +154,7 @@ def test_remote_full_green_sequence_and_record(pool, tmp_path, monkeypatch, fake
     ver, prev = "v1.2.3", "v1.1.0"
     sha = requirements_sha(pd / "apps/api/requirements.txt")
     runner.answer("git describe", ver)
-    runner.answer(".requirements.sha", sha)          # 依赖与 releases/current 一致
+    runner.answer(".requirements.sha", sha)          # 依赖与 current 基准一致
     runner.answer("cut -d= -f1", "API_KEY\nDB_PASS\nNEW_TOKEN")  # 远端 .env 只回 key 名
     runner.answer("readlink", f"releases/{prev}")
     smoke_calls = fake_smoke(_green_smoke())
@@ -178,8 +178,8 @@ def test_remote_full_green_sequence_and_record(pool, tmp_path, monkeypatch, fake
     assert [c for _, _, c in runner.ssh] == [
         f"mkdir -p {APP}/releases",
         _unpack_cmd(ver),
-        (f"test -f {APP}/releases/current/.requirements.sha "
-         f"&& cat {APP}/releases/current/.requirements.sha || echo ''"),
+        (f"test -f {APP}/current/.requirements.sha "
+         f"&& cat {APP}/current/.requirements.sha || echo ''"),
         f"echo {sha} > {APP}/releases/{ver}/.requirements.sha",
         f"test -f {APP}/.env && cut -d= -f1 {APP}/.env || echo ''",
         f"test -L {APP}/current && readlink {APP}/current || echo ''",
@@ -247,8 +247,8 @@ def test_remote_deps_mismatch_aborts_before_switch(pool, tmp_path, monkeypatch, 
     assert [c for _, _, c in runner.ssh] == [
         f"mkdir -p {APP}/releases",
         _unpack_cmd(ver),
-        (f"test -f {APP}/releases/current/.requirements.sha "
-         f"&& cat {APP}/releases/current/.requirements.sha || echo ''"),
+        (f"test -f {APP}/current/.requirements.sha "
+         f"&& cat {APP}/current/.requirements.sha || echo ''"),
     ]
     assert not any("ln -sfn" in c for _, _, c in runner.ssh)
     assert not any("cut -d= -f1" in c for _, _, c in runner.ssh)
@@ -289,7 +289,7 @@ def test_remote_first_install_requires_allow_and_placeholder_rollback(pool, tmp_
     t = _ticket(pool, pd)
     runner = FakeRunner(monkeypatch)
     runner.answer("git describe", "v1.0.0")
-    runner.answer(".requirements.sha", "")   # 首装:releases/current 无基准
+    runner.answer(".requirements.sha", "")   # 首装:current 无基准
     runner.answer("readlink", "")            # 首装:无 current
     fake_smoke(_green_smoke())
 

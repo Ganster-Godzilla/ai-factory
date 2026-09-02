@@ -248,7 +248,7 @@ def requirements_sha(local_path: str | Path) -> str:
 
 def requirements_changed(local_path: str | Path, remote_sha: str | None) -> bool:
     """依赖差异判定(design §2.3):本地 requirements 哈希 vs 远端
-    releases/current/.requirements.sha 内容;不一致即 True(部署中止条件,
+    current/.requirements.sha 内容;不一致即 True(部署中止条件,
     G4 流水线据此 FAIL,或 --allow-deps-change 显式放行并写 venv 重建说明)。
 
     远端无基准(None/空/首装无 current)→ True:无从比对即保守视为有差异,
@@ -514,15 +514,17 @@ def _run_remote(pool: Path, conf: dict, ticket, project_dir: str | Path,
                      f"ln -sfn {app}/{item} {app}/releases/{ver}/{item} || true")
 
         # 4. 依赖差异前置检查(design §2.3):本地 requirements 哈希 vs 远端
-        #    releases/current/.requirements.sha;不一致即中止 FAIL,除非显式放行
+        #    current/.requirements.sha;不一致即中止 FAIL,除非显式放行。
+        #    基准真实位置是 {app}/current(软链 → releases/{ver},见步骤 8 回切),
+        #    此前误写成 {app}/releases/current(服务器上不存在)→ 恒读空、恒误报差异。
         remote_sha = _ssh_run(key, host,
-                              f"test -f {app}/releases/current/.requirements.sha "
-                              f"&& cat {app}/releases/current/.requirements.sha || echo ''")
+                              f"test -f {app}/current/.requirements.sha "
+                              f"&& cat {app}/current/.requirements.sha || echo ''")
         local_sha = requirements_sha(pd / conf["requirements"])
         deps_changed = requirements_changed(pd / conf["requirements"], remote_sha or None)
         if deps_changed and not allow_deps_change:
             detail = (f"依赖差异中止:本地 {conf['requirements']} sha={local_sha} 与远端 "
-                      f"releases/current/.requirements.sha={remote_sha or '<无基准>'} 不一致。"
+                      f"current/.requirements.sha={remote_sha or '<无基准>'} 不一致。"
                       f"处置:发布单显式声明依赖变更处置(发布机重建 venv 随包上传,"
                       f"服务器不现场装依赖)后以 --allow-deps-change 放行;或先单独更新依赖。")
             return handle_deploy_failure(pool, ticket, pd, conf, detail=detail)
@@ -555,7 +557,7 @@ def _run_remote(pool: Path, conf: dict, ticket, project_dir: str | Path,
 
         # 10. 发布记录章节写入(design §4 成功路径):部署清单/冒烟结果/回滚方案
         deps_note = (DEPS_CHANGE_NOTE if deps_changed and allow_deps_change
-                     else "无差异(与 releases/current 基准一致)")
+                     else "无差异(与 current 基准一致)")
         manifest = render_deploy_manifest(
             version=ver, target="remote", when=datetime.now(timezone.utc).isoformat(),
             deps_note=deps_note, env_diff=env_diff)
