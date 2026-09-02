@@ -408,6 +408,11 @@ def advance_once(pool: Path, ticket_id: str, adapter: HarnessAdapter,
                 "system" if t.state == "p3_running" else role, project_dir)
             if blocked:
                 return blocked
+            # T-2026-0902-015 S3:P4 边放行(QA 结论通过)留痕 verdict=pass。
+            # fail 路径无需新增:GateFailed→gate_failed 事件 fails 已含 verdict 行。
+            if t.state == "p5_ready":
+                append_event(pool, t.id, role, "verdict", verdict="pass",
+                             note="QA 结论通过,P4→p5_ready 放行(R11)")
     else:
         if t.state == "p5_releasing":
             suspend(pool, t, actor="system", reason=f"发布失败: {result.status}",

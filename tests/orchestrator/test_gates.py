@@ -2,7 +2,7 @@
 from datetime import datetime
 
 from orchestrator.daemon.gates import check_gate
-from orchestrator.daemon.ticket import Ticket, new_ticket
+from orchestrator.daemon.ticket import Ticket, new_ticket, save_ticket
 
 
 def _new(pool, summary="闸门测试"):
@@ -188,3 +188,38 @@ def test_parse_verdict_fail_wins_over_pass_substring():
 def test_parse_verdict_nogo_is_fail():
     assert parse_verdict("NO-GO:阻塞项未清") == "fail"
     assert parse_verdict("no-go") == "fail"
+
+
+# --- T-2026-0902-015 S3:P4 放行留痕 verdict=pass 事件 ---
+def test_p4_release_writes_verdict_pass_event(pool, tmp_path):
+    import subprocess
+    from orchestrator.adapters.fake import FakeHarness
+    from orchestrator.daemon.events import read_events
+    from orchestrator.daemon.runner import advance_once
+
+    proj = tmp_path / "proj"
+    proj.mkdir()
+    subprocess.run(["git", "init", "-b", "main"], cwd=proj, check=True,
+                   capture_output=True)
+    subprocess.run(["git", "config", "user.email", "t@t"], cwd=proj, check=True)
+    subprocess.run(["git", "config", "user.name", "t"], cwd=proj, check=True)
+    (proj / "f.txt").write_text("x", encoding="utf-8")
+    subprocess.run(["git", "add", "."], cwd=proj, check=True)
+    subprocess.run(["git", "commit", "-m", "i"], cwd=proj, check=True,
+                   capture_output=True)
+
+    t = _new(pool)
+    t.state = "p4_verifying"
+    save_ticket(pool, t)
+    rep = proj / f"document/business/{t.id}-测试/04_测试/验收报告.md"
+    rep.parent.mkdir(parents=True, exist_ok=True)
+    rep.write_text("# 验收报告\n## 环境\nx\n## 范围\nx\n## 用例结果\nx\n"
+                   "## 结论\n**通过。**\n", encoding="utf-8")
+
+    advance_once(pool, t.id, FakeHarness(), proj,
+                 cfg={"budgets": {"k3_week_token_budget": 10**9,
+                                  "ds_daily_cny": 10**9}})
+    from orchestrator.daemon.ticket import load_ticket
+    assert load_ticket(pool, t.id).state == "p5_ready"
+    evs = [e for e in read_events(pool, t.id) if e["event"] == "verdict"]
+    assert evs and evs[-1]["verdict"] == "pass"
