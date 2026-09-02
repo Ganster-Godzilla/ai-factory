@@ -1,0 +1,63 @@
+- id: S1
+  title: statemachine.resume 加 force 参数 + 同因检测(读事件流最近两条 suspended reason_code)
+  scope:
+  - orchestrator/daemon/statemachine.py
+  - tests/orchestrator/test_statemachine.py
+  acceptance_cmd: python -m pytest tests/orchestrator/test_statemachine.py -q
+  depends_on: []
+  context: |
+    目标:design How-1/2/3。statemachine.resume 签名改
+    `resume(pool, ticket, actor, force=False)`(默认 False 保持现行为)。
+    既有校验(state=="suspended" 且 resume_state 非空)后:
+    - 用 events.read_events(pool, ticket.id) 过滤 event=="suspended",
+      按时间升序取 reason_code 序列 codes
+    - 同因判定:len(codes)>=2 且 codes[-1]==codes[-2] 且 codes[-1] 非 None
+    - 同因 且 not force → 抛 IllegalTransition(
+      f"上次同因({codes[-1]})挂起,根因未变;确认已修请加 --force / 勾选确认")
+    - 否则走原逻辑;force=True 时 append_event 的 resumed 事件补 forced=True
+    单测覆盖 Checkpoints:同因未 force 拦截(状态不变)/同因 force 放行(forced=True)/
+    异因放行/仅一条 suspended 放行/最近 reason_code=None 放行/非挂起仍 IllegalTransition。
+    事件构造:直接 append_event 造 suspended 序列,或 suspend() 两次(注意 suspend 后
+    需先把 state 拨回再二次 suspend,按现有测试夹具习惯)。
+    铁律:不改成 Transport 签名除加 force 外的任何部分;P1_REDO 逻辑不动;TDD 先红后绿。
+  status: pending
+
+- id: S2
+  title: cli resume 加 --force 透传
+  scope:
+  - orchestrator/daemon/cli.py
+  - tests/orchestrator/test_cli.py
+  acceptance_cmd: python -m pytest tests/orchestrator/test_cli.py -q
+  depends_on:
+  - S1
+  context: |
+    目标:design How-4。cli.py resume 子命令加 `--force` flag(action="store_true"),
+    resume(pool, load_ticket(...), actor="boss", force=args.force)。
+    同因未 --force:statemachine 抛 IllegalTransition → cli 现有异常路径打印并非零退出
+    (确认 cli 对 resume 的 IllegalTransition 有 try/except 或让 traceback 转化为人读消息;
+    若无 try,补一个 try/except IllegalTransition 打印 + return 1,与 guard 子命令风格一致)。
+    --force:正常 resume,打印 resumed。
+    测试:mock/夹具造同因工单,断言未 --force 时退出非零且不 resume、--force 时 resume 成功。
+    铁律:不动其他子命令;TDD 先红后绿。
+  status: pending
+
+- id: S3
+  title: dashboard /resume 确认勾选 + 全套回归
+  scope:
+  - orchestrator/dashboard/app.py
+  - orchestrator/dashboard/templates/approvals.html
+  - tests/orchestrator/test_dashboard.py
+  acceptance_cmd: python -m pytest tests/ -q
+  depends_on:
+  - S1
+  context: |
+    目标:design How-5。dashboard /resume/<ticket_id> 路由读 request.form.get("force")
+    透传 resume(..., force=bool);approvals.html 恢复表单加"确认已修根因(同因强制恢复)"
+    复选框(name="force")。同因未勾选 → resume 抛 IllegalTransition 走既有 _error 分支
+    展示提示;勾选 → 正常恢复。
+    测试(test_dashboard):POST /resume 同因不带 force → 非重定向(错误页)+ 状态不变;
+    带 force → 302 到 approvals 且已恢复。
+    验证:先跑 S1/S2 相关测试,再跑全套 `pytest tests/ -q` 零回归。
+    铁律:CSRF/loopback 校验不动;模板改动最小(加一个 checkbox);
+    全套含 tests/test_watchdog*.py(时序敏感,失败按 R14 放宽窗口而非削弱断言)。
+  status: pending

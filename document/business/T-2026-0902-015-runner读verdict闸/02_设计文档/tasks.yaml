@@ -1,0 +1,70 @@
+- id: S1
+  title: gates.parse_verdict 纯函数(fail 优先/pass 族/unknown 兜底)+ 词表单测
+  scope:
+  - orchestrator/daemon/gates.py
+  - tests/orchestrator/test_gates.py
+  acceptance_cmd: python -m pytest tests/orchestrator/test_gates.py -q
+  depends_on: []
+  context: |
+    目标:design How-1。在 orchestrator/daemon/gates.py 新增 parse_verdict(text)->str,
+    返回 "pass"|"fail"|"unknown"。输入为 QA 验收报告"## 结论"章节正文。
+    判定规则(fail 优先,防 R6 误放):
+    1. 命中 fail 词表("不通过"/"NO-GO"/"no-go",大小写不敏感)任一 → "fail"
+    2. 否则命中 pass 词表("通过"/"验收通过"/"GO"/"放行")→ "pass"
+       注意:"不通过"含"通过"子串,故必须先判 fail;pass 匹配用整词/前缀锚定防误中
+    3. 正文为空或两族都不命中 → "unknown"
+    单测覆盖 Checkpoints 全部措辞样本:
+    - "不通过,P4 挂起,退回处置。" → fail
+    - "验收通过。遗留…不阻塞。" → pass
+    - "**通过(8/8 验收命令全绿…)**" → pass
+    - "方案 B 全部验收用例通过,建议放行进入发布/观察窗。" → pass
+    - "" / "见上文。" → unknown
+    - "不通过……可转通过" → fail(fail 优先)
+    铁律:纯函数无副作用,不读文件不碰 pool;先写失败测试再实现(TDD)。
+  status: pending
+
+- id: S2
+  title: check_gate 挂 P4 verdict 检查(fail/unknown→FAIL 行,fail-closed)
+  scope:
+  - orchestrator/daemon/gates.py
+  - tests/orchestrator/test_gate_enforcement.py
+  acceptance_cmd: python -m pytest tests/orchestrator/test_gate_enforcement.py -q
+  depends_on:
+  - S1
+  context: |
+    目标:design How-2/3。在 gates.check_gate 内、stage=="P4" 分支:
+    验收报告通过存在性+"结论"章节校验后,取 "## 结论" 至下一 "## "(或文末)正文,
+    调 S1 parse_verdict;结果 != "pass" → 追加 FAIL 行
+    `_fail(rel, f"QA 结论非通过(verdict={v}): 挂起退回")`。
+    报告缺"结论"章节时不进入本分支(现有产物门禁已 FAIL,fail-closed 天然成立)。
+    仅 P4 边挂此检查,其他边零影响。
+    测试(经 test_gate_enforcement 既有闸门路径,非 conftest 旁路):
+    - 报告写"不通过" → transition(p4→p5_ready) 抛 GateFailed,fails 含 verdict 行
+    - 报告结论 unknown → 抛 GateFailed
+    - 报告写"通过" + 章节齐 → 放行到 p5_ready
+    - 报告缺"结论"章节 → FAIL 行是"缺少章节"而非 verdict 行(顺序正确)
+    - p3→p4 / p5→monitoring 边不触发 verdict 检查
+    铁律:不动 runner.py(GateFailed 现有挂起+事件路径自动接管);
+    不改其他边的判定;TDD 先红后绿。
+  status: pending
+
+- id: S3
+  title: verdict=pass 事件留痕 + 全套回归
+  scope:
+  - orchestrator/daemon/runner.py
+  - orchestrator/daemon/statemachine.py
+  - tests/orchestrator/test_gates.py
+  acceptance_cmd: python -m pytest tests/ -q
+  depends_on:
+  - S2
+  context: |
+    目标:design How-3 收尾。P4 边放行路径在 state_changed 事件补 verdict=pass:
+    - 最小方案:runner.advance_once 在 p4→p5 _transition_gated 成功后,向 transition
+      传 ev verdict="pass"(transition 已支持 **ev 透传到 append_event);
+      若接线代价高,可退而在 runner 追加一条 append_event(verdict=pass)留痕,
+      二选一,以不破坏现有 transition 签名为准。
+    - fail 路径无需新增:GateFailed→gate_failed 事件 fails 已含 verdict 行。
+    验证:先跑 S2/S1 相关测试确认绿,再跑全套 `pytest tests/ -q` 零回归。
+    铁律:statemachine.transition 现有签名与 P1_REDO 逻辑不动;conftest 旁路不破坏;
+    全套含 tests/test_watchdog*.py(时序敏感,失败后按 R14 放宽窗口而非削弱断言)。
+  status: pending
