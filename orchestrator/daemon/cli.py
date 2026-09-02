@@ -68,6 +68,8 @@ def main(argv: list[str] | None = None) -> int:
                         "缺省仍关单。仅 p1_proposed 可用,其余态报错")
     c = sub.add_parser("suspend"); c.add_argument("id"); c.add_argument("reason")
     c = sub.add_parser("resume"); c.add_argument("id")
+    c.add_argument("--force", action="store_true",
+                   help="同因挂起强制恢复(根因已修确认;T-2026-0902-016)")
     c = sub.add_parser("advance"); c.add_argument("id"); c.add_argument("project_dir"); c.add_argument("--fake", action="store_true")
     c.add_argument("--consult-fake", action="store_true")
     c = sub.add_parser("dashboard"); c.add_argument("--port", type=int, default=8321)
@@ -127,7 +129,13 @@ def main(argv: list[str] | None = None) -> int:
                     reason_code="manual")
             print(f"{args.id} → suspended")
         elif args.cmd == "resume":
-            resume(pool, load_ticket(pool, args.id), actor="boss")
+            try:
+                resume(pool, load_ticket(pool, args.id), actor="boss",
+                       force=args.force)
+            except IllegalTransition as e:
+                # 同因未 --force(T-2026-0902-016):打印提示+非零退出,不执行恢复
+                print(f"error: {args.id} 恢复被拒: {e}", file=sys.stderr)
+                return 1
             print(f"{args.id} → resumed")
         elif args.cmd == "advance":
             cfg = _cfg()

@@ -99,3 +99,37 @@ def test_reject_default_still_closes(tmp_path, monkeypatch, capsys):
     assert main(["reject", tid]) == 0                    # 缺省行为不变:关单
     assert "closed" in capsys.readouterr().out
     assert load_ticket(tmp_path / "pool", tid).state == "closed"
+
+
+# --- T-2026-0902-016 S2:cli resume --force 透传 ---
+def _suspend_twice_same(tmp_path, monkeypatch, capsys, code="release_failed"):
+    """造一张同因(最近两条 suspended reason_code 相同)挂起工单。"""
+    from orchestrator.daemon.statemachine import suspend, transition
+    from orchestrator.daemon.ticket import load_ticket, save_ticket
+    _cfg(tmp_path, monkeypatch)
+    tid = _new_ticket(tmp_path, capsys, "same-cause")
+    pool = tmp_path / "pool"
+    t = load_ticket(pool, tid)
+    transition(pool, t, "p0_proposed", actor="pm")
+    suspend(pool, t, actor="system", reason="r1", reason_code=code)
+    # 拨回再二次同因挂起
+    t.state = t.resume_state
+    t.resume_state = None
+    save_ticket(pool, t)
+    suspend(pool, t, actor="system", reason="r2", reason_code=code)
+    return tid
+
+
+def test_cli_resume_same_cause_without_force_blocked(tmp_path, monkeypatch, capsys):
+    tid = _suspend_twice_same(tmp_path, monkeypatch, capsys)
+    rc = main(["resume", tid])
+    assert rc == 1
+    assert load_ticket(tmp_path / "pool", tid).state == "suspended"
+    assert "同因" in capsys.readouterr().err
+
+
+def test_cli_resume_same_cause_with_force_passes(tmp_path, monkeypatch, capsys):
+    tid = _suspend_twice_same(tmp_path, monkeypatch, capsys)
+    rc = main(["resume", tid, "--force"])
+    assert rc == 0
+    assert load_ticket(tmp_path / "pool", tid).state == "p0_proposed"
