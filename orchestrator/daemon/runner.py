@@ -189,37 +189,51 @@ def _transition_gated(pool: Path, t, to_state: str, actor: str,
         return f"suspend: 产物门禁未过({to_state})"
 
 
-def run_dev_tasks(pool: Path, ticket, adapter: HarnessAdapter,
-                  project_dir: Path, cfg: dict | None = None,
-                  consult_adapter: HarnessAdapter | None = None) -> str:
-    if not ticket.tasks:
-        # 架构师产物 lazy-load:统一解析器定位 02_设计文档/tasks.yaml(T-2026-0830-001 F6)
-        from orchestrator.daemon.artifacts import resolve_artifact_path
-        rel = resolve_artifact_path(
-            project_dir, "document/business/{tid_dir}/02_设计文档/tasks.yaml",
-            ticket.id)
-        spec = project_dir / rel if rel else project_dir / "__none__"
-        if spec.exists():
-            try:
-                ticket.tasks = load_task_list(spec)
-            except Exception as e:
-                suspend(pool, ticket, "system", reason=f"任务清单装载失败: {e}",
-                        reason_code="load_failed")
-                return f"suspended: 任务清单装载失败: {e}"
-            save_ticket(pool, ticket)
+def _lazy_load_tasks(pool: Path, ticket, project_dir: Path) -> str | None:
+    """任务 lazy-load(T-2026-0903-002 抽自 run_dev_tasks L195-209,行为零变化):
+    tasks.yaml 定位+装载;load_failed 挂起返回挂起串,否则 None(继续)。"""
+    if ticket.tasks:
+        return None
+    # 架构师产物 lazy-load:统一解析器定位 02_设计文档/tasks.yaml(T-2026-0830-001 F6)
+    from orchestrator.daemon.artifacts import resolve_artifact_path
+    rel = resolve_artifact_path(
+        project_dir, "document/business/{tid_dir}/02_设计文档/tasks.yaml",
+        ticket.id)
+    spec = project_dir / rel if rel else project_dir / "__none__"
+    if spec.exists():
+        try:
+            ticket.tasks = load_task_list(spec)
+        except Exception as e:
+            suspend(pool, ticket, "system", reason=f"任务清单装载失败: {e}",
+                    reason_code="load_failed")
+            return f"suspended: 任务清单装载失败: {e}"
+        save_ticket(pool, ticket)
+    return None
+
+
+def _completion_or_deadlock(pool: Path, ticket, project_dir: Path) -> str | None:
+    """完工/死锁判定(抽自 L210-221,行为零变化):无 ready 时——
+    全 done→p4 转换(返回 p4/blocked 串),非全 done→deadlock 挂起;
+    有 ready 返回 None(调用方继续派发)。"""
     ready = ready_tasks(ticket.tasks)
-    if not ready:
-        if all(t["status"] == "done" for t in ticket.tasks):
-            blocked = _transition_gated(pool, ticket, "p4_verifying", "system",
-                                        project_dir)
-            if blocked:
-                return blocked
-            return "auto: p4_verifying"
-        suspend(pool, ticket, actor="system",
-                reason="无可派发任务且未完成:依赖死锁或依赖缺失",
-                reason_code="deadlock")
-        return "suspend: 依赖死锁"
-    # 成本闸在完工判定之后:全 done 工单优先进 p4,不得被帽挂起(T1 评审观察)
+    if ready:
+        return None
+    if all(t["status"] == "done" for t in ticket.tasks):
+        blocked = _transition_gated(pool, ticket, "p4_verifying", "system",
+                                    project_dir)
+        if blocked:
+            return blocked
+        return "auto: p4_verifying"
+    suspend(pool, ticket, actor="system",
+            reason="无可派发任务且未完成:依赖死锁或依赖缺失",
+            reason_code="deadlock")
+    return "suspend: 依赖死锁"
+
+
+def _cost_gate_blocked(pool: Path, ticket, cfg: dict | None) -> str | None:
+    """双成本闸(抽自 L222-242,行为零变化):ds 日现金线 + 工单预算帽;
+    mingfang 明放降级 budget_warn 事件放行;硬闸命中返回 blocked/suspend 串,
+    放行返回 None。成本闸在完工判定之后:全 done 工单优先进 p4,不得被帽挂起。"""
     # 明放模式(T-2026-0829-004):mingfang_mode 下双闸降级为 budget_warn 事件放行;
     # 缺省/关闭维持硬闸。配置即决策留痕(orchestrator.yaml 标注磨合期+复审日)
     mingfang = _mingfang(cfg)
@@ -240,7 +254,22 @@ def run_dev_tasks(pool: Path, ticket, adapter: HarnessAdapter,
             return "suspend: 工单预算帽"
         append_event(pool, ticket.id, "system", "budget_warn", gate="ticket_cap",
                      value=round(ticket_cost, 4), threshold=cap)
-    task = ready[0]
+    return None
+
+
+def run_dev_tasks(pool: Path, ticket, adapter: HarnessAdapter,
+                  project_dir: Path, cfg: dict | None = None,
+                  consult_adapter: HarnessAdapter | None = None) -> str:
+    blocked = _lazy_load_tasks(pool, ticket, project_dir)
+    if blocked:
+        return blocked
+    done_or_dead = _completion_or_deadlock(pool, ticket, project_dir)
+    if done_or_dead:
+        return done_or_dead
+    cost_blocked = _cost_gate_blocked(pool, ticket, cfg)
+    if cost_blocked:
+        return cost_blocked
+    task = ready_tasks(ticket.tasks)[0]
     wt = ensure_worktree(project_dir, f"{ticket.id}-{task['id']}")
     packet = make_packet(task, ticket, wt, design_excerpt="")
     packet.model = _model_for(cfg, "dev")
