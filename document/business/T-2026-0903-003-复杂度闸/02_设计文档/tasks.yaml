@@ -1,0 +1,41 @@
+- id: S1
+  title: check-complexity.py 核心(radon json 解析+基线比对+闸语义)+ radon 常设化
+  scope:
+  - scripts/check-complexity.py
+  - requirements.txt
+  - tests/orchestrator/test_check_complexity.py
+  acceptance_cmd: python -m pytest tests/orchestrator/test_check_complexity.py -q
+  depends_on: []
+  context: |
+    目标:design How-1/2/4。requirements.txt 加 radon;新建 scripts/check-complexity.py:
+    - 跑 `radon cc orchestrator/ plugin/ scripts/ --json`(sys.executable -m radon),
+      解析 per-file entries(name/classname/complexity),qualname=classname.name 或 name,
+      键 (rel_path 正斜杠, qualname) → cc
+    - 读 scripts/complexity-baseline.txt(格式 `rel::qualname::cc`,`#` 注释/空行跳过)
+    - 判定:cc>15 且(不在基线 或 cc>baseline_cc)→ 命中;打印 `rel::qualname cc=N
+      (baseline=M 或 新增)`;命中非空 return 1,全豁免 return 0
+    - radon 缺失(调用失败/FileNotFoundError/json 解析失败)→ 打印
+      "check-complexity 需要 radon:pip install radon" + return 2(不静默放行)
+    TDD:tests/orchestrator/test_check_complexity.py——mock/临时目录构造:
+    新增超标函数被拦/基线内豁免/基线函数 cc 升高被拦/cc 降低放行/无 radon return 2。
+    铁律:脚本 sys.path.insert 直跑;阈值 15 常量;不误拦存量。
+  status: pending
+
+- id: S2
+  title: 生成现状基线 + CLAUDE.md 使用说明 + 全套回归
+  scope:
+  - scripts/complexity-baseline.txt
+  - scripts/check-complexity.py
+  - CLAUDE.md
+  acceptance_cmd: python -m pytest tests/ -q
+  depends_on:
+  - S1
+  context: |
+    目标:design How-3/5/6。跑 S1 脚本对当前仓生成基线(可加 --write-baseline 写
+    complexity-baseline.txt,或捕获输出整理);基线含现状 cc>15 函数(main/check_gate/
+    DshAdapter.run/load_deploy_config 等,**不含已拆的 run_dev_tasks**)。
+    写后验证 AC1:对当前仓跑返回 0。CLAUDE.md 纪律要点补:
+    "合 main 前必跑 python scripts/check-complexity.py(复杂度闸,只拦增量/恶化)"。
+    跑全套 pytest tests/ -q 全绿。
+    铁律:基线文件提交入 git;AC1-AC6 全过;radon json 解析与真实输出对齐。
+  status: pending
