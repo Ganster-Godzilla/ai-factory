@@ -206,6 +206,8 @@ def test_ticket_detail(pool_client):
     html = r.get_data(as_text=True)
     assert "详情页测试" in html and "quant-lab" in html
     assert "state_changed" in html   # 事件流
+    # T-2026-0902-009:DS 现金字段口径标注(P3 切 k3 池后防"¥0=零消耗"误读)
+    assert "仅 DeepSeek 通道" in html
 
 
 def test_ticket_detail_404(pool_client):

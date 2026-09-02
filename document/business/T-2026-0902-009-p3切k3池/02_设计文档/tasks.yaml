@@ -1,0 +1,17 @@
+- id: B1
+  title: "relay:kimi4(k3-d)入池 + ds-flash/glm-flash 翻译后端 + 测试"
+  acceptance_cmd: "cd /d/Tool && node --test test/relay-keys.test.js test/relay-stats.test.js test/relay-translate.test.js test/relay-zen.test.js"
+  scope: ["D:/Tool/kimi-relay.js", "D:/Tool/test/relay-keys.test.js", "D:/Tool/test/relay-zen.test.js"]
+- id: B2
+  title: "runner:ROLE_ROUTING dev/qa/release/sre → k3 适配器 + 水位闸 600M warn-only + pytest"
+  acceptance_cmd: "cd /d/workspace/ai-factory && python -m pytest tests/ -q -x --ignore=tests/orchestrator/test_dashboard.py"
+  scope: ["orchestrator/daemon/runner.py", "orchestrator.yaml", "tests/orchestrator/"]
+- id: B3
+  title: "Dashboard DS 现金字段标注'仅 DeepSeek 通道'"
+  acceptance_cmd: "cd /d/workspace/ai-factory && python -m pytest tests/orchestrator/test_dashboard.py -q"
+  scope: ["orchestrator/dashboard/", "tests/orchestrator/test_dashboard.py"]
+  depends_on: []
+- id: B4
+  title: "生产:重启 relay + 顺位演练(伪造冷却)+ dev 小切片 k3 首验 + 04/05 文档"
+  acceptance_cmd: "curl -s http://127.0.0.1:8787/__status"
+  depends_on: [B1, B2, B3]

@@ -21,11 +21,14 @@ from orchestrator.daemon.worktree import ensure_worktree
 
 ROLE_ROUTING = {
     "pm": "claude_code", "architect": "claude_code", "test_designer": "claude_code",
-    "qa_vision": "claude_code", "dev": "dsh", "qa": "dsh",
-    "release": "dsh", "sre": "dsh",
+    "qa_vision": "claude_code", "dev": "claude_code", "qa": "claude_code",
+    "release": "claude_code", "sre": "claude_code",
+    # T-2026-0902-009(B 方案,boss 决策):P3 执行层全切 k3 订阅池(claude -p 经 relay,
+    # 溢出梯 kimi1-4→glm→ds→zen-k3 在 relay 侧,runner 零感知);DS 现金耗尽,
+    # dsh 适配器保留作回退路径(回本表四行即切回)。
 }
 
-# 角色 → 模型维度(GLM 对照实验时切 glm-5.3-flash)
+# 角色 → 模型维度(仅 dsh 路径使用;claude_code 适配器不读 model,relay 侧自选/重写)
 ROLE_MODEL = {
     "dev": "deepseek-v4-flash", "qa": "deepseek-v4-flash",
     "release": "deepseek-v4-flash", "sre": "deepseek-v4-flash",
@@ -286,10 +289,17 @@ def run_dev_tasks(pool: Path, ticket, adapter: HarnessAdapter,
     if action == "consult":
         if (cfg and ticket.type != "incident"
                 and k3_effective_week_tokens(pool, cfg) > cfg["budgets"]["k3_week_token_budget"]):
-            suspend(pool, ticket, actor="system",
-                    reason="k3 配额超线,会诊通道关闭,任务挂起",
-                    reason_code="quota_exceeded")
-            return "suspend: k3 配额超线"
+            # T-2026-0902-009:P3 全切 k3 池后水位含 runner 流量,观察期(至 2026-09-09)
+            # 与 DS 明放同款 warn-only:超线写 budget_warn 放行,不卡 pipeline;
+            # 复审按 relay 真实曲线决定恢复硬闸或定阈值。mingfang_mode 关闭即恢复硬闸。
+            if (cfg.get("budgets") or {}).get("mingfang_mode"):
+                append_event(pool, ticket.id, "system", "budget_warn",
+                             note="k3 周水位超线(观察期 warn-only,T-2026-0902-009)")
+            else:
+                suspend(pool, ticket, actor="system",
+                        reason="k3 配额超线,会诊通道关闭,任务挂起",
+                        reason_code="quota_exceeded")
+                return "suspend: k3 配额超线"
         ca = consult_adapter or get_adapter("claude_code")
         cp = consult_packet(task, ticket, result.output, wt)
         cr = ca.run(cp)
