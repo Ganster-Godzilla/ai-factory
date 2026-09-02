@@ -1,9 +1,9 @@
 """T-2026-0902-010 S3:runner 三处接线(dev/consult/五角色)经 _run_with_watchdog
-包装 + killed→timeout 判负改写 + 全角色路径冒烟 + 父活语义回归。适配器文件零改动。
+包装 + killed→timeout 判负改写 + 全角色路径冒烟。适配器文件零改动。
 
 冒烟形态:monkeypatch watchdog.guard 为记录器,逐路径断言调用均经包装
-(role/task_id/timeout=packet.timeout);killed→timeout 用记录器置 killed 验证改写;
-父活语义回归用真实 guard + 不起子进程的 stub 证透传零副作用。
+(role/task_id/timeout=packet.timeout);killed→timeout 用记录器置 killed 验证改写。
+父活语义回归(真实 guard 透传)在 tests/test_runner.py。
 D5:断言失败一律先打印 `FAIL: <子句>`。
 """
 import subprocess
@@ -196,28 +196,4 @@ def test_killed_idempotent_with_adapter_self_report(pool, tmp_path, guard_record
     _check(ev["output"] == "stub:qa", "自报 timeout 输出原样,不二次包装")
 
 
-# ---------------- 父活语义回归(真实 guard) ----------------
-
-def test_parent_alive_real_guard_role_passthrough(pool, tmp_path):
-    """父活+准时收工:真实 guard + 不起子进程的 stub → 结果透传、状态推进、零事件。"""
-    t = new_ticket(pool, project="p", summary="x")
-    transition_target = "p1_drafting"
-    t.state = transition_target
-    save_ticket(pool, t)
-    msg = advance_once(pool, t.id, StubAdapter(), tmp_path)
-    _check(msg == "role:pm:done", "真实 guard 透传 adapter 结果")
-    _check(load_ticket(pool, t.id).state == "p1_proposed", "状态照常推进")
-    _check(not [e for e in read_events(pool, t.id)
-                if e["event"] == "watchdog_killed"], "父活准时收工零 watchdog 事件")
-
-
-def test_parent_alive_real_guard_dev_done(pool, tmp_path, monkeypatch):
-    """父活 dev 完工:真实 guard 下任务照常 done、验收照常跑、零 watchdog 事件。"""
-    _stub_acceptance_ok(monkeypatch)
-    proj = _git_repo(tmp_path)
-    t = _p3_ticket(pool)
-    msg = advance_once(pool, t.id, FakeHarness(), proj)
-    _check(msg == "task:task-1:done", "真实 guard 下 dev 照常完工")
-    _check(load_ticket(pool, t.id).tasks[0]["status"] == "done", "任务落盘 done")
-    _check(not [e for e in read_events(pool, t.id)
-                if e["event"] == "watchdog_killed"], "零 watchdog 事件")
+# 父活语义回归(真实 guard 透传)在 tests/test_runner.py——验收命令两文件各司其职
