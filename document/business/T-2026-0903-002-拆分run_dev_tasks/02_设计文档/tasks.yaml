@@ -1,0 +1,52 @@
+- id: S1
+  title: 抽三闸(_lazy_load_tasks/_completion_or_deadlock/_cost_gate_blocked)
+  scope:
+  - orchestrator/daemon/runner.py
+  acceptance_cmd: python -m pytest tests/orchestrator/test_gate_enforcement.py tests/orchestrator/test_statemachine.py -q
+  depends_on: []
+  context: |
+    目标:design Architecture 前三段。把 run_dev_tasks 的 lazy-load(L195-209)、
+    完工/死锁判定(L210-221)、双成本闸(L222-242)抽为三个私有函数,
+    run_dev_tasks 顺序调用:任一返串即 return,否则继续。只移动代码不改逻辑。
+    返回协议逐字保留:suspended: 任务清单装载失败/auto: p4_verifying/blocked(门禁)/
+    suspend: 依赖死锁/blocked: ds 日现金线/suspend: 工单预算帽。
+    _completion_or_deadlock 返 None 表示有 ready 可继续(入口随后重算 ready_tasks)。
+    验证:gate_enforcement + statemachine 测试全绿(覆盖 suspend/挂起/事件路径)。
+    铁律:行为零变化;每抽一函数跑测试保持绿;签名与事件字段不动。
+  status: pending
+
+- id: S2
+  title: 抽派发与验收判负(_dispatch_task + _verify_task)
+  scope:
+  - orchestrator/daemon/runner.py
+  acceptance_cmd: python -m pytest tests/test_runner.py tests/test_runner_watchdog.py tests/test_runner_parent_alive.py -q
+  depends_on:
+  - S1
+  context: |
+    目标:design Architecture 第四段。把任务派发(L243-261 执行+计数+入账)、
+    scope/acceptance 验收(L262-294,抽为 _verify_task 返回改写后 result 或 verify)、
+    retry/consult/判负阶梯(L295-356)抽为 _dispatch_task(内含 _verify_task)。
+    run_dev_tasks 末段:task=ready[0]; return _dispatch_task(...)。
+    返回协议逐字保留:task:{id}:done/retry/consult/suspend: k3 配额超线/
+    suspend:{id}(consult_exhausted)/suspend: 任务判负/task_failed:{id}。
+    验证:runner 三测试文件全绿(覆盖 watchdog 包装/killed 改写/父活回归)。
+    铁律:行为零变化;attempts/attempts_total 计数、verify 留痕、入账语义不动;
+    scope 越界 FAIL 置顶格式、acceptance 复检证据在前格式逐字保留。
+  status: pending
+
+- id: S3
+  title: 入口收薄 + radon 实测 + 全套回归
+  scope:
+  - orchestrator/daemon/runner.py
+  acceptance_cmd: python -m pytest tests/ -q
+  depends_on:
+  - S2
+  context: |
+    目标:design Checkpoints 收口。确认 run_dev_tasks 编排入口 cc≤10、辅助函数≤15:
+    用 tmp venv radon 实测(d:/workspace/tmp/codereview-venv/.../radon cc runner.py -s),
+    任一超标则进一步拆分至达标。跑全套 pytest tests/ -q 全绿。
+    返回协议 12 串 grep 源码逐字核对(对照 design Architecture 表)。
+    ruff F 类零新增(tmp venv ruff check runner.py --select F)。
+    铁律:仅 runner.py 的 run_dev_tasks 段有 diff,其他函数零改动;
+    超标必拆不迁就;实测数据留验收报告。
+  status: pending
