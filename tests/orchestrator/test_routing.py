@@ -19,7 +19,10 @@ def _git_repo(tmp_path):
 
 
 def test_routing():
-    assert ROLE_ROUTING["dev"] == "dsh"
+    # T-2026-0902-009(B 方案,boss 决策):P3 执行层全切 k3 订阅池;
+    # 回退路径=ROLE_ROUTING 四行改回 "dsh"
+    assert ROLE_ROUTING["dev"] == "claude_code"
+    assert ROLE_ROUTING["qa"] == "claude_code"
     assert ROLE_ROUTING["pm"] == "claude_code"
     assert isinstance(get_adapter("fake"), FakeHarness)
 
