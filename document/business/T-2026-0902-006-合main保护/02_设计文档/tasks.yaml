@@ -1,0 +1,25 @@
+# T-2026-0902-006 任务切片:loop 合 main 走受保护路径
+# 契约:[{id, title, acceptance_cmd, depends_on}];改代码任务必带 scope
+# 设计依据:document/business/T-2026-0902-006-合main保护/02_设计文档/design.md
+# 运行环境:Windows + Git Bash;ai-factory 仓根执行
+# 交接说明:本单由 sk 侧移交(boss 2026-09-02 批准),ai-factory 侧评审后执行
+
+- id: S1
+  title: gitguard 守卫 + CLI + playbook 接线 + pytest
+  depends_on: []
+  scope: ["orchestrator/daemon/gitguard.py", "orchestrator/daemon/cli.py", "tests/orchestrator/test_gitguard.py", "docs/orchestrator-guide.md", "orchestrator/roles/prompts/**"]
+  context: |
+    目标(design 全节):
+    1. 新建 orchestrator/daemon/gitguard.py:check_pre_merge(project_dir,
+       allowed_prefixes=默认白名单) -> 阻塞清单;规则:fetch 后
+       git log origin/main..HEAD 非空且存在非白名单前缀提交 → 拦截(打印
+       hash/作者/时间/首行);git status --porcelain 非空 → 拦截;
+    2. cli.py 加子命令 `guard pre-merge <project_dir>`(0 过/2 拦);
+    3. dev-loop playbook 接线:docs/orchestrator-guide.md 规则#11 相关段与
+       驱动提示词(orchestrator/roles/prompts/)改"切片即合 main"为
+       "先 orc guard pre-merge,绿才合";合并成功处写 loop_merge 事件;
+    4. tests/orchestrator/test_gitguard.py:临时仓四场景(干净过/他人提交拦/
+       脏树拦/白名单放);
+    铁律:release 角色 P5 审批链不动;worktree 机制不动;守卫纯增量。
+  acceptance_cmd: >
+    bash -lc "python -m pytest tests/orchestrator/test_gitguard.py -q && python -m orchestrator.daemon.cli guard pre-merge . && grep -q 'guard pre-merge' docs/orchestrator-guide.md && echo G2-GUARD-OK"
