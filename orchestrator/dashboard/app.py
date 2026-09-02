@@ -120,8 +120,10 @@ def create_app(pool_dir: Path, cfg: dict) -> Flask:
     def resume_ticket(ticket_id: str):
         pool = app.config["POOL"]
         t = load_ticket(pool, ticket_id)
+        # T-2026-0902-016:同因强制恢复勾选 → force 透传(R12)
+        force = bool(request.form.get("force"))
         try:
-            resume(pool, t, actor="boss")
+            resume(pool, t, actor="boss", force=force)
         except IllegalTransition as e:
             return _error(f"恢复失败({t.id}):{e}")
         return redirect(url_for("approvals"))

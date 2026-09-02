@@ -26,7 +26,12 @@
       <form method="post" action="/reject/{{ t.id }}"><button class="no">驳回</button></form>
       {% endif %}
       {% if "resume" in actions %}
-      <form method="post" action="/resume/{{ t.id }}"><button class="ok">恢复</button></form>
+      <form method="post" action="/resume/{{ t.id }}">
+        <button class="ok">恢复</button>
+        <label class="force-resume" title="上次同因挂起时勾选:确认根因已修,强制恢复">
+          <input type="checkbox" name="force" value="1"> 同因强制
+        </label>
+      </form>
       {% endif %}
     </td>
   </tr>

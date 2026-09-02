@@ -588,3 +588,36 @@ def test_ticket_load_ignores_unknown_keys(tmp_path):
     t = Ticket.load(p)
     assert t.id == "T-2026-0901-001" and t.p1_round == 2
     assert not hasattr(t, "future_field")
+
+
+# --- T-2026-0902-016 S3:dashboard /resume 同因强制勾选 ---
+def _same_cause_suspended(pool, code="release_failed"):
+    from orchestrator.daemon.statemachine import suspend, transition
+    from orchestrator.daemon.ticket import new_ticket, save_ticket
+    t = new_ticket(pool, project="p", summary="same-cause")
+    transition(pool, t, "p0_proposed", actor="pm")
+    suspend(pool, t, actor="system", reason="r1", reason_code=code)
+    t.state = t.resume_state
+    t.resume_state = None
+    save_ticket(pool, t)
+    suspend(pool, t, actor="system", reason="r2", reason_code=code)
+    return t
+
+
+def test_resume_same_cause_without_force_blocked(pool_client):
+    pool, client = pool_client
+    from orchestrator.daemon.ticket import load_ticket
+    t = _same_cause_suspended(pool)
+    r = client.post(f"/resume/{t.id}")   # 不带 force
+    assert r.status_code != 302          # 错误页,非重定向
+    assert load_ticket(pool, t.id).state == "suspended"
+    assert "同因" in r.get_data(as_text=True)
+
+
+def test_resume_same_cause_with_force_passes(pool_client):
+    pool, client = pool_client
+    from orchestrator.daemon.ticket import load_ticket
+    t = _same_cause_suspended(pool)
+    r = client.post(f"/resume/{t.id}", data={"force": "1"})
+    assert r.status_code == 302
+    assert load_ticket(pool, t.id).state == "p0_proposed"
