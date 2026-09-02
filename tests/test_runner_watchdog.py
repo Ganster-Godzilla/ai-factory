@@ -3,7 +3,7 @@
 
 冒烟形态:monkeypatch watchdog.guard 为记录器,逐路径断言调用均经包装
 (role/task_id/timeout=packet.timeout);killed→timeout 用记录器置 killed 验证改写。
-父活语义回归(真实 guard 透传)在 tests/test_runner.py。
+父活语义回归(真实 guard 透传)在 tests/test_runner_parent_alive.py。
 D5:断言失败一律先打印 `FAIL: <子句>`。
 """
 import subprocess
@@ -196,4 +196,4 @@ def test_killed_idempotent_with_adapter_self_report(pool, tmp_path, guard_record
     _check(ev["output"] == "stub:qa", "自报 timeout 输出原样,不二次包装")
 
 
-# 父活语义回归(真实 guard 透传)在 tests/test_runner.py——验收命令两文件各司其职
+# 父活语义回归(真实 guard 透传)在 tests/test_runner_parent_alive.py——验收命令两文件各司其职

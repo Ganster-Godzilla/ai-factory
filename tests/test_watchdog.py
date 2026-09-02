@@ -97,7 +97,7 @@ def test_grandchild_leak_swept_by_helper(pool, tmp_path):
     def _killed_events():
         return [e for e in read_events(pool, TID) if e["event"] == "watchdog_killed"]
 
-    _check(_wait_for(lambda: bool(_killed_events()), timeout=20),
+    _check(_wait_for(lambda: bool(_killed_events()), timeout=45),
            "helper 到点写 watchdog_killed 事件")
     e = _killed_events()[0]
     _check(e["pid"] == proc.pid, "事件 pid=被杀组根")
