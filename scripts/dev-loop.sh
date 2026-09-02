@@ -44,11 +44,17 @@ for i in $(seq 1 120); do
       for try in 1 2 3; do
         mout=$(git merge --no-ff "orc/$TID-$sid" -m "merge($sid): 切片即合 main(loop 自动,规则#11)" 2>&1)
         if [ $? -eq 0 ]; then
-          # 真合并校验:分支必须成为 main 祖先(Already-up-to-date 也算过,但前提是分支有货)
-          if git merge-base --is-ancestor "orc/$TID-$sid" main; then
+          # 真合并校验:ancestor 检查在并发写入下可能瞬假(011-S1 实证:他单同时提交),
+          # 三次重试再判假合并
+          anc=0
+          for ac in 1 2 3; do
+            git merge-base --is-ancestor "orc/$TID-$sid" main && { anc=1; break; }
+            sleep 8
+          done
+          if [ $anc -eq 1 ]; then
             echo "  merged $sid"; ok=1; break
           fi
-          echo "  STOP: $sid 假合并(ancestor 校验失败)"; break
+          echo "  STOP: $sid 假合并(ancestor 三次校验失败)"; break
         fi
         if echo "$mout" | grep -q "index.lock"; then echo "  index.lock 竞争,等 20s 重试 $try"; sleep 20; continue; fi
         bad=$(git diff --name-only --diff-filter=U 2>/dev/null)
