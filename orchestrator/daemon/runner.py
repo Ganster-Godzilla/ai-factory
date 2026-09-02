@@ -270,24 +270,13 @@ def run_dev_tasks(pool: Path, ticket, adapter: HarnessAdapter,
     if cost_blocked:
         return cost_blocked
     task = ready_tasks(ticket.tasks)[0]
-    wt = ensure_worktree(project_dir, f"{ticket.id}-{task['id']}")
-    packet = make_packet(task, ticket, wt, design_excerpt="")
-    packet.model = _model_for(cfg, "dev")
-    if task["attempts"] > 0:
-        packet.prompt = retry_prompt(task, packet.prompt, task.get("last_error", ""))
-    result = _run_with_watchdog(pool, ticket, adapter, packet, "dev",
-                                task_id=task["id"])
-    task["attempts"] += 1
-    # 累计计数(T-2026-0901-003):修复重跑会清零 attempts,看板失真
-    # (003-S6 实败 23 次显示 1)——attempts_total 只增不减,事件流之外的快查口
-    task["attempts_total"] = int(task.get("attempts_total", 0)) + 1
-    if result.usage_missing:
-        # 明放(T-2026-0829-004):无 trailer 按 returncode 推进+估算入账,事件留痕供审计
-        append_event(pool, ticket.id, "dev", "usage_missing", task=task["id"],
-                     output=result.output[:500])
-    if cfg:
-        # DS 现金不分成败:失败/被复检打回的尝试照样烧钱,每次调用都入账
-        _record_cost(pool, ticket, adapter, result, "dev")
+    return _dispatch_task(pool, ticket, task, adapter, project_dir, cfg,
+                          consult_adapter)
+
+
+def _verify_task(pool: Path, ticket, task, result, wt) -> str | None:
+    """scope 越界 + acceptance 复检(抽自 L291-330,行为零变化):
+    就地改写 result.status/output,返回 verify(passed/failed/None)。"""
     verify = None
     if result.status == "done" and task.get("scope"):
         # R7 scope 越界强制检查:dev done 后、验收前先拦——越界属致命,不必再烧验收
@@ -328,11 +317,45 @@ def run_dev_tasks(pool: Path, ticket, adapter: HarnessAdapter,
                  attempt=task["attempts"], status=result.status,
                  tokens=result.tokens, cost_cny=result.cost_cny,
                  output=result.output[:500], verify=verify)
+    return verify
+
+
+def _dispatch_task(pool: Path, ticket, task, adapter: HarnessAdapter,
+                   project_dir: Path, cfg: dict | None,
+                   consult_adapter: HarnessAdapter | None) -> str:
+    """任务派发 + 验收判负阶梯(抽自 L272-385,行为零变化):worktree/packet/
+    retry_prompt/watchdog 执行+attempts 计数+入账+验收(_verify_task)+
+    retry/consult/判负分支;返回终态串。"""
+    wt = ensure_worktree(project_dir, f"{ticket.id}-{task['id']}")
+    packet = make_packet(task, ticket, wt, design_excerpt="")
+    packet.model = _model_for(cfg, "dev")
+    if task["attempts"] > 0:
+        packet.prompt = retry_prompt(task, packet.prompt, task.get("last_error", ""))
+    result = _run_with_watchdog(pool, ticket, adapter, packet, "dev",
+                                task_id=task["id"])
+    task["attempts"] += 1
+    # 累计计数(T-2026-0901-003):修复重跑会清零 attempts,看板失真
+    # (003-S6 实败 23 次显示 1)——attempts_total 只增不减,事件流之外的快查口
+    task["attempts_total"] = int(task.get("attempts_total", 0)) + 1
+    if result.usage_missing:
+        # 明放(T-2026-0829-004):无 trailer 按 returncode 推进+估算入账,事件留痕供审计
+        append_event(pool, ticket.id, "dev", "usage_missing", task=task["id"],
+                     output=result.output[:500])
+    if cfg:
+        # DS 现金不分成败:失败/被复检打回的尝试照样烧钱,每次调用都入账
+        _record_cost(pool, ticket, adapter, result, "dev")
+    _verify_task(pool, ticket, task, result, wt)
     if result.status == "done":
         task["status"] = "done"
         save_ticket(pool, ticket)
         return f"task:{task['id']}:done"
+    return _fail_ladder(pool, ticket, task, result, wt, cfg, consult_adapter)
 
+
+def _fail_ladder(pool: Path, ticket, task, result, wt, cfg: dict | None,
+                 consult_adapter: HarnessAdapter | None) -> str:
+    """判负阶梯(抽自 L353-385,行为零变化):retry/consult/判负三分支;
+    返回 retry/consult/suspend/task_failed 终态串。"""
     task["last_error"] = result.output[:800]
     save_ticket(pool, ticket)  # attempts 已记
     action = next_action(task)
