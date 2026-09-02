@@ -31,6 +31,10 @@ ROLE_MODEL = {
     "release": "deepseek-v4-flash", "sre": "deepseek-v4-flash",
 }
 
+# 角色级超时(秒):release 要写发布记录+跑完整部署链(构建/上传/翻转/重启/冒烟),
+# 1800s 在 007 实证被打死;其余角色沿用 TaskPacket 缺省 1800
+ROLE_TIMEOUT = {"release": 3600}
+
 WORK_STATES = {
     "p1_drafting": "pm",
     "p2_designing": "architect",
@@ -347,6 +351,7 @@ def advance_once(pool: Path, ticket_id: str, adapter: HarnessAdapter,
         workdir=project_dir,
         budget=t.budget,
         model=_model_for(cfg, role),
+        timeout=ROLE_TIMEOUT.get(role, 1800),
     )
     result = adapter.run(packet)
     if result.usage_missing:
