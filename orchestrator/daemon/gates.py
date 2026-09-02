@@ -19,26 +19,44 @@ def _fail(path: str, reason: str) -> str:
 
 
 # T-2026-0902-015 S1:QA 结论判定词表(基于现有验收报告真实措辞采样)。
-# fail 优先于 pass:"不通过"含"通过"子串,先判 fail 防误放(R6)。
+# 判定取"最靠前出现的判定词":结论开头是主判定(R6);
+# "不通过"作整体词,pass 匹配须剔除其子串(防"不通过"被误当"通过")。
 _VERDICT_FAIL = ("不通过", "no-go")
 _VERDICT_PASS = ("验收通过", "通过", "放行", "go")
+
+
+def _first_hit(body: str, words) -> int:
+    """词表中最早出现的位置(小写文本);无命中 → -1。"""
+    pos = [body.find(w) for w in words]
+    pos = [p for p in pos if p >= 0]
+    return min(pos) if pos else -1
 
 
 def parse_verdict(text: str) -> str:
     """QA 验收报告"结论"章节正文 → "pass" | "fail" | "unknown"。
 
-    fail 优先:任一 fail 词命中即 fail(即使同含 pass 词);否则命中 pass 词为
-    pass;正文为空或两族都不命中 → unknown(调用方按 fail-closed 处理)。
+    判定规则(015 自验实证,防 R6 双向误判):
+    1. "不通过"作为整体词优先剔除——先把"不通过"替换掉再判 pass,
+       防"不通过"里的"通过"子串被误当 pass;也防 pass 句里提及
+       "不通过"(括号补充)被误当 fail。
+    2. 在剔除"不通过"后的文本找 pass 首位置、在原文找"不通过"/no-go
+       首位置,取**最靠前**者为判定(结论开头是主判定)。
+    3. 两族都不命中或正文为空 → unknown(调用方按 fail-closed 处理)。
     纯函数:不读文件、不碰 pool,大小写不敏感。
     """
     body = (text or "").lower()
     if not body.strip():
         return "unknown"
-    if any(w in body for w in _VERDICT_FAIL):
+    fail_pos = _first_hit(body, _VERDICT_FAIL)
+    # 剔除"不通过"再判 pass:既防其子串误中 pass,也让"通过…(…不通过…)"
+    # 这类主判定 pass、提及 fail 的措辞正确判 pass。
+    body_no_fail = body.replace("不通过", "　")
+    pass_pos = _first_hit(body_no_fail, _VERDICT_PASS)
+    if fail_pos < 0 and pass_pos < 0:
+        return "unknown"
+    if fail_pos >= 0 and (pass_pos < 0 or fail_pos < pass_pos):
         return "fail"
-    if any(w in body for w in _VERDICT_PASS):
-        return "pass"
-    return "unknown"
+    return "pass"
 
 
 def project_dir_for(cfg: dict, project: str) -> Path | None:

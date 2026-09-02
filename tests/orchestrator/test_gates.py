@@ -223,3 +223,21 @@ def test_p4_release_writes_verdict_pass_event(pool, tmp_path):
     assert load_ticket(pool, t.id).state == "p5_ready"
     evs = [e for e in read_events(pool, t.id) if e["event"] == "verdict"]
     assert evs and evs[-1]["verdict"] == "pass"
+
+
+def test_parse_verdict_pass_with_parenthetical_bu_tongguo():
+    # R6 反例(015 自验发现):主判定"通过"在句首,括号里"不通过"是提及非判定 → pass
+    assert parse_verdict(
+        "**通过。** 三条切片全绿,fail-closed 语义(不通过/缺章节/无法解析一律挂起)"
+        "实证成立。") == "pass"
+
+
+def test_parse_verdict_fail_when_bu_tongguo_leads():
+    # "不通过"在判定位(句首)→ fail,即便后文有"通过"字样
+    assert parse_verdict("**不通过,P4 挂起。** 修复后可转通过。") == "fail"
+
+
+def test_parse_verdict_earliest_keyword_wins():
+    # 判定词取最靠前者:放行在前的 pass;不通过在前的 fail
+    assert parse_verdict("放行进入观察窗;此前不通过项已清。") == "pass"
+    assert parse_verdict("不通过;放行暂缓。") == "fail"
