@@ -7,7 +7,8 @@ import subprocess
 from pathlib import Path
 
 from orchestrator.adapters import get_adapter
-from orchestrator.adapters.base import HarnessAdapter, TaskPacket
+from orchestrator.adapters.base import HarnessAdapter, HarnessResult, TaskPacket
+from orchestrator.daemon import watchdog
 from orchestrator.daemon.circuitbreaker import (
     MAX_RETRY, consult_packet, next_action, retry_prompt,
 )
@@ -97,6 +98,27 @@ def _record_cost(pool: Path, ticket, adapter: HarnessAdapter, result, role: str)
         append_ledger(pool, resource, amount, unit, ticket.id, role, adapter.name,
                       tokens=tokens, calls=1,
                       estimated=getattr(result, "estimated", False))
+
+
+def _run_with_watchdog(pool: Path, ticket, adapter: HarnessAdapter,
+                       packet: TaskPacket, role: str,
+                       task_id: str | None = None) -> HarnessResult:
+    """T-2026-0902-010:角色调用经进程组墙钟看门狗包装(适配器零改动)。
+    guard 期间子孙进程强制独立进程组+登记注册表,detached helper 持 deadline
+    父死不灭、到点按组终止;退出回查 guard.killed → 结果改写 timeout 判负
+    (与适配器自报同值,幂等),失败沿既有重试/会诊/判负阶梯走。"""
+    with watchdog.guard(pool, ticket, role=role, task_id=task_id,
+                        timeout=packet.timeout) as g:
+        result = adapter.run(packet)
+    if g.killed and result.status != "timeout":
+        result = HarnessResult(
+            status="timeout",
+            output=(f"watchdog_killed: 墙钟 {packet.timeout}s 到点按组终止\n"
+                    f"--- harness 输出(截断) ---\n{result.output[:500]}"),
+            tokens=result.tokens, cost_cny=result.cost_cny,
+            log_path=result.log_path, usage_missing=result.usage_missing,
+            estimated=result.estimated)
+    return result
 
 
 def _run_acceptance(cmd: str, cwd: Path, timeout: int = 600) -> subprocess.CompletedProcess:
@@ -224,7 +246,8 @@ def run_dev_tasks(pool: Path, ticket, adapter: HarnessAdapter,
     packet.model = _model_for(cfg, "dev")
     if task["attempts"] > 0:
         packet.prompt = retry_prompt(task, packet.prompt, task.get("last_error", ""))
-    result = adapter.run(packet)
+    result = _run_with_watchdog(pool, ticket, adapter, packet, "dev",
+                                task_id=task["id"])
     task["attempts"] += 1
     # 累计计数(T-2026-0901-003):修复重跑会清零 attempts,看板失真
     # (003-S6 实败 23 次显示 1)——attempts_total 只增不减,事件流之外的快查口
@@ -302,7 +325,8 @@ def run_dev_tasks(pool: Path, ticket, adapter: HarnessAdapter,
                 return "suspend: k3 配额超线"
         ca = consult_adapter or get_adapter("claude_code")
         cp = consult_packet(task, ticket, result.output, wt)
-        cr = ca.run(cp)
+        cr = _run_with_watchdog(pool, ticket, ca, cp, "architect",
+                                task_id=task["id"])
         if cr.status == "done":
             task["consulted"] = True
             task["attempts"] = MAX_RETRY - 1   # 会诊后只再给 1 次
@@ -363,7 +387,7 @@ def advance_once(pool: Path, ticket_id: str, adapter: HarnessAdapter,
         model=_model_for(cfg, role),
         timeout=ROLE_TIMEOUT.get(role, 1800),
     )
-    result = adapter.run(packet)
+    result = _run_with_watchdog(pool, t, adapter, packet, role)
     if result.usage_missing:
         # dsh 角色路径(qa/release/sre)明放同款:无 trailer 推进+估算,事件留痕
         append_event(pool, t.id, role, "usage_missing", output=result.output[:500])
