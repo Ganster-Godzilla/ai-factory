@@ -11,7 +11,9 @@
   <div class="card"><div class="label">负责人角色</div><div class="value" style="font-size:16px">{{ ticket.owner_role }}</div></div>
   <div class="card"><div class="label">创建者</div><div class="value" style="font-size:16px">{{ ticket.created_by }}</div></div>
   <div class="card"><div class="label">DS 成本(现金)</div><div class="value" style="font-size:16px">¥{{ ds_cost }}</div>
-    <div class="sub">token 上限 {{ ticket.budget.get("token_cap", "-") }} / ¥{{ ticket.budget.get("token_cap_cny", "-") }}</div></div>
+    <div class="sub">token 上限 {{ ticket.budget.get("token_cap", "-") }} / ¥{{ ticket.budget.get("token_cap_cny", "-") }}</div>
+    <!-- T-2026-0902-009:P3 已切 k3 订阅池,¥0 多为"未走 DS 通道"而非零消耗 -->
+    <div class="sub">仅 DeepSeek 通道(dsh 直调);k3 池消耗按周水位计,不按单</div></div>
   {% if ticket.resume_state %}
   <div class="card"><div class="label">挂起前状态</div><div class="value" style="font-size:16px">{{ ticket.resume_state }}</div></div>
   {% endif %}
