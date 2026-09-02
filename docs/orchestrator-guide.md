@@ -59,7 +59,32 @@ python -m orchestrator.daemon.cli reject <id>                    # 驳回
 python -m orchestrator.daemon.cli advance <id> <项目目录>         # 推进一步(真实模型)
 python -m orchestrator.daemon.cli advance <id> . --fake          # 假模型演练(不烧钱)
 python -m orchestrator.daemon.cli advance <id> . --fake --consult-fake  # 失败演练也不烧 k3
+python -m orchestrator.daemon.cli guard pre-merge .              # 合 main 前守卫(0=可合,2=拦)
 ```
+
+### 合 main 守卫(dev-loop「切片即合 main」快道接线,T-2026-0902-006)
+
+dev-loop 合 main 前必须**先跑守卫,绿才合**(不跑守卫直接重置同步 main,
+会静默丢弃他人未推送的提交/改动——2026-09-01 事故实证):
+
+```bash
+python -m orchestrator.daemon.cli guard pre-merge <项目目录>
+# exit 0 = 可合(仅 loop 签名提交且树干净);exit 2 = 拦(见下),禁止硬合/重置同步
+```
+
+守卫规则(fetch 后,本地未推送的他人工作 = 保护对象,**宁可误拦**):
+
+1. `git log origin/main..HEAD`:空 → 过;非空但全部命中 loop 签名白名单前缀
+   (`merge(orc/`、`merge(S`、`chore(S`、`merge(T-`、`fix(T-`、`feat(T-`、
+   `docs(T-`、`release(T-`)→ 过;含其他前缀提交 → 拦,打印他人提交清单
+   (hash/作者/时间/首行);
+2. `git status --porcelain` 非空(工作区/索引有未提交改动——同步 main 时会被
+   丢弃,须先提交/还原;编排器记号 `.orc-base` 除外)→ 拦。
+
+被拦 = 他人工作在飞:挂起工单 + 报警,**人工对齐后再合**,绝不硬合。
+合 main 成功后写 `loop_merge` 审计事件(actor=loop,字段=工单/基线/合并前后
+HEAD;git 侧字段由守卫模块 `gitguard.make_loop_merge_fields()` 生成,`ticket`
+由合并点补上)。release 角色 P5 审批链不受影响(已受老板审批保护)。
 
 ## 密钥与网关
 
@@ -126,6 +151,7 @@ python -m orchestrator.daemon.cli new SK-main "你的第一个需求"
 | 症状 | 处理 |
 |---|---|
 | 工单挂起(红色) | 看详情页事件流找原因;修复后审批中心点【恢复】 |
+| 合 main 被守卫拦(`guard pre-merge` 退出 2) | 他人未推送提交/脏文件在飞:先人工对齐(提交/推送/还原),再跑守卫至 0 后重试 |
 | 会诊反复失败 | 大概率是设计/切片问题,驳回 P2 让架构师重做 |
 | `pool/.lock` 残留(建单报 TimeoutError) | 删掉 `pool/.lock` 文件(上次进程被强杀的痕迹) |
 | 网关连不上 | `curl http://127.0.0.1:8787/__status`;死了就 `cd /d/Tool && node kimi-relay.js &` |
