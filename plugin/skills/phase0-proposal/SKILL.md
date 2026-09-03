@@ -10,7 +10,7 @@ description: Phase 0 提案阶段。当用户提出新想法/新需求/新模块
 模板:`${CLAUDE_PLUGIN_ROOT}/templates/proposal.template.md`
 
 ## 内容边界(只写四项)
-1. 问题/机会  2. 建议方向  3. 粗略范围  4. 不做什么
+1. 问题  2. 方向  3. 范围  4. 不做
 
 ## 禁止
 - ❌ 写 Why/What 详细论证(那是 Phase 1 PRD)
