@@ -621,3 +621,43 @@ def test_resume_same_cause_with_force_passes(pool_client):
     r = client.post(f"/resume/{t.id}", data={"force": "1"})
     assert r.status_code == 302
     assert load_ticket(pool, t.id).state == "p0_proposed"
+
+
+# ============ T-2026-0903-010:tasks 裸串双层防御 ============
+
+def _plant_str_tasks(pool, tasks):
+    """绕过 save_ticket 校验直写脏数据(Ticket.save 不校验),模拟手写裸串事故现场。"""
+    from orchestrator.daemon.ticket import new_ticket, _path
+    t = new_ticket(pool, project="p", summary="裸串 tasks 事故单")
+    t.tasks = tasks
+    t.save(_path(pool, t.id))
+    return t
+
+
+def test_ticket_detail_str_tasks_200(pool_client):
+    # 存量/旁路脏数据容错:详情页 200,str 项降级显示 id=串本身 + 非法提示
+    pool, client = pool_client
+    t = _plant_str_tasks(pool, ["S1", "S2"])
+    r = client.get(f"/ticket/{t.id}")
+    assert r.status_code == 200
+    html = r.get_data(as_text=True)
+    assert "S1" in html and "S2" in html
+    assert "非法任务项" in html
+
+
+def test_save_ticket_rejects_str_tasks(pool):
+    # 写入层拒入(L1):str 项 tasks 落盘即 ValueError,事故挡在写入时
+    from orchestrator.daemon.ticket import new_ticket, save_ticket
+    t = new_ticket(pool, project="p", summary="写入校验")
+    t.tasks = ["S1"]
+    with pytest.raises(ValueError, match="tasks"):
+        save_ticket(pool, t)
+
+
+def test_save_ticket_accepts_dict_tasks(pool):
+    # dict 契约不受影响:正常落盘回读
+    from orchestrator.daemon.ticket import new_ticket, save_ticket, load_ticket
+    t = new_ticket(pool, project="p", summary="dict tasks")
+    t.tasks = [{"id": "S1", "title": "x", "status": "pending", "attempts": 0}]
+    save_ticket(pool, t)
+    assert load_ticket(pool, t.id).tasks[0]["id"] == "S1"

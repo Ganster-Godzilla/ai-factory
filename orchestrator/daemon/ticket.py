@@ -117,8 +117,18 @@ def load_ticket(pool: Path, ticket_id: str) -> Ticket:
     return Ticket.load(_path(pool, ticket_id))
 
 
+def _validate_tasks(tasks: list) -> list[str]:
+    """tasks 契约(T-2026-0903-010):每项须为 dict 且含非空 id 键。
+    手写裸串 ["S1", ...] 曾致详情页 500 / ready_tasks 炸——写入层快速失败拒入。"""
+    problems = []
+    for i, x in enumerate(tasks or []):
+        if not isinstance(x, dict) or not x.get("id"):
+            problems.append(f"tasks[{i}] 契约违例:须为 dict 且含非空 id,收到 {x!r}")
+    return problems
+
+
 def save_ticket(pool: Path, ticket: Ticket) -> None:
-    problems = ticket.validate()
+    problems = ticket.validate() + _validate_tasks(ticket.tasks)
     if problems:
         raise ValueError(f"工单校验失败: {problems}")
     ticket.save(_path(pool, ticket.id))

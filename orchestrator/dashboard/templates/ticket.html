@@ -29,11 +29,17 @@
   <tr><th>任务</th><th>标题</th><th>状态</th><th>尝试次数</th><th>Worktree</th></tr>
   {% for task in tasks %}
   <tr>
+    {% if task is mapping %}
     <td>{{ task.get("id", "-") }}</td>
     <td>{{ task.get("title", "-") }}</td>
     <td>{{ task.get("status", "-") }}</td>
     <td>{{ task.get("attempts", 0) }}</td>
     <td>{{ task.get("worktree", "-") or "-" }}</td>
+    {% else %}
+    <!-- T-2026-0903-010:裸串 tasks 容错(R2),脏数据可见不 500 -->
+    <td>{{ task }}</td>
+    <td colspan="4" class="muted">非法任务项(非 dict),请修数据</td>
+    {% endif %}
   </tr>
   {% endfor %}
 </table>

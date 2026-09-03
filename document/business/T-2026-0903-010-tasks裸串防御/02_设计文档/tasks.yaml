@@ -1,0 +1,38 @@
+# T-2026-0903-010 任务切片:tasks 裸串双层防御
+# 契约:[{id, title, acceptance_cmd, depends_on}];改代码任务必带 scope
+# 设计依据:document/business/T-2026-0903-010-tasks裸串防御/02_设计文档/design.md
+# 运行环境:Windows + Git Bash;ai-factory 仓根执行
+
+- id: S1
+  title: 写入层校验:save_ticket 拒入裸串 tasks(_validate_tasks + ValueError)
+  depends_on: []
+  scope: ["orchestrator/daemon/ticket.py", "tests/orchestrator/*"]
+  context: |
+    目标(design S1):ticket.py 增 _validate_tasks(tasks):None/空表放行;
+    每项须 isinstance dict 且含非空 "id" 键,违例抛 ValueError;
+    save_ticket 写盘前调用。既有全池工单(均 dict 或空)不受影响。
+  acceptance_cmd: >
+    bash -lc "cd /d/workspace/ai-factory && python -m pytest tests/orchestrator/ -x -q && echo S1-OK"
+
+- id: S2
+  title: 展示层容错:ticket.html tasks 循环兼容 str 项(mapping 分支)
+  depends_on: []
+  scope: ["orchestrator/dashboard/templates/ticket.html", "tests/orchestrator/*"]
+  context: |
+    目标(design S2):{% if task is mapping %} 走原渲染;
+    else 渲染 id=串本身 + colspan=4 提示"非法任务项(非 dict),请修数据"。
+    事件流/产物块不动。007/008 渲染不回退。
+  acceptance_cmd: >
+    bash -lc "cd /d/workspace/ai-factory && python -m pytest tests/orchestrator/test_dashboard.py -x -q && echo S2-OK"
+
+- id: S3
+  title: 回归测试三用例 + 全池扫描 + 详情页冒烟(007/008/str 构造单)
+  depends_on: [S1, S2]
+  scope: ["tests/orchestrator/test_dashboard.py"]
+  context: |
+    目标(design S3):test_ticket_detail_str_tasks_200(200+含串+含提示);
+    test_save_ticket_rejects_str_tasks(ValueError);
+    test_save_ticket_accepts_dict_tasks(落盘回读)。
+    全池 yaml 扫描无 str tasks;007/008 详情页 200。
+  acceptance_cmd: >
+    bash -lc "cd /d/workspace/ai-factory && python -m pytest tests/orchestrator/test_dashboard.py -x -q && curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8321/ticket/T-2026-0903-008 && echo ' S3-OK'"
