@@ -6,10 +6,10 @@
 - **状态**: speculative | candidate | accepted | executing | suspended | obsolete | archived
 - **Backlog ID**: (登记后回填)
 
-## 问题/机会
+## 问题
 
-## 建议方向
+## 方向
 
-## 粗略范围
+## 范围
 
-## 不做什么
+## 不做
