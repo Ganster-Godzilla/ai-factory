@@ -1,0 +1,38 @@
+# T-2026-0908-001 任务切片:zheyuan 渠道三通道入网关
+# 契约:[{id, title, acceptance_cmd, depends_on}];改代码任务必带 scope
+# 设计依据:document/business/T-2026-0908-001-zheyuan接入/02_设计文档/design.md
+# 运行环境:Windows + Git Bash + Node;D:\Tool 仓执行
+
+- id: S1
+  title: 三后端入 BACKENDS(zy-k2 原生/zy-gpt/zy-ds 翻译)+ 名单断言 7→10
+  depends_on: []
+  scope: ["D:/Tool/kimi-relay.js", "D:/Tool/test/relay-keys.test.js"]
+  context: |
+    目标(design R1):BACKENDS 追加 zy-k2(透传+model 重写 kimi-k2.6)、
+    zy-gpt/zy-ds(translate);keys 从 zheyuan-k2/gpt/ds.env 加载(已在位);
+    relay-keys.test.js 后端数断言 7→10。TDD:先改断言看红,再加后端看绿。
+  acceptance_cmd: >
+    bash -lc "cd /d/Tool && node --test test/relay-keys.test.js && echo S1-OK"
+
+- id: S2
+  title: ROUTES 按模型路由组 + pickBackends(model) + 路由/顺位测试
+  depends_on: [S1]
+  scope: ["D:/Tool/kimi-relay.js", "D:/Tool/test/relay-routes.test.js"]
+  context: |
+    目标(design R2):ROUTES={'k2.6':[zy-k2,zy-ds,glm-flash,ds-flash,kimi1-4,zen-k3],
+    'gpt-6-astra':[zy-gpt,kimi1-4,zen-k3]};pickBackends(model) 按链过滤冷却,
+    pinned 语义不变;缺省链=BACKENDS 顺序(回归锁)。
+    新增 test/relay-routes.test.js:三模型取链断言+伪造冷却顺位跳过+缺省链一致。
+  acceptance_cmd: >
+    bash -lc "cd /d/Tool && node --test test/relay-routes.test.js test/relay-keys.test.js && echo S2-OK"
+
+- id: S3
+  title: 全量回归 + 活冒烟(三后端真实调用/路由落点/计量)+ 生产 relay 重启
+  depends_on: [S2]
+  scope: ["D:/Tool/test/", "D:/Tool/kimi-relay.js"]
+  context: |
+    目标(design R3/R4):node --test test/ 全量零红;
+    test/smoke-zheyuan.js:隔离端口四步(名单 10/三后端钉住真实调用/k2.6 落点/k3 缺省链);
+    生产 relay(8787)重启 → /__status 十后端在线;/__stats kimi* 合计口径不变(编排器水位不受影响)。
+  acceptance_cmd: >
+    bash -lc "cd /d/Tool && node --test test/ && node test/smoke-zheyuan.js && echo S3-OK"
