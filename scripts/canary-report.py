@@ -16,7 +16,6 @@ import re
 import sys
 import time
 import urllib.request
-from collections import defaultdict
 from datetime import datetime
 from pathlib import Path
 
