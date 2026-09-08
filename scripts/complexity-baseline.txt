@@ -9,3 +9,4 @@ orchestrator/daemon/gates.py::check_gate::24
 orchestrator/daemon/watchdog.py::_helper_main::17
 orchestrator/dashboard/views.py::overview_data::16
 orchestrator/dashboard/views.py::ticket_list::19
+scripts/canary-report.py::_ticket_rows::18

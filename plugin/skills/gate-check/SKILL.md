@@ -16,4 +16,8 @@ description: Phase 门禁检查(刚性)。当用户说"推进""进入下一阶�
 ## 全过后
 - 更新 state.json:`milestones.<phaseN>=completed`、`phase` 推进、`last_updated`
 - 更新 backlog.md 状态
+- **待批可见性(R16,刚性)**:产物需 boss 批准时,工单 `owner_role` 必须交还
+  boss 并补 note 事件;然后预演 `views.pending_groups(pool)` 确认工单出现在
+  对应审批桶(或跑 `python scripts/check-approval-visibility.py`)。
+  桶里看不到 = boss 无单可批,禁止宣称"已待批"
 - 告知用户可进入的下一 Phase 及对应技能名

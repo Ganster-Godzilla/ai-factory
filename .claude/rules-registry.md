@@ -21,3 +21,4 @@
 | R15 | 复杂度治理按"复杂度×改动热度"分诊,不搞大扫除:基线内超标函数(scripts/complexity-baseline.txt)由 003 复杂度闸兜底只防恶化;改动到谁顺手拆谁(在当张工单里抽离所动段落),让 cc 自然降;只有闸频繁拦某函数恶化时才专立单拆 | E1 | 自觉(003 闸已 E2 兜底恶化) | 2026-09-03 | 源于 ruff/radon 扫描与 002/003 治理:run_dev_tasks cc46+月改33次+心脏三重叠加才专立单拆;基线 6 函数(cc16-25)均 MI A 级,非严重问题,防过度治理打断业务 |
 
 
+| R16 | 交互式 phase 推进、产物待 boss 批时,工单 owner_role 必须交还 boss 并补 note 事件,且必须预演 pending_groups 确认工单落在审批桶(桶里看不到=boss 无单可批,禁止宣称已待批) | E2 | scripts/check-approval-visibility.py(待批状态入桶预演+p2_designing 两件套齐但 owner 未交还即 FAIL);gate-check 技能全过后步骤含预演 | 2026-09-08 | 源于 T-2026-0908-002:P2 设计完成但 owner_role 停 pm,审批中心 P2 桶空,boss 无单可批;boss 报第 2 次遇到,触发同 E1 两犯必晋升 |
