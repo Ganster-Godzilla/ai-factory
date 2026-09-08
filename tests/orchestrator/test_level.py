@@ -12,7 +12,7 @@ from orchestrator.daemon.circuitbreaker import next_action
 from orchestrator.daemon.statemachine import (
     IllegalTransition, approval_target, transition,
 )
-from orchestrator.daemon.ticket import Ticket, load_ticket, new_ticket, save_ticket
+from orchestrator.daemon.ticket import load_ticket, new_ticket, save_ticket
 
 
 def _ticket(pool, *, level=None, state="draft", type="feature", created_at="2026-09-08T00:00:00+00:00"):
