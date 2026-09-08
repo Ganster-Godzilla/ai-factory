@@ -251,3 +251,39 @@ def test_parse_verdict_go_word_boundary():
     # 不含判定词,仅含 go 子串 → unknown(不误判 pass)
     assert parse_verdict("ongoing investigation, good progress") == "unknown"
     assert parse_verdict("结果尚可,google 一下便知") == "unknown"
+
+
+# ── T-2026-0829-006 R5:L3 门禁裁剪 ────────────────────────────────────────────
+
+def _l3(pool, state, summary="快速通道单"):
+    t = new_ticket(pool, project="p", summary=summary, level="L3")
+    t.state = state
+    return t
+
+
+def test_l3_exempts_artifact_stages(pool, tmp_path):
+    """L3 单 P0/P1/P4 产物边:零产物文件也放行(豁免);L1 同场景照拦(对照)。"""
+    for frm, to in [("p0_proposed", "p1_drafting"),
+                    ("p1_drafting", "p1_proposed"),
+                    ("p4_verifying", "p5_ready")]:
+        t = _l3(pool, frm)
+        assert check_gate(tmp_path, t, to) == [], f"L3 {frm}→{to} 应豁免"
+        l1 = _new(pool); l1.state = frm
+        assert check_gate(tmp_path, l1, to), f"L1 {frm}→{to} 应照拦"
+
+
+def test_l3_p3_edge_keeps_task_verify(pool, tmp_path):
+    """L3 的 P3 边不可省(验收命令执行):verify 非 passed 照拦,passed 放行。"""
+    t = _l3(pool, "p3_running")
+    t.tasks = [{"id": "S1", "title": "x", "status": "done",
+                "acceptance_cmd": "echo ok", "verify": "failed"}]
+    fails = check_gate(tmp_path, t, "p4_verifying")
+    assert any("verify" in f for f in fails)
+    t.tasks[0]["verify"] = "passed"
+    assert check_gate(tmp_path, t, "p4_verifying") == []
+
+
+def test_l3_p4_edge_skips_verdict(pool, tmp_path):
+    """L3 豁免验收报告产物 → P4 verdict 检查随产物一并豁免(无报告也放行)。"""
+    t = _l3(pool, "p4_verifying")
+    assert check_gate(tmp_path, t, "p5_ready") == []

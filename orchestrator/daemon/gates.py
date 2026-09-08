@@ -95,17 +95,32 @@ def check_gate(project_dir: Path, ticket, to_state: str) -> list[str]:
     stage = manifest_for_edge(ticket.state, to_state)
     if stage is None or not gate_required(ticket):
         return []
+    # L3 快速通道裁剪(T-2026-0829-006 R5,策略"不可省四项"封闭清单):
+    # 产物文件校验(P0/P1/P2/P4/P5_*)全豁免,P4 verdict 随验收报告产物一并豁免;
+    # 仅 P3 边保留 task_verify_required(不可省四项之二:验收命令执行)。
+    # 其余三项承载点:发布批准=TRANSITIONS actor 表;台账=ledger;状态机=transition 落事件。
+    if getattr(ticket, "level", "L1") == "L3" and stage != "P3":
+        return []
     spec = ARTIFACT_MANIFEST[stage]
-    fails: list[str] = []
+    fails = _check_artifact_files(Path(project_dir), spec["artifacts"], ticket)
+    fails += _check_task_verifies(ticket, spec)
+    fails += _check_p4_verdict(Path(project_dir), ticket, stage, fails)
+    return fails
 
-    for art in spec["artifacts"]:
-        rel = _resolve_rel(Path(project_dir), art["path"], ticket.id)
+
+def _check_artifact_files(project_dir: Path, artifacts: list[dict],
+                          ticket) -> list[str]:
+    """产物文件逐件机器校验(存在/非空/tasks 契约/必含章节),T-2026-0829-006 抽离
+    (check_gate cc 超闸,R15 改动到谁顺手拆谁;行为零变化)。"""
+    fails: list[str] = []
+    for art in artifacts:
+        rel = _resolve_rel(project_dir, art["path"], ticket.id)
         if rel is None:
             fails.append(_fail(art["path"].replace("{tid_dir}",
                                                  f"{ticket.id}-<短名>"),
                                "产物不存在(工单文件夹未建)"))
             continue
-        p = Path(project_dir) / rel
+        p = project_dir / rel
         if not p.is_file():
             fails.append(_fail(rel, "产物不存在"))
             continue
@@ -130,7 +145,12 @@ def check_gate(project_dir: Path, ticket, to_state: str) -> list[str]:
         for reason in doccheck(text, art["require_sections"],
                                require_content=art["require_content"]):
             fails.append(_fail(rel, reason))
+    return fails
 
+
+def _check_task_verifies(ticket, spec: dict) -> list[str]:
+    """P3 边任务 verify 留痕校验(不可省四项之二,L3 亦不豁免)。"""
+    fails: list[str] = []
     if spec.get("task_verify_required"):
         for task in ticket.tasks or []:
             if task.get("status") != "done":
@@ -139,25 +159,31 @@ def check_gate(project_dir: Path, ticket, to_state: str) -> list[str]:
                 fails.append(_fail(f"task[{task.get('id')}]",
                                    "verify 留痕非 passed"
                                    "(补救:核实后手改 yaml 或 closed 重开)"))
-
-    # T-2026-0902-015 S2:P4 边(p4_verifying→p5_ready)追加 verdict 检查——
-    # QA 报告"结论"非通过(fail/unknown)即挂起退回,fail-closed。
-    # 报告缺失/无"结论"章节时,上方产物门禁已 FAIL(不重复判 verdict)。
-    if stage == "P4" and not any("验收报告" in f for f in fails):
-        report_rel = _resolve_rel(
-            Path(project_dir),
-            "document/business/{tid_dir}/04_测试/验收报告.md", ticket.id)
-        if report_rel is not None:
-            rpt = Path(project_dir) / report_rel
-            if rpt.is_file():
-                verdict = parse_verdict(_section_text(
-                    rpt.read_text(encoding="utf-8", errors="replace"), "结论"))
-                if verdict != "pass":
-                    fails.append(_fail(
-                        report_rel,
-                        f"QA 结论非通过(verdict={verdict}): 挂起退回"
-                        "(R11:状态机须读结论,不只认退出码)"))
     return fails
+
+
+def _check_p4_verdict(project_dir: Path, ticket, stage: str,
+                      fails: list[str]) -> list[str]:
+    """T-2026-0902-015 S2:P4 边(p4_verifying→p5_ready)追加 verdict 检查——
+    QA 报告"结论"非通过(fail/unknown)即挂起退回,fail-closed。
+    报告缺失/无"结论"章节时,上方产物门禁已 FAIL(不重复判 verdict)。"""
+    if stage != "P4" or any("验收报告" in f for f in fails):
+        return []
+    report_rel = _resolve_rel(
+        project_dir,
+        "document/business/{tid_dir}/04_测试/验收报告.md", ticket.id)
+    if report_rel is None:
+        return []
+    rpt = project_dir / report_rel
+    if not rpt.is_file():
+        return []
+    verdict = parse_verdict(_section_text(
+        rpt.read_text(encoding="utf-8", errors="replace"), "结论"))
+    if verdict != "pass":
+        return [_fail(report_rel,
+                      f"QA 结论非通过(verdict={verdict}): 挂起退回"
+                      "(R11:状态机须读结论,不只认退出码)")]
+    return []
 
 
 def _section_text(text: str, section: str) -> str:

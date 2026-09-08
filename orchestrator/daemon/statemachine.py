@@ -8,7 +8,7 @@ from orchestrator.daemon.ticket import Ticket, save_ticket
 
 TRANSITIONS = {
     "draft":         {"p0_proposed": {"pm", "boss"}, "closed": {"boss"}},
-    "p0_proposed":   {"p1_drafting": {"boss"}, "closed": {"boss"}},
+    "p0_proposed":   {"p1_drafting": {"boss"}, "p3_queued": {"boss"}, "closed": {"boss"}},
     "p1_drafting":   {"p1_proposed": {"pm"}, "suspended": {"*"}},
     "p1_proposed":   {"p2_designing": {"boss"}, "p1_drafting": {"boss"}, "closed": {"boss"}},
     "p2_designing":  {"p2_approved": {"boss"}, "p1_drafting": {"boss"}, "suspended": {"*"}},
@@ -17,12 +17,16 @@ TRANSITIONS = {
     "p3_running":    {"p4_verifying": {"system"}, "suspended": {"*"}},
     "p4_verifying":  {"p5_ready": {"qa"}, "p3_running": {"qa"}, "suspended": {"*"}},
     "p5_ready":      {"p5_releasing": {"boss"}, "suspended": {"*"}},
-    "p5_releasing":  {"monitoring": {"release"}, "suspended": {"*"}},
+    "p5_releasing":  {"monitoring": {"release"}, "done": {"release"}, "suspended": {"*"}},
     "monitoring":    {"done": {"sre"}, "suspended": {"*"}},
     "suspended":     {"closed": {"boss"}},
     "done":          {},
     "closed":        {},
 }
+
+# L3 快速通道条件边(T-2026-0829-006,策略:L3 最短路):仅 level==L3 放行,
+# L1/L2 走这两边响亮报错——快速通道是"按级别裁剪"而非"人人可抄近道"。
+LEVEL_GATED_EDGES = {("p0_proposed", "p3_queued"), ("p5_releasing", "done")}
 
 APPROVALS = {
     "p0_proposed": "p1_drafting",
@@ -42,6 +46,15 @@ SUSPEND_REASON_CODES = {
 # P1 重做边(D2):PRD 驳回回炉,actor 限 boss。轮次计数在 transition 内统一记,
 # CLI/dashboard 等任何入口都经此走,不会漏计
 P1_REDO_EDGE = ("p1_proposed", "p1_drafting")
+
+
+def approval_target(ticket) -> str | None:
+    """审批目标按级别解析(T-2026-0829-006 R3):CLI 与 Dashboard 审批中心共用本函数,
+    双入口同口径防漂移。p0_proposed 态 L3→p3_queued(快速通道),L1/L2→p1_drafting;
+    其余态查 APPROVALS;非审批态 → None。"""
+    if ticket.state == "p0_proposed":
+        return "p3_queued" if getattr(ticket, "level", "L1") == "L3" else "p1_drafting"
+    return APPROVALS.get(ticket.state)
 
 
 class IllegalTransition(Exception):
@@ -84,6 +97,11 @@ def transition(pool: Path, ticket: Ticket, to_state: str, actor: str,
         raise IllegalTransition(f"{ticket.state} → {to_state} 不在迁移表")
     if "*" not in allowed and actor not in allowed:
         raise IllegalTransition(f"{ticket.state} → {to_state} 不允许 actor={actor}")
+    if (ticket.state, to_state) in LEVEL_GATED_EDGES \
+            and getattr(ticket, "level", "L1") != "L3":
+        raise IllegalTransition(
+            f"{ticket.state} → {to_state} 为 L3 快速通道边,"
+            f"当前 level={getattr(ticket, 'level', 'L1')}")
     _enforce_gate(project_dir, ticket, to_state)
     frm = ticket.state
     ticket.state = to_state
@@ -92,6 +110,9 @@ def transition(pool: Path, ticket: Ticket, to_state: str, actor: str,
         # getattr 兜底:内存中的旧工单对象可能没有 p1_round 字段
         ticket.p1_round = getattr(ticket, "p1_round", 0) + 1
         ev.setdefault("round", ticket.p1_round)
+    if (frm, to_state) == ("p5_releasing", "done"):
+        # L3 快速通道终点(策略):发布批准后即 done,观察窗豁免记事件
+        ev.setdefault("monitoring_skipped", True)
     save_ticket(pool, ticket)
     append_event(pool, ticket.id, actor, "state_changed", frm=frm, to=to_state, **ev)
     return ticket

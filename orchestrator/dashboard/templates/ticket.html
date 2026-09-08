@@ -8,6 +8,10 @@
   <div class="card"><div class="label">项目</div><div class="value" style="font-size:16px">{{ ticket.project }}</div></div>
   <div class="card"><div class="label">状态</div><div class="value" style="font-size:16px">{{ ticket.state }}</div></div>
   <div class="card"><div class="label">类型 / 优先级</div><div class="value" style="font-size:16px">{{ ticket.type }} / {{ ticket.priority }}</div></div>
+  <!-- T-2026-0829-006:级别卡(当前级别+定级来源);存量无字段兜底 L1 -->
+  <div class="card"><div class="label">级别</div><div class="value" style="font-size:16px">
+    <span class="badge badge-{{ (ticket.level or 'L1')|lower }}">{{ ticket.level or 'L1' }}</span></div>
+    <div class="sub">{{ '快速通道(L3 裁剪生效)' if ticket.level == 'L3' else '完整流程' }} · 建单指定;存量单兜底 L1</div></div>
   <div class="card"><div class="label">负责人角色</div><div class="value" style="font-size:16px">{{ ticket.owner_role }}</div></div>
   <div class="card"><div class="label">创建者</div><div class="value" style="font-size:16px">{{ ticket.created_by }}</div></div>
   <div class="card"><div class="label">DS 成本(现金)</div><div class="value" style="font-size:16px">¥{{ ds_cost }}</div>

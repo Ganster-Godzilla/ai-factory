@@ -6,9 +6,14 @@ from pathlib import Path
 from orchestrator.adapters.base import TaskPacket
 
 MAX_RETRY = 3
+# L3 快速通道收紧(T-2026-0829-006,策略:第三次重试成本已超任务价值);
+# 免会诊——无架构师产物,达上限直接挂起转人工
+MAX_RETRY_L3 = 2
 
 
-def next_action(task: dict) -> str:
+def next_action(task: dict, level: str = "L1") -> str:
+    if level == "L3":
+        return "retry" if task["attempts"] < MAX_RETRY_L3 else "suspend"
     if task["attempts"] < MAX_RETRY:
         return "retry"
     if not task.get("consulted"):
