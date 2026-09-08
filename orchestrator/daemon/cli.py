@@ -12,7 +12,7 @@ from orchestrator.adapters.fake import FakeHarness
 from orchestrator.daemon.events import read_events
 from orchestrator.daemon.runner import ROLE_ROUTING, WORK_STATES, advance_once
 from orchestrator.daemon.statemachine import (
-    APPROVALS, IllegalTransition, resume, suspend, transition,
+    IllegalTransition, approval_target, resume, suspend, transition,
 )
 from orchestrator.daemon.ticket import load_ticket, new_ticket
 
@@ -59,6 +59,8 @@ def main(argv: list[str] | None = None) -> int:
     sub = p.add_subparsers(dest="cmd", required=True)
     c = sub.add_parser("new"); c.add_argument("project"); c.add_argument("summary"); c.add_argument("--by", default="human")
     c.add_argument("--type", choices=["feature", "incident"], default="feature")
+    c.add_argument("--level", choices=["L1", "L2", "L3"], default="L1",
+                   help="任务分级(T-2026-0829-006):L1 完整流程(缺省保守)/ L3 快速通道")
     sub.add_parser("list")
     c = sub.add_parser("show"); c.add_argument("id")
     c = sub.add_parser("approve"); c.add_argument("id"); c.add_argument("--as", dest="actor", default="boss")
@@ -89,7 +91,7 @@ def main(argv: list[str] | None = None) -> int:
     try:
         if args.cmd == "new":
             t = new_ticket(pool, args.project, args.summary, created_by=args.by,
-                           type=args.type)
+                           type=args.type, level=args.level)
             print(f"created {t.id} ({t.state})")
         elif args.cmd == "list":
             for f in sorted((pool / "tickets").glob("*.yaml")):
@@ -106,7 +108,7 @@ def main(argv: list[str] | None = None) -> int:
             if args.actor == "pm" and t.state == "draft":
                 transition(pool, t, "p0_proposed", actor="pm", project_dir=pd)
             else:
-                target = APPROVALS.get(t.state)
+                target = approval_target(t)   # 级别感知(T-2026-0829-006):L3 在 p0 直落 p3_queued
                 if not target:
                     print(f"{t.state} 不是审批态", file=sys.stderr)
                     return 1

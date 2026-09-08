@@ -661,3 +661,37 @@ def test_save_ticket_accepts_dict_tasks(pool):
     t.tasks = [{"id": "S1", "title": "x", "status": "pending", "attempts": 0}]
     save_ticket(pool, t)
     assert load_ticket(pool, t.id).tasks[0]["id"] == "S1"
+
+
+# ── T-2026-0829-006 R6:level 展示 ─────────────────────────────────────────────
+
+def test_ticket_list_shows_level_badge(pool):
+    cfg = _cfg()
+    new_ticket(pool, project="p", summary="L3 快速单", level="L3")
+    new_ticket(pool, project="p", summary="普通单")          # 缺省 L1
+    app = create_app(pool, cfg); app.config["TESTING"] = True
+    html = app.test_client().get("/tickets").get_data(as_text=True)
+    assert "badge-l3" in html and "L3" in html
+    assert "badge-l1" in html
+
+
+def test_ticket_detail_shows_level_card(pool):
+    cfg = _cfg()
+    t = new_ticket(pool, project="p", summary="详情级别卡", level="L3")
+    app = create_app(pool, cfg); app.config["TESTING"] = True
+    html = app.test_client().get(f"/ticket/{t.id}").get_data(as_text=True)
+    assert "级别" in html and "L3" in html
+
+
+def test_legacy_ticket_without_level_renders(pool):
+    """存量无 level 字段:列表与详情渲染不炸,兜底显示 L1。"""
+    cfg = _cfg()
+    t = new_ticket(pool, project="p", summary="存量单")
+    p = pool / "tickets" / f"{t.id}.yaml"
+    p.write_text(p.read_text(encoding="utf-8").replace("level: L1\n", ""),
+                 encoding="utf-8")
+    app = create_app(pool, cfg); app.config["TESTING"] = True
+    c = app.test_client()
+    assert c.get("/tickets").status_code == 200
+    r = c.get(f"/ticket/{t.id}")
+    assert r.status_code == 200 and "L1" in r.get_data(as_text=True)

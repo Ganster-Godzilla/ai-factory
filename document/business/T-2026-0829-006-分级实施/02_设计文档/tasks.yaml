@@ -1,0 +1,70 @@
+# T-2026-0829-006 任务切片:任务分级快速通道(L1 现状 + L3 落地)
+# 契约:[{id, title, acceptance_cmd, depends_on}];改代码任务必带 scope
+# 设计依据:document/business/T-2026-0829-006-分级实施/02_设计文档/design.md
+# 运行环境:Windows + Git Bash;ai-factory 仓根执行
+
+- id: S1
+  title: Ticket.level 字段(L1|L2|L3,load 兜底 L1)+ validate 取值域 + orc new --level
+  depends_on: []
+  scope: ["orchestrator/daemon/ticket.py", "orchestrator/daemon/cli.py", "tests/orchestrator/*"]
+  context: |
+    目标(design R1):VALID_LEVELS={"L1","L2","L3"};Ticket.level 缺省 "L1"(存量兜底);
+    validate() 拒绝取值域外值;new_ticket(level="L1");cli new --level 缺省 L1。
+    TDD 用例:缺字段工单 load→L1;L4 拒入;orc new --level L3 建单 yaml 含 level: L3;缺省=L1。
+  acceptance_cmd: >
+    bash -lc "cd /d/workspace/ai-factory && python -m pytest tests/orchestrator/test_level.py tests/orchestrator/test_cli.py -x -q && echo S1-OK"
+
+- id: S2
+  title: 状态机 L3 条件边 ×2 + approval_target() 级别感知 + CLI/Dashboard 双入口接线
+  depends_on: [S1]
+  scope: ["orchestrator/daemon/statemachine.py", "orchestrator/daemon/cli.py", "orchestrator/dashboard/app.py", "tests/orchestrator/*"]
+  context: |
+    目标(design R2/R3):TRANSITIONS 增 p0_proposed→p3_queued{boss}、p5_releasing→done{release};
+    transition() 级别守卫(非 L3 走这两边→IllegalTransition);L3 p5_releasing→done 记 monitoring_skipped=true;
+    approval_target(ticket):p0_proposed 态 L3→p3_queued 否则→p1_drafting,其余态查 APPROVALS;
+    cli approve 与 app.py /approve 同改调 approval_target(L1/L2 行为零变化)。
+  acceptance_cmd: >
+    bash -lc "cd /d/workspace/ai-factory && python -m pytest tests/orchestrator/test_level.py tests/orchestrator/test_cli.py tests/orchestrator/test_dashboard.py -x -q && echo S2-OK"
+
+- id: S3
+  title: 熔断参数按级别:L3 重试≤2、免会诊,达上限 suspend(circuit_exhausted)
+  depends_on: [S1]
+  scope: ["orchestrator/daemon/circuitbreaker.py", "orchestrator/daemon/runner.py", "tests/orchestrator/*"]
+  context: |
+    目标(design R4):next_action(task, level="L1");L3→MAX_RETRY_L3=2 且无 consult 分支;
+    runner._fail_ladder 传 ticket.level;L1/L2 现阶梯零变化(回归全绿)。
+  acceptance_cmd: >
+    bash -lc "cd /d/workspace/ai-factory && python -m pytest tests/orchestrator/test_circuitbreaker.py tests/orchestrator/test_level.py -x -q && echo S3-OK"
+
+- id: S4
+  title: 门禁按级别裁剪:L3 只守不可省四项(P3 边 verify 保留),产物全豁免
+  depends_on: [S1]
+  scope: ["orchestrator/daemon/gates.py", "tests/orchestrator/*"]
+  context: |
+    目标(design R5):check_gate 开头 L3 分支——stage=="P3" 保留 task_verify_required 段;
+    其余 stage 直接返回 [](产物文件校验与 P4 verdict 一并豁免);L1 单产物缺失照拦(回归)。
+    注:conftest 默认旁路 _enforce_gate,裁剪分支单测直测 check_gate;真闸门回归在 test_gate_enforcement。
+  acceptance_cmd: >
+    bash -lc "cd /d/workspace/ai-factory && python -m pytest tests/orchestrator/test_gates.py tests/orchestrator/test_gate_enforcement.py tests/orchestrator/test_level.py -x -q && echo S4-OK"
+
+- id: S5
+  title: Dashboard 最小展示:工单中心 level 徽章列 + 详情页级别卡(存量兜底不炸)
+  depends_on: [S1]
+  scope: ["orchestrator/dashboard/templates/tickets.html", "orchestrator/dashboard/templates/ticket.html", "orchestrator/dashboard/templates/base.html", "tests/orchestrator/*"]
+  context: |
+    目标(design R6):tickets.html 加"级别"列(L1 灰/L2 蓝/L3 绿徽章,L3 即快速通道标记);
+    ticket.html 卡片区加"级别"卡(当前级别+副注:建单指定/存量兜底 L1);
+    base.html 增 .badge-l1/l2/l3 样式;无 level 字段存量单渲染不炸。
+  acceptance_cmd: >
+    bash -lc "cd /d/workspace/ai-factory && python -m pytest tests/orchestrator/test_dashboard.py -x -q && echo S5-OK"
+
+- id: S6
+  title: 整单验收:全量回归 + pyflakes + check-pool-load/check-complexity + L3 演示路径自验
+  depends_on: [S2, S3, S4, S5]
+  scope: ["tests/orchestrator/*", "scripts/*"]
+  context: |
+    目标(design Checkpoints):pytest tests/ 全量零红;pyflakes 改动文件零告警;
+    check-pool-load.py / check-complexity.py 过闸;
+    演示:orc new --level L3 建单→approve 落 p3_queued;L1 单 approve 落 p1_drafting(回归)。
+  acceptance_cmd: >
+    bash -lc "cd /d/workspace/ai-factory && python -m pytest tests/ -q && python -m pyflakes orchestrator/daemon/ticket.py orchestrator/daemon/cli.py orchestrator/daemon/statemachine.py orchestrator/daemon/circuitbreaker.py orchestrator/daemon/runner.py orchestrator/daemon/gates.py orchestrator/dashboard/app.py && python scripts/check-pool-load.py && python scripts/check-complexity.py && echo S6-OK"

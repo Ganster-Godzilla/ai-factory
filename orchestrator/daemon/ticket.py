@@ -17,6 +17,8 @@ VALID_STATES = {
     "p5_ready", "p5_releasing", "monitoring", "done", "suspended", "closed",
 }
 VALID_TYPES = {"feature", "incident"}
+# 任务分级(T-2026-0829-006):L1 完整流程 / L2(字段合法,本单行为同 L1)/ L3 快速通道
+VALID_LEVELS = {"L1", "L2", "L3"}
 ID_RE = re.compile(r"^T-\d{4}-\d{4}-\d{3}$")
 
 
@@ -38,6 +40,7 @@ class Ticket:
     related_ticket: str | None = None   # 事故单回链原单 id(P5 发布失败自动建单时写入)
     p1_round: int = 0   # P1 重做轮次(D2):驳回回炉次数,只增不清;旧 yaml 缺字段时默认 0 兜底
     created_at: str | None = None   # 建单时刻 UTC ISO(T-2026-0829-001 D3):None=存量单,新门禁不追溯
+    level: str = "L1"   # 任务分级(T-2026-0829-006):缺省 L1 保守;存量 yaml 无字段 load 自然兜底
 
     @classmethod
     def load(cls, path: Path) -> "Ticket":
@@ -63,6 +66,8 @@ class Ticket:
             problems.append(f"state 非法: {self.state}")
         if self.type not in VALID_TYPES:
             problems.append(f"type 非法: {self.type}")
+        if self.level not in VALID_LEVELS:
+            problems.append(f"level 非法: {self.level}")
         return problems
 
 
@@ -95,7 +100,8 @@ def _locked(pool: Path):
 
 
 def new_ticket(pool: Path, project: str, summary: str, created_by: str = "human",
-               type: str = "feature", related_ticket: str | None = None) -> Ticket:
+               type: str = "feature", related_ticket: str | None = None,
+               level: str = "L1") -> Ticket:
     lock = _locked(pool)
     try:
         t = Ticket(
@@ -105,6 +111,7 @@ def new_ticket(pool: Path, project: str, summary: str, created_by: str = "human"
             priority="high" if type == "incident" else "normal",
             related_ticket=related_ticket,
             created_at=datetime.now(timezone.utc).isoformat(),
+            level=level,
         )
         save_ticket(pool, t)
         append_event(pool, t.id, created_by, "created", summary=summary)

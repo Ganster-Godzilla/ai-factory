@@ -358,7 +358,7 @@ def _fail_ladder(pool: Path, ticket, task, result, wt, cfg: dict | None,
     返回 retry/consult/suspend/task_failed 终态串。"""
     task["last_error"] = result.output[:800]
     save_ticket(pool, ticket)  # attempts 已记
-    action = next_action(task)
+    action = next_action(task, getattr(ticket, "level", "L1"))   # L3 收紧 ≤2 免会诊(T-2026-0829-006)
     if action == "retry":
         return f"retry:{task['id']}:{task['attempts']}"
     if action == "consult":

@@ -31,7 +31,7 @@
 <table>
   <tr>
     <th><a href="{{ sort_url('id_desc' if cur.sort == 'id_asc' else 'id_asc') }}">工单号{{ {'id_desc': ' ↓', 'id_asc': ' ↑'}.get(cur.sort, '') }}</a></th>
-    <th>项目</th><th>状态</th><th>负责人</th><th>优先级</th><th>摘要</th>
+    <th>项目</th><th>状态</th><th>级别</th><th>负责人</th><th>优先级</th><th>摘要</th>
     <th><a href="{{ sort_url('mtime_desc') }}">最近更新{{ ' ↓' if cur.sort == 'mtime_desc' }}</a></th>
   </tr>
   {% for t in tickets %}
@@ -39,6 +39,8 @@
     <td><a href="/ticket/{{ t.id }}">{{ t.id }}</a></td>
     <td>{{ t.project }}</td>
     <td>{{ t.state }}</td>
+    <!-- T-2026-0829-006:级别徽章,L3 绿=快速通道;存量无字段兜底 L1 -->
+    <td><span class="badge badge-{{ (t.level or 'L1')|lower }}">{{ t.level or 'L1' }}</span></td>
     <td>{{ t.owner_role }}</td>
     <td>{{ t.priority }}</td>
     <td>{{ t.summary }}</td>

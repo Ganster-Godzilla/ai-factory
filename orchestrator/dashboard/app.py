@@ -7,8 +7,8 @@ from urllib.parse import urlparse
 from flask import Flask, abort, redirect, render_template, request, url_for
 
 from orchestrator.dashboard import views
-from orchestrator.daemon.statemachine import (APPROVALS, IllegalTransition,
-                                              resume, transition)
+from orchestrator.daemon.statemachine import (IllegalTransition,
+                                              approval_target, resume, transition)
 from orchestrator.daemon.ticket import load_ticket
 
 # 本地 CSRF 防护(终审 F2):POST 的 Origin/Referer host 只认回环
@@ -93,8 +93,8 @@ def create_app(pool_dir: Path, cfg: dict) -> Flask:
             elif t.state == "p2_designing" and t.owner_role != "boss":
                 # owner 门禁(终审 F3):设计尚未交还 boss,与审批中心列表过滤口径一致
                 return _error(f"批准失败({t.id}):设计尚未完成(owner={t.owner_role})")
-            elif t.state in APPROVALS:
-                transition(pool, t, APPROVALS[t.state], actor="boss",
+            elif approval_target(t) is not None:
+                transition(pool, t, approval_target(t), actor="boss",
                            project_dir=_project_dir(t))
             else:
                 raise IllegalTransition(f"{t.state} 无可审批迁移")
