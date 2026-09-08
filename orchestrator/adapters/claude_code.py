@@ -11,6 +11,10 @@ from orchestrator.adapters.base import HarnessAdapter, HarnessResult, TaskPacket
 class ClaudeCodeAdapter(HarnessAdapter):
     name = "claude_code"
 
+    # relay 路由组键(T-2026-0908-003 分流):只有这组 model 才传 --model;
+    # dsh 语义模型(deepseek-v4-flash 等)透传会注崩 kimi 上游,一律忽略。
+    DRIVER_MODELS = {"k2.6", "gpt-6-astra"}
+
     def run(self, packet: TaskPacket) -> HarnessResult:
         # Windows 上 npm 安装的 claude 是 .cmd shim,CreateProcess 只自动补 .exe;
         # shutil.which 解析出带扩展名的全路径(POSIX 同样返回真实路径),缺失时回退裸名。
@@ -21,6 +25,9 @@ class ClaudeCodeAdapter(HarnessAdapter):
         # pm.md 里的 <工单号> 被当成重定向符号截断参数(进程挂起/输出退化为纯文本)。
         cmd = [exe, "-p", "--output-format", "json",
                "--dangerously-skip-permissions"]
+        if packet.model in self.DRIVER_MODELS:
+            # 分流驾驶员(T-2026-0908-003):L2/L3 工单 → --model k2.6 → relay 免费渠道链
+            cmd += ["--model", packet.model]
         try:
             r = subprocess.run(cmd, input=packet.prompt, cwd=packet.workdir,
                                capture_output=True,

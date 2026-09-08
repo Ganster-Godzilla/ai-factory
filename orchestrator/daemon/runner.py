@@ -70,6 +70,13 @@ def _model_for(cfg: dict | None, role: str) -> str | None:
     return ((cfg or {}).get("models") or {}).get(role) or ROLE_MODEL.get(role)
 
 
+def _driver_for_level(ticket) -> str | None:
+    """level→驾驶员模型(T-2026-0908-003 分流):L2/L3 → 'k2.6'(relay 路由组,
+    免费渠道);L1 → None(claude 默认 k3 付费池语义不变)。
+    返回值经 DRIVER_MODELS 白名单才会变成 claude --model,dsh 语义不受影响。"""
+    return "k2.6" if getattr(ticket, "level", "L1") in ("L2", "L3") else None
+
+
 def _mingfang(cfg: dict | None) -> bool:
     """明放开关(T-2026-0829-004):budgets.mingfang_mode 显式 true 才放行;
     缺键/缺 budgets 一律硬闸(向后兼容)。必须 is True:yaml 里写 "false"(带引号)
@@ -328,7 +335,7 @@ def _dispatch_task(pool: Path, ticket, task, adapter: HarnessAdapter,
     retry/consult/判负分支;返回终态串。"""
     wt = ensure_worktree(project_dir, f"{ticket.id}-{task['id']}")
     packet = make_packet(task, ticket, wt, design_excerpt="")
-    packet.model = _model_for(cfg, "dev")
+    packet.model = _driver_for_level(ticket) or _model_for(cfg, "dev")   # L2/L3→k2.6(T-2026-0908-003)
     if task["attempts"] > 0:
         packet.prompt = retry_prompt(task, packet.prompt, task.get("last_error", ""))
     result = _run_with_watchdog(pool, ticket, adapter, packet, "dev",
@@ -436,7 +443,7 @@ def advance_once(pool: Path, ticket_id: str, adapter: HarnessAdapter,
         prompt=_role_prompt(role) + f"\n[{role}] 工单 {t.id}: {t.summary}",
         workdir=project_dir,
         budget=t.budget,
-        model=_model_for(cfg, role),
+        model=_driver_for_level(t) or _model_for(cfg, role),   # L2/L3→k2.6(T-2026-0908-003)
         timeout=ROLE_TIMEOUT.get(role, 1800),
     )
     result = _run_with_watchdog(pool, t, adapter, packet, role)

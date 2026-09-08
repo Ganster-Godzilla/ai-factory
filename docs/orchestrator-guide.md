@@ -129,6 +129,27 @@ HEAD;git 侧字段由守卫模块 `gitguard.make_loop_merge_fields()` 生成,`ti
 
 阈值都在 `orchestrator.yaml` 的 `budgets:` 段,改阈值走 git 提交留痕。
 
+## 分流与 W1 金丝雀(T-2026-0908-001/003 上线)
+
+工单按 `level` 自动分驾驶员(建单 `orc new --level` 指定,缺省 L1 保守):
+
+| level | 驾驶员 | relay 落点 | 适用 |
+|---|---|---|---|
+| L1 | k3(订阅池) | kimi1-4 → glm → **zy-ds(免费)** → ds-flash → zen-k3 | 大特性/高风险/跨项目 |
+| L2/L3 | **kimi-k2.6**(免费渠道) | zy-k2 → zy-ds → glm → ds-flash → kimi 池 → zen-k3 | 文档/单点 bug/小特性 |
+
+- 渠道=合伙人免费账号(折愿知心);**官方 key 全部保留在链尾**,渠道冷却自动掉回,业务无感
+- k3 周水位闸只计 kimi 池;渠道用量独立计量(`curl http://127.0.0.1:8787/__stats`)
+- deepseek 文本已直切免费渠道(zy-ds 在缺省链 ds-flash 前),官方付费留备份
+
+**W1 金丝雀节奏**:
+```bash
+python scripts/canary-report.py --days 7        # 每晚 1 分钟出台账(工单×驾驶员×一次通过率×返工×consult)
+# 每周一次:Kimi 控制台抄 4 账号剩余额度,填进台账第 3 段
+```
+- 交互式试 k2.6(不换默认环境):`claude --model k2.6` 或 `ANTHROPIC_MODEL=k2.6 claude`
+- 单工单回退:level 改 L1(建单或 PM 调整);全量回退:`cd /d/Tool && git revert <commit> && wscript kimi-relay.vbs`
+
 ## 接入新项目(如 SK-main)
 
 ```bash
