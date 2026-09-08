@@ -1,0 +1,49 @@
+# T-2026-0908-003 任务切片:分流 T2
+# 契约:[{id, title, acceptance_cmd, depends_on}];改代码任务必带 scope
+# 设计依据:document/business/T-2026-0908-003-分流T2/02_设计文档/design.md
+# 运行环境:Windows + Git Bash + Node;ai-factory 与 D:\Tool 双仓
+
+- id: S1
+  title: zy-ds 移入缺省链(glm 后 ds 前去 routeOnly)+ relay 侧测试更新 + 生产重启
+  depends_on: []
+  scope: ["D:/Tool/kimi-relay.js", "D:/Tool/test/relay-routes.test.js", "D:/Tool/test/relay-zen.test.js"]
+  context: |
+    目标(design R3):zy-ds 条目移到 ds-flash 正前方并去 routeOnly(R1 文本直切,
+    同模型族免费通道);缺省链=[kimi1-4,glm-flash,zy-ds,ds-flash,zen-k3];
+    defaultChain/顺位期望同步;zy-k2/zy-gpt 保持 routeOnly。生产 relay 重启后 /__status 验证。
+  acceptance_cmd: >
+    bash -lc "cd /d/Tool && node --test test/*.test.js && echo S1-OK"
+
+- id: S2
+  title: runner._driver_for_level 两注入点 + claude_code --model 白名单 + pytest 用例
+  depends_on: []
+  scope: ["orchestrator/daemon/runner.py", "orchestrator/adapters/claude_code.py", "tests/orchestrator/*"]
+  context: |
+    目标(design R1/R2):_driver_for_level(ticket):L2/L3→'k2.6' 否则 None;
+    _dispatch_task 与 advance_once 角色包 model=driver or _model_for;
+    claude_code DRIVER_MODELS={k2.6,gpt-6-astra} 才传 --model。
+    用例:L3 单 packet.model=='k2.6';L1/存量==现值;白名单值进 cmd,deepseek-v4-flash/None 不进。
+  acceptance_cmd: >
+    bash -lc "cd /d/workspace/ai-factory && python -m pytest tests/orchestrator/test_level.py tests/orchestrator/test_claude_code_adapter.py -x -q && echo S2-OK"
+
+- id: S3
+  title: canary-report.py 台账脚本 + guide 分流/W1 手册段
+  depends_on: []
+  scope: ["scripts/canary-report.py", "docs/orchestrator-guide.md"]
+  context: |
+    目标(design R4/R5):周度聚合(工单×级别×驾驶员×一次通过率×返工×consult×suspended
+    + relay /__stats 渠道用量段 + 控制台读数手填位),markdown 输出,--days/--out 可选;
+    guide 增"分流与 W1 金丝雀"小节(自动路由口径/交互式 k2.6 姿势/台账节奏/回退)。
+  acceptance_cmd: >
+    bash -lc "cd /d/workspace/ai-factory && python scripts/canary-report.py --days 7 | head -40 && echo S3-OK"
+
+- id: S4
+  title: 整单验收:pytest 全量 + node 全量 + L3 端到端(隔离池断言 --model k2.6 传递)
+  depends_on: [S1, S2, S3]
+  scope: ["tests/orchestrator/*", "D:/Tool/test/"]
+  context: |
+    目标(design Checkpoints):pytest tests/ 全量零红;node --test 全绿;
+    隔离池 L3 工单经 advance --fake 改造为捕获 cmd 的 fake adapter,断言 --model k2.6 传递链路
+    (或直接单测 _dispatch_task 注入点);relay 缺省链八层在线。
+  acceptance_cmd: >
+    bash -lc "cd /d/workspace/ai-factory && python -m pytest tests/ -q && cd /d/Tool && node --test test/*.test.js && echo S4-OK"
