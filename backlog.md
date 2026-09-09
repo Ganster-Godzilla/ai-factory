@@ -6,6 +6,8 @@
 (空)
 
 | 2026-09-09 | Dashboard 事故单无关闭入口(按钮缺口) | parked | boss 实证:T-2026-0909-001 详情页无关闭按钮;状态机关单径 suspended→closed(boss),但 UI 无对应动作;建议在「已挂起」桶加【关闭】按钮(actor=boss) |
+| 2026-09-09 | Dashboard 错误消息张冠李戴(校验失败渲染成"工单不存在") | parked | 实证:手工建单 type=bugfix 非法 → save_ticket ValueError 被笼统 errorhandler 捕获,boss 点批准看到「工单不存在」404,实际工单在、是校验失败;建议 errorhandler 按异常类型/消息分流,校验失败亮出具体字段错误(T-2026-0909-002 已改 type=feature 解封,沙盒试批过) |
+| 2026-09-09 | deploy 同版本重跑不幂等(撞 root 属主 __pycache__ 误报 FAIL) | parked | 实证(T-2026-0909-003):首轮 deploy 成功后服务(root 运行)在 release 目录生成 root 属主 pycache;同版本二次 deploy 解包覆盖在飞目录后 chown -R EPERM 退出 1,误报 FAIL 并自动建事故单;且首轮成功零输出(成功路径无回显,诱发重跑)。建议:①成功路径打印版本/冒烟结果摘要;②chown 失败降级 warning(属主已正确则跳过)或解包到全新临时目录再原子换名;③同版本重跑前置检测直接报"已在产" |
 
 ## Blocked
 (空)
