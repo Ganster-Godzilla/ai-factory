@@ -5,6 +5,8 @@
 ## In Progress
 (空)
 
+| 2026-09-09 | Dashboard 事故单无关闭入口(按钮缺口) | parked | boss 实证:T-2026-0909-001 详情页无关闭按钮;状态机关单径 suspended→closed(boss),但 UI 无对应动作;建议在「已挂起」桶加【关闭】按钮(actor=boss) |
+
 ## Blocked
 (空)
 
