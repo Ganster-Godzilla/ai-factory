@@ -444,7 +444,12 @@ def _ssh_run(ssh_key: str, host: str, remote_cmd: str) -> str:
             "-o", "BatchMode=yes",
             "-o", "StrictHostKeyChecking=accept-new",
             host, remote_cmd]
-    proc = subprocess.run(args, capture_output=True, text=True)
+    # T-2026-0909-001:显式 UTF-8+replace——Windows 本机 locale=GBK 时 text=True
+    # 默认 GBK 解码,远端(Linux/UTF-8)输出含中文/emoji 即 _readerthread
+    # UnicodeDecodeError → stdout 变 None → 下游 .strip() AttributeError
+    # (T-2026-0908-002 部署中止实证;同文件 _local_run 已有同款护栏,此处补齐)
+    proc = subprocess.run(args, capture_output=True, text=True,
+                          encoding="utf-8", errors="replace")
     if proc.returncode != 0:
         raise RuntimeError(f"远端命令失败(exit={proc.returncode}): {remote_cmd}")
     return proc.stdout.strip()
