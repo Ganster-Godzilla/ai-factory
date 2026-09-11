@@ -12,14 +12,14 @@ from pathlib import Path
 from orchestrator.dashboard import views
 from orchestrator.daemon.events import read_events
 
-# 六岗位定义(对应编排器 WORK_STATES);昵称可配,岗位恒显
+# 六岗位定义(对应编排器 WORK_STATES);昵称=变形金刚,岗位恒显,图标拟物
 ROLES = [
-    {"key": "pm", "title": "PM", "nick": "王经理", "states": ["p1_drafting"]},
-    {"key": "architect", "title": "架构师", "nick": "钱工", "states": ["p2_designing"]},
-    {"key": "dev", "title": "开发", "nick": "陈工", "states": ["p3_running"]},
-    {"key": "qa", "title": "QA", "nick": "赵审", "states": ["p4_verifying"]},
-    {"key": "release", "title": "发布", "nick": "刘市", "states": ["p5_ready", "p5_releasing"]},
-    {"key": "sre", "title": "SRE", "nick": "孙维", "states": ["monitoring"]},
+    {"key": "pm", "title": "PM", "nick": "擎天柱", "icon": "🚛", "states": ["p1_drafting"]},
+    {"key": "architect", "title": "架构师", "nick": "千斤顶", "icon": "🔧", "states": ["p2_designing"]},
+    {"key": "dev", "title": "开发", "nick": "大黄蜂", "icon": "🐝", "states": ["p3_running"]},
+    {"key": "qa", "title": "QA", "nick": "救护车", "icon": "🚑", "states": ["p4_verifying"]},
+    {"key": "release", "title": "发布", "nick": "铁皮", "icon": "🚚", "states": ["p5_ready", "p5_releasing"]},
+    {"key": "sre", "title": "SRE", "nick": "爵士", "icon": "📡", "states": ["monitoring"]},
 ]
 
 # 事件 → 一句话气泡(结构化生成,不展示模型推理)
@@ -72,14 +72,19 @@ def office_data(pool: Path, cfg: dict, project: str | None = None) -> dict:
     if project:
         tickets = [t for t in tickets if t.project == project]
     state_to_role = {s: r["key"] for r in ROLES for s in r["states"]}
-    # 挂起工单归到"等待你/阻塞",不进岗位工位(岗位只显示在跑阶段)
+    # 挂起工单归"待你处理/阻塞";monitoring(观察窗)单列,不算 SRE 主动执行——
+    # "33 单 SRE 进行中"实为观察窗积压等非 sre 主动跑(语义失真,用户指认,见 B 决策)。
     by_role = {r["key"]: [] for r in ROLES}
     attention = []   # 待你处理:审批中 + 挂起
+    observation = []  # 观察窗(monitoring):发布后待 sre 出报告转 done
     for t in tickets:
         if t.state in ("done", "closed", "draft"):
             continue
         if t.state == "suspended":
             attention.append(_ticket_card(pool, t))
+            continue
+        if t.state == "monitoring":
+            observation.append(_ticket_card(pool, t))
             continue
         rk = state_to_role.get(t.state)
         if rk:
@@ -115,4 +120,5 @@ def office_data(pool: Path, cfg: dict, project: str | None = None) -> dict:
         },
         "roles": roles_out,
         "attention": sorted(attention, key=lambda c: c["last_update"], reverse=True)[:10],
+        "observation": sorted(observation, key=lambda c: c["last_update"], reverse=True),
     }

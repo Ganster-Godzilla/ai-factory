@@ -26,10 +26,9 @@
   .desk { background:var(--card); border:1px solid var(--line); border-radius:12px;
           padding:14px; cursor:pointer; transition:.15s; position:relative; }
   .desk:hover { box-shadow:0 2px 10px rgba(0,0,0,.08); transform:translateY(-2px); }
-  .desk .avatar { width:44px; height:44px; border-radius:50%; display:flex; align-items:center;
-                  justify-content:center; font-size:20px; color:#fff; margin-bottom:8px; }
-  .desk.active .avatar { background:var(--run); }
-  .desk.idle .avatar { background:var(--idle); }
+  .desk .avatar { font-size:34px; line-height:1; margin-bottom:8px; }
+  .desk.active .avatar { filter:drop-shadow(0 0 6px rgba(37,99,235,.5)); }
+  .desk.idle .avatar { opacity:.45; }
   .desk .who { font-weight:600; }
   .desk .role { color:var(--mut); font-size:12px; }
   .desk .cnt { position:absolute; top:12px; right:12px; background:var(--run); color:#fff;
@@ -87,14 +86,26 @@
 
   <div class="layout">
     <!-- 六岗位工位 -->
-    <div class="office">
-      <div v-for="r in data.roles" :key="r.key" class="desk" :class="r.status" @click="open(r)">
-        <div class="cnt" v-if="r.count">{{ r.count }}</div>
-        <div class="avatar">{{ emoji(r.key) }}</div>
-        <div class="who">{{ r.nick }}</div>
-        <div class="role">{{ r.title }}</div>
-        <div style="margin-top:8px;font-size:12px;color:var(--mut)">
-          <span class="status-dot"></span>{{ r.count ? r.count + ' 单进行中' : '空闲' }}
+    <div>
+      <div class="office">
+        <div v-for="r in data.roles" :key="r.key" class="desk" :class="r.status" @click="open(r)">
+          <div class="cnt" v-if="r.count">{{ r.count }}</div>
+          <div class="avatar">{{ r.icon }}</div>
+          <div class="who">{{ r.nick }}</div>
+          <div class="role">{{ r.title }}</div>
+          <div style="margin-top:8px;font-size:12px;color:var(--mut)">
+            <span class="status-dot"></span>{{ r.count ? r.count + ' 单进行中' : '空闲' }}
+          </div>
+        </div>
+      </div>
+
+      <!-- 观察窗(monitoring 积压,不算 SRE 主动执行) -->
+      <div class="card" style="background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px;margin-top:14px" v-if="data.observation && data.observation.length">
+        <h3 style="margin:0 0 10px;font-size:13px;color:var(--mut)">🛰️ 观察窗 · 待 SRE 出报告 ({{ data.observation.length }})</h3>
+        <div v-for="c in data.observation" :key="c.id" class="att" style="border-left-color:var(--run);background:#f0f6ff" @click="openTicket(c)">
+          <div class="id">{{ c.id }} <span style="color:var(--mut);font-weight:400">{{ c.project }}</span></div>
+          <div class="sum">{{ c.summary }}</div>
+          <div class="meta" style="color:var(--mut);font-size:11px">monitoring · {{ fmtTime(c.last_update) }}</div>
         </div>
       </div>
     </div>
@@ -119,7 +130,7 @@
     <div class="drawer-mask" @click="cur=null"></div>
     <div class="drawer">
       <button class="close" @click="cur=null">×</button>
-      <h2>{{ emoji(cur.key) }} {{ cur.nick }} · {{ cur.title }}</h2>
+      <h2>{{ cur.icon }} {{ cur.nick }} · {{ cur.title }}</h2>
       <div style="color:var(--mut);font-size:12px">{{ cur.count ? cur.count+' 张工单在处理' : '当前空闲' }}</div>
       <div v-if="!cur.tickets.length" class="empty">没有进行中的工单</div>
       <div v-for="c in cur.tickets" :key="c.id" class="tcard">
@@ -138,10 +149,9 @@
 <script>
 const { createApp } = Vue;
 createApp({
-  data() { return { data: { kpi:{}, roles:[], attention:[], projects:[], synced_at:'' },
+  data() { return { data: { kpi:{}, roles:[], attention:[], observation:[], projects:[], synced_at:'' },
                     project: null, cur: null, timer: null }; },
   methods: {
-    emoji(k) { return {pm:'📋',architect:'📐',dev:'💻',qa:'🔍',release:'🚀',sre:'🛡️'}[k]||'👤'; },
     fmtTime(ts) { if(!ts) return '-'; const d=new Date(ts);
       return d.toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit'}); },
     async load() {
