@@ -1,0 +1,46 @@
+- id: S1
+  title: 现状验证 + office.py 数据聚合(六岗位映射/工单卡/待办/观察窗/KPI)
+  scope:
+  - orchestrator/dashboard/office.py
+  acceptance_cmd: python -c "import sys; sys.path.insert(0,'.'); from pathlib import Path; import yaml; from orchestrator.dashboard import office; cfg=yaml.safe_load(open('orchestrator.yaml',encoding='utf-8')); d=office.office_data(Path('pool'),cfg); assert d['roles'] and len(d['roles'])==6; assert 'observation' in d and 'kpi' in d; print('office_data OK')"
+  depends_on: []
+  context: |
+    目标:design Architecture 数据层。跑通真实 pool 现状验证(数据缺口=心跳唯一,
+    后置);写 office.py:ROLES 六岗位(变形金刚命名+SVG 路径)、_ticket_card
+    (目标/阶段/最近更新/阻塞/气泡/产物/进度)、office_data(六岗位分派+
+    attention 审批挂起+observation monitoring 单列+KPI+项目清单)。只读零写入。
+    验证:office_data 返回 6 岗位+观察窗+KPI,与 pool 实况一致。
+  status: done
+
+- id: S2
+  title: /api/v1/office 只读 API + /office 灰盒页(Vue3 CDN 单文件)
+  scope:
+  - orchestrator/dashboard/app.py
+  - orchestrator/dashboard/templates/office.html
+  acceptance_cmd: python -c "import ast; ast.parse(open('orchestrator/dashboard/app.py',encoding='utf-8').read()); print('app.py syntax OK')"
+  depends_on:
+  - S1
+  context: |
+    目标:design How-2/3。app.py 加 /api/v1/office(jsonify office_data)+ /office
+    (原文返回跳过 Jinja——实证坑①:render_template 误解析 Vue {{ }} 与三元符致 500);
+    office.html 灰盒 SPA:六工位卡+岗位抽屉+待办栏+观察窗区块+KPI+项目切换+5s 轮询。
+    实证坑②:重启须杀净端口孤儿(双实例旧代码抢流量)。
+    验证:起测试实例 curl /api/v1/office 与 /office 均 200,数据真实。
+  status: done
+
+- id: S3
+  title: 变形金刚命名 + 观察窗语义修正 + 6 汽车人原创 SVG 头像
+  scope:
+  - orchestrator/dashboard/office.py
+  - orchestrator/dashboard/templates/office.html
+  - orchestrator/dashboard/static/avatars/
+  acceptance_cmd: python -c "from pathlib import Path; av=Path('orchestrator/dashboard/static/avatars'); svgs=list(av.glob('*.svg')); assert len(svgs)==6, f'需 6 头像,实得 {len(svgs)}'; print('6 avatars OK')"
+  depends_on:
+  - S2
+  context: |
+    目标:用户决策落地。命名改变形金刚(擎天柱/千斤顶/大黄蜂/救护车/铁皮/爵士),
+    岗位恒显;monitoring 工单从 SRE 工位移出单列观察窗(用户指认'33单SRE进行中'
+    语义失真,B 决策);自绘 6 汽车人原创立体简笔 SVG(渐变+高光+投影,提特征不复制
+    官方形象,无版权风险),office.py icon 改 SVG 路径,前端 avatar 改 img。
+    验证:6 SVG 全部 200,API icon 字段正确,页面头像显示,观察窗单列。
+  status: done
