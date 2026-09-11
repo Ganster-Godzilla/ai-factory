@@ -1,8 +1,15 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import type { Role } from '../api'
 import TicketCardItem from './TicketCardItem.vue'
-defineProps<{ role: Role | null }>()
+const props = defineProps<{ role: Role | null }>()
 const emit = defineEmits<{ (e: 'close'): void; (e: 'open-ticket', id: string): void }>()
+const base = import.meta.env.BASE_URL
+const iconUrl = computed(() => {
+  if (!props.role) return ''
+  const f = props.role.icon.split('/').pop() || props.role.icon
+  return base + 'avatars/' + f
+})
 </script>
 
 <template>
@@ -10,7 +17,7 @@ const emit = defineEmits<{ (e: 'close'): void; (e: 'open-ticket', id: string): v
     <div class="mask" @click="emit('close')"></div>
     <div class="drawer">
       <button class="close" @click="emit('close')">×</button>
-      <h2><img :src="role.icon" :alt="role.nick"> {{ role.nick }} · {{ role.title }}</h2>
+      <h2><img :src="iconUrl" :alt="role.nick"> {{ role.nick }} · {{ role.title }}</h2>
       <div class="sub">{{ role.count ? role.count + ' 张工单在处理' : '当前空闲' }}</div>
       <div v-if="!role.tickets.length" class="empty">没有进行中的工单</div>
       <TicketCardItem v-for="c in role.tickets" :key="c.id" :card="c" @open="emit('open-ticket', $event)" />
