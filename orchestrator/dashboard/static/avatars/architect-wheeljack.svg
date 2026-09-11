@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <defs>
+    <linearGradient id="bgA" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1f7a4d"/><stop offset="1" stop-color="#0d3d26"/></linearGradient>
+    <linearGradient id="helmA" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#f8fafc"/><stop offset=".5" stop-color="#d7e0d9"/><stop offset="1" stop-color="#9fb3a8"/></linearGradient>
+    <linearGradient id="accA" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#4ade80"/><stop offset="1" stop-color="#15803d"/></linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="14" fill="url(#bgA)"/>
+  <ellipse cx="20" cy="10" rx="22" ry="12" fill="#fff" opacity=".08"/>
+  <path d="M14 32 L20 12 L44 12 L50 32 Z" fill="url(#helmA)"/>
+  <path d="M20 12 L24 12 L22 32 L14 32 Z" fill="#fff" opacity=".6"/>
+  <rect x="11" y="30" width="9" height="20" rx="3" fill="url(#helmA)"/>
+  <rect x="44" y="30" width="9" height="20" rx="3" fill="url(#helmA)"/>
+  <!-- 护目镜(工程感) -->
+  <rect x="17" y="29" width="30" height="11" rx="5" fill="url(#accA)"/>
+  <rect x="21" y="31.5" width="9" height="5" rx="2.5" fill="#052e16" opacity=".9"/>
+  <rect x="34" y="31.5" width="9" height="5" rx="2.5" fill="#052e16" opacity=".9"/>
+  <rect x="22" y="31.5" width="7" height="2" rx="1" fill="#86efac"/>
+  <rect x="35" y="31.5" width="7" height="2" rx="1" fill="#86efac"/>
+  <!-- 下颌 -->
+  <path d="M22 43 h20 v6 a10 6 0 0 1 -20 0 Z" fill="url(#helmA)"/>
+  <path d="M17 31 L13 46 M47 31 L51 46" stroke="#4ade80" stroke-width="2" opacity=".6" fill="none"/>
+  <ellipse cx="32" cy="58" rx="18" ry="4" fill="#000" opacity=".18"/>
+</svg>

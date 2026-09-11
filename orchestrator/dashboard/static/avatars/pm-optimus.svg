@@ -1,0 +1,49 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#2a4bb5"/><stop offset="1" stop-color="#16255f"/>
+    </linearGradient>
+    <linearGradient id="helm" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#5b8def"/><stop offset=".5" stop-color="#2f62d8"/><stop offset="1" stop-color="#1d3f9e"/>
+    </linearGradient>
+    <linearGradient id="side" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#6ea3ff"/><stop offset="1" stop-color="#2f62d8"/>
+    </linearGradient>
+    <linearGradient id="silver" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#f1f5f9"/><stop offset=".6" stop-color="#c3ccd8"/><stop offset="1" stop-color="#8b98ab"/>
+    </linearGradient>
+    <linearGradient id="visor" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#f87171"/><stop offset="1" stop-color="#b91c1c"/>
+    </linearGradient>
+  </defs>
+  <!-- 底 -->
+  <rect width="64" height="64" rx="14" fill="url(#bg)"/>
+  <ellipse cx="20" cy="10" rx="22" ry="12" fill="#ffffff" opacity=".08"/>
+  <!-- 天线(立体) -->
+  <rect x="21" y="5" width="4" height="12" rx="2" fill="url(#helm)"/>
+  <rect x="39" y="5" width="4" height="12" rx="2" fill="url(#helm)"/>
+  <rect x="22" y="6" width="1.5" height="9" rx=".75" fill="#dbeafe" opacity=".8"/>
+  <rect x="40" y="6" width="1.5" height="9" rx=".75" fill="#dbeafe" opacity=".8"/>
+  <!-- 侧甲(左右,带高光) -->
+  <rect x="11" y="29" width="9" height="22" rx="3" fill="url(#side)"/>
+  <rect x="44" y="29" width="9" height="22" rx="3" fill="url(#side)"/>
+  <rect x="12.5" y="31" width="2.5" height="16" rx="1.2" fill="#dbeafe" opacity=".7"/>
+  <!-- 头盔(立体渐变) -->
+  <path d="M14 31 L20 13 L44 13 L50 31 Z" fill="url(#helm)"/>
+  <path d="M20 13 L24 13 L22 31 L14 31 Z" fill="#93c5fd" opacity=".55"/>
+  <!-- 红色眼罩(立体) -->
+  <rect x="17" y="29" width="30" height="10" rx="4" fill="url(#visor)"/>
+  <rect x="21" y="31" width="9" height="5" rx="2.5" fill="#fff" opacity=".95"/>
+  <rect x="34" y="31" width="9" height="5" rx="2.5" fill="#fff" opacity=".95"/>
+  <rect x="21" y="31" width="9" height="2" rx="1" fill="#bfdbfe"/>
+  <rect x="34" y="31" width="9" height="2" rx="1" fill="#bfdbfe"/>
+  <!-- 银色口罩(立体) -->
+  <path d="M21 42 h22 v7 a11 7 0 0 1 -22 0 Z" fill="url(#silver)"/>
+  <rect x="28" y="42" width="2.5" height="8" rx="1" fill="#94a3b8"/>
+  <rect x="33.5" y="42" width="2.5" height="8" rx="1" fill="#94a3b8"/>
+  <path d="M21 42 h22 v2.5 h-22 Z" fill="#f8fafc" opacity=".8"/>
+  <!-- 面甲轮廓线 -->
+  <path d="M17 30 L13 45 M47 30 L51 45" stroke="#60a5fa" stroke-width="2" fill="none" opacity=".7"/>
+  <!-- 底部投影 -->
+  <ellipse cx="32" cy="58" rx="18" ry="4" fill="#000" opacity=".18"/>
+</svg>

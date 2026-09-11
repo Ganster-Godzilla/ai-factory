@@ -12,14 +12,14 @@ from pathlib import Path
 from orchestrator.dashboard import views
 from orchestrator.daemon.events import read_events
 
-# 六岗位定义(对应编排器 WORK_STATES);昵称=变形金刚,岗位恒显,图标拟物
+# 六岗位定义(对应编排器 WORK_STATES);昵称=变形金刚,岗位恒显,头像=原创 SVG
 ROLES = [
-    {"key": "pm", "title": "PM", "nick": "擎天柱", "icon": "🚛", "states": ["p1_drafting"]},
-    {"key": "architect", "title": "架构师", "nick": "千斤顶", "icon": "🔧", "states": ["p2_designing"]},
-    {"key": "dev", "title": "开发", "nick": "大黄蜂", "icon": "🐝", "states": ["p3_running"]},
-    {"key": "qa", "title": "QA", "nick": "救护车", "icon": "🚑", "states": ["p4_verifying"]},
-    {"key": "release", "title": "发布", "nick": "铁皮", "icon": "🚚", "states": ["p5_ready", "p5_releasing"]},
-    {"key": "sre", "title": "SRE", "nick": "爵士", "icon": "📡", "states": ["monitoring"]},
+    {"key": "pm", "title": "PM", "nick": "擎天柱", "icon": "/static/avatars/pm-optimus.svg", "states": ["p1_drafting"]},
+    {"key": "architect", "title": "架构师", "nick": "千斤顶", "icon": "/static/avatars/architect-wheeljack.svg", "states": ["p2_designing"]},
+    {"key": "dev", "title": "开发", "nick": "大黄蜂", "icon": "/static/avatars/dev-bumblebee.svg", "states": ["p3_running"]},
+    {"key": "qa", "title": "QA", "nick": "救护车", "icon": "/static/avatars/qa-ratchet.svg", "states": ["p4_verifying"]},
+    {"key": "release", "title": "发布", "nick": "铁皮", "icon": "/static/avatars/release-ironhide.svg", "states": ["p5_ready", "p5_releasing"]},
+    {"key": "sre", "title": "SRE", "nick": "爵士", "icon": "/static/avatars/sre-jazz.svg", "states": ["monitoring"]},
 ]
 
 # 事件 → 一句话气泡(结构化生成,不展示模型推理)

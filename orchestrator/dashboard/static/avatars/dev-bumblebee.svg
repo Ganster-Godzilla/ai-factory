@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <defs>
+    <linearGradient id="bgD" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#b45309"/><stop offset="1" stop-color="#5b2c06"/></linearGradient>
+    <linearGradient id="helmD" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fde047"/><stop offset=".5" stop-color="#facc15"/><stop offset="1" stop-color="#ca8a04"/></linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="14" fill="url(#bgD)"/>
+  <ellipse cx="20" cy="10" rx="22" ry="12" fill="#fff" opacity=".1"/>
+  <!-- 圆头 -->
+  <path d="M16 34 a16 18 0 0 1 32 0 v10 a16 12 0 0 1 -32 0 Z" fill="url(#helmD)"/>
+  <ellipse cx="24" cy="24" rx="8" ry="6" fill="#fef9c3" opacity=".7"/>
+  <!-- 战斗面罩(黑) -->
+  <rect x="18" y="32" width="28" height="10" rx="5" fill="#1f2937"/>
+  <rect x="22" y="34" width="8" height="5" rx="2.5" fill="#38bdf8"/>
+  <rect x="34" y="34" width="8" height="5" rx="2.5" fill="#38bdf8"/>
+  <!-- 面罩下甲 -->
+  <path d="M22 46 h20 v4 a10 6 0 0 1 -20 0 Z" fill="url(#helmD)"/>
+  <rect x="30" y="46" width="4" height="6" fill="#1f2937"/>
+  <!-- 耳翼 -->
+  <path d="M12 30 L16 24 L18 32 Z" fill="url(#helmD)"/>
+  <path d="M52 30 L48 24 L46 32 Z" fill="url(#helmD)"/>
+  <ellipse cx="32" cy="58" rx="18" ry="4" fill="#000" opacity=".18"/>
+</svg>

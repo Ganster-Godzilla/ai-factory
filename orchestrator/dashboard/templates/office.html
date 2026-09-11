@@ -26,9 +26,11 @@
   .desk { background:var(--card); border:1px solid var(--line); border-radius:12px;
           padding:14px; cursor:pointer; transition:.15s; position:relative; }
   .desk:hover { box-shadow:0 2px 10px rgba(0,0,0,.08); transform:translateY(-2px); }
-  .desk .avatar { font-size:34px; line-height:1; margin-bottom:8px; }
-  .desk.active .avatar { filter:drop-shadow(0 0 6px rgba(37,99,235,.5)); }
-  .desk.idle .avatar { opacity:.45; }
+  .desk .avatar { margin-bottom:8px; }
+  .desk .avatar img { width:46px; height:46px; border-radius:10px; display:block;
+                      box-shadow:0 2px 6px rgba(0,0,0,.15); }
+  .desk.active .avatar img { filter:drop-shadow(0 0 6px rgba(37,99,235,.4)); }
+  .desk.idle .avatar img { opacity:.5; filter:grayscale(.4); }
   .desk .who { font-weight:600; }
   .desk .role { color:var(--mut); font-size:12px; }
   .desk .cnt { position:absolute; top:12px; right:12px; background:var(--run); color:#fff;
@@ -90,7 +92,7 @@
       <div class="office">
         <div v-for="r in data.roles" :key="r.key" class="desk" :class="r.status" @click="open(r)">
           <div class="cnt" v-if="r.count">{{ r.count }}</div>
-          <div class="avatar">{{ r.icon }}</div>
+          <div class="avatar"><img :src="r.icon" :alt="r.nick"></div>
           <div class="who">{{ r.nick }}</div>
           <div class="role">{{ r.title }}</div>
           <div style="margin-top:8px;font-size:12px;color:var(--mut)">
@@ -130,7 +132,7 @@
     <div class="drawer-mask" @click="cur=null"></div>
     <div class="drawer">
       <button class="close" @click="cur=null">×</button>
-      <h2>{{ cur.icon }} {{ cur.nick }} · {{ cur.title }}</h2>
+      <h2><img :src="cur.icon" :alt="cur.nick" style="width:28px;vertical-align:-6px;border-radius:6px"> {{ cur.nick }} · {{ cur.title }}</h2>
       <div style="color:var(--mut);font-size:12px">{{ cur.count ? cur.count+' 张工单在处理' : '当前空闲' }}</div>
       <div v-if="!cur.tickets.length" class="empty">没有进行中的工单</div>
       <div v-for="c in cur.tickets" :key="c.id" class="tcard">
