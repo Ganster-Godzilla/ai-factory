@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AI 编排指挥室 · 灰盒样板</title>
+<script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+<style>
+  :root { --bg:#f4f5f7; --card:#fff; --line:#e4e7ec; --txt:#1f2329; --mut:#8a94a6;
+          --run:#2563eb; --ok:#16a34a; --warn:#d97706; --blk:#dc2626; --idle:#9aa3b2; }
+  * { box-sizing:border-box; }
+  body { margin:0; font:14px/1.5 -apple-system,"Segoe UI","Microsoft YaHei",sans-serif;
+         background:var(--bg); color:var(--txt); }
+  header { display:flex; align-items:center; gap:16px; padding:12px 20px; background:var(--card);
+           border-bottom:1px solid var(--line); position:sticky; top:0; z-index:5; }
+  header h1 { font-size:16px; margin:0; }
+  header .sync { margin-left:auto; color:var(--mut); font-size:12px; }
+  select { padding:4px 8px; border:1px solid var(--line); border-radius:6px; }
+  .kpis { display:flex; gap:12px; padding:14px 20px; flex-wrap:wrap; }
+  .kpi { background:var(--card); border:1px solid var(--line); border-radius:10px;
+         padding:10px 16px; min-width:96px; cursor:default; }
+  .kpi b { display:block; font-size:22px; }
+  .kpi span { color:var(--mut); font-size:12px; }
+  .layout { display:grid; grid-template-columns:1fr 320px; gap:16px; padding:0 20px 20px; }
+  .office { display:grid; grid-template-columns:repeat(3,1fr); gap:14px; }
+  .desk { background:var(--card); border:1px solid var(--line); border-radius:12px;
+          padding:14px; cursor:pointer; transition:.15s; position:relative; }
+  .desk:hover { box-shadow:0 2px 10px rgba(0,0,0,.08); transform:translateY(-2px); }
+  .desk .avatar { width:44px; height:44px; border-radius:50%; display:flex; align-items:center;
+                  justify-content:center; font-size:20px; color:#fff; margin-bottom:8px; }
+  .desk.active .avatar { background:var(--run); }
+  .desk.idle .avatar { background:var(--idle); }
+  .desk .who { font-weight:600; }
+  .desk .role { color:var(--mut); font-size:12px; }
+  .desk .cnt { position:absolute; top:12px; right:12px; background:var(--run); color:#fff;
+               border-radius:10px; padding:1px 8px; font-size:12px; }
+  .desk.idle .cnt { background:var(--idle); }
+  .status-dot { display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:4px; }
+  .desk.active .status-dot { background:var(--ok); }
+  .desk.idle .status-dot { background:var(--idle); }
+  .side .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:12px; }
+  .side h3 { margin:0 0 10px; font-size:13px; color:var(--mut); }
+  .att { border-left:3px solid var(--warn); padding:6px 8px; margin-bottom:8px; background:#fffaf0;
+         border-radius:0 6px 6px 0; cursor:pointer; }
+  .att.susp { border-left-color:var(--blk); background:#fff5f5; }
+  .att .id { font-weight:600; font-size:12px; }
+  .att .sum { color:var(--txt); font-size:12px; }
+  /* 详情抽屉 */
+  .drawer-mask { position:fixed; inset:0; background:rgba(0,0,0,.25); z-index:9; }
+  .drawer { position:fixed; top:0; right:0; width:420px; max-width:92vw; height:100%;
+            background:var(--card); z-index:10; box-shadow:-4px 0 16px rgba(0,0,0,.12);
+            padding:18px; overflow-y:auto; }
+  .drawer h2 { font-size:15px; margin:0 0 4px; }
+  .drawer .close { position:absolute; top:12px; right:14px; cursor:pointer; color:var(--mut);
+                   font-size:20px; border:none; background:none; }
+  .tcard { border:1px solid var(--line); border-radius:10px; padding:10px; margin:10px 0; }
+  .tcard .id { font-weight:600; color:var(--run); }
+  .tcard .meta { color:var(--mut); font-size:12px; margin:4px 0; }
+  .tcard .blk { color:var(--blk); font-size:12px; }
+  .bubble { display:inline-block; background:#eef2ff; color:#3730a3; border-radius:10px;
+            padding:2px 8px; font-size:12px; margin:2px 4px 0 0; }
+  .arts { font-size:12px; color:var(--mut); }
+  .prog { font-size:12px; color:var(--ok); }
+  .empty { color:var(--mut); text-align:center; padding:30px 0; }
+  a.back { color:var(--run); text-decoration:none; font-size:13px; }
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <h1>🏢 AI 编排指挥室 <span style="color:var(--mut);font-size:12px">灰盒样板 v0.1</span></h1>
+    <select v-model="project" @change="load">
+      <option :value="null">全部项目</option>
+      <option v-for="p in data.projects" :key="p" :value="p">{{ p }}</option>
+    </select>
+    <a class="back" href="/">看板</a>
+    <span class="sync">同步于 {{ fmtTime(data.synced_at) }} · 5s 轮询</span>
+  </header>
+
+  <div class="kpis">
+    <div class="kpi"><b>{{ data.kpi.running }}</b><span>运行中</span></div>
+    <div class="kpi"><b>{{ data.kpi.pending_approval }}</b><span>待审批</span></div>
+    <div class="kpi"><b>{{ data.kpi.suspended }}</b><span>阻塞中</span></div>
+    <div class="kpi"><b>{{ data.kpi.today_done }}</b><span>今日完成</span></div>
+    <div class="kpi"><b>¥{{ data.kpi.ds_today.toFixed(2) }}</b><span>今日费用</span></div>
+  </div>
+
+  <div class="layout">
+    <!-- 六岗位工位 -->
+    <div class="office">
+      <div v-for="r in data.roles" :key="r.key" class="desk" :class="r.status" @click="open(r)">
+        <div class="cnt" v-if="r.count">{{ r.count }}</div>
+        <div class="avatar">{{ emoji(r.key) }}</div>
+        <div class="who">{{ r.nick }}</div>
+        <div class="role">{{ r.title }}</div>
+        <div style="margin-top:8px;font-size:12px;color:var(--mut)">
+          <span class="status-dot"></span>{{ r.count ? r.count + ' 单进行中' : '空闲' }}
+        </div>
+      </div>
+    </div>
+
+    <!-- 待你处理 -->
+    <div class="side">
+      <div class="card">
+        <h3>待你处理 ({{ data.attention.length }})</h3>
+        <div v-if="!data.attention.length" class="empty">暂无待办 ✓</div>
+        <div v-for="c in data.attention" :key="c.id" class="att" :class="{susp: c.blocked}" @click="openTicket(c)">
+          <div class="id">{{ c.id }}</div>
+          <div class="sum">{{ c.summary }}</div>
+          <div class="meta" style="color:var(--mut);font-size:11px">{{ c.state }} · {{ fmtTime(c.last_update) }}</div>
+          <div v-if="c.blocked" style="color:var(--blk);font-size:11px">⛔ {{ c.blocked }}</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 岗位抽屉 -->
+  <template v-if="cur">
+    <div class="drawer-mask" @click="cur=null"></div>
+    <div class="drawer">
+      <button class="close" @click="cur=null">×</button>
+      <h2>{{ emoji(cur.key) }} {{ cur.nick }} · {{ cur.title }}</h2>
+      <div style="color:var(--mut);font-size:12px">{{ cur.count ? cur.count+' 张工单在处理' : '当前空闲' }}</div>
+      <div v-if="!cur.tickets.length" class="empty">没有进行中的工单</div>
+      <div v-for="c in cur.tickets" :key="c.id" class="tcard">
+        <div class="id">{{ c.id }} <span style="color:var(--mut);font-weight:400">{{ c.project }}</span></div>
+        <div>{{ c.summary }}</div>
+        <div class="meta">阶段 {{ c.state }} · 更新 {{ fmtTime(c.last_update) }}</div>
+        <div class="prog" v-if="c.tasks_total">子任务 {{ c.tasks_done }}/{{ c.tasks_total }}</div>
+        <div v-if="c.blocked" class="blk">⛔ {{ c.blocked }}</div>
+        <div><span v-for="b in c.bubbles" :key="b" class="bubble">{{ b }}</span></div>
+        <div class="arts" v-if="c.artifacts.length">产物:{{ c.artifacts.join(', ') }}</div>
+      </div>
+    </div>
+  </template>
+</div>
+
+<script>
+const { createApp } = Vue;
+createApp({
+  data() { return { data: { kpi:{}, roles:[], attention:[], projects:[], synced_at:'' },
+                    project: null, cur: null, timer: null }; },
+  methods: {
+    emoji(k) { return {pm:'📋',architect:'📐',dev:'💻',qa:'🔍',release:'🚀',sre:'🛡️'}[k]||'👤'; },
+    fmtTime(ts) { if(!ts) return '-'; const d=new Date(ts);
+      return d.toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit'}); },
+    async load() {
+      const url = '/api/v1/office' + (this.project ? '?project='+encodeURIComponent(this.project) : '');
+      try { const r = await fetch(url); this.data = await r.json(); }
+      catch(e) { console.warn('同步失败', e); }
+    },
+    open(r) { this.cur = r; },
+    openTicket(c) { window.location.href = '/ticket/' + c.id; },
+  },
+  mounted() { this.load(); this.timer = setInterval(this.load, 5000); },
+  beforeUnmount() { clearInterval(this.timer); },
+}).mount('#app');
+</script>
+</body>
+</html>

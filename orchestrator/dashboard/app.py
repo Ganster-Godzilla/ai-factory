@@ -4,9 +4,9 @@ from __future__ import annotations
 from pathlib import Path
 from urllib.parse import urlparse
 
-from flask import Flask, abort, redirect, render_template, request, url_for
+from flask import Flask, abort, jsonify, redirect, render_template, request, url_for
 
-from orchestrator.dashboard import views
+from orchestrator.dashboard import office, views
 from orchestrator.daemon.statemachine import (IllegalTransition,
                                               approval_target, resume, transition)
 from orchestrator.daemon.ticket import load_ticket
@@ -56,6 +56,22 @@ def create_app(pool_dir: Path, cfg: dict) -> Flask:
     def projects():
         return render_template("projects.html",
                                **views.swimlanes(app.config["POOL"]))
+
+    # --- 可视化办公室(T-2026-0911-004):只读 API + 灰盒页 ---
+    @app.get("/api/v1/office")
+    def api_office():
+        """只读:六岗位×关联工单×KPI×待办,5s 轮询消费;前端不得据此改状态。"""
+        d = office.office_data(
+            app.config["POOL"], app.config["CFG"],
+            project=request.args.get("project"))
+        return jsonify(d)
+
+    @app.get("/office")
+    def office_page():
+        # 灰盒样板:纯前端 SPA(含 Vue {{ }} 与三元符,Jinja 会误解析),
+        # 故不走 render_template,按原文返回,跳过 Jinja(T-2026-0911-004 实证坑)。
+        p = Path(__file__).parent / "templates" / "office.html"
+        return p.read_text(encoding="utf-8"), 200, {"Content-Type": "text/html; charset=utf-8"}
 
     def _error(msg: str):
         return render_template(
