@@ -69,9 +69,9 @@ def create_app(pool_dir: Path, cfg: dict) -> Flask:
 
     @app.get("/office")
     def office_page():
-        # 灰盒样板:纯前端 SPA(含 Vue {{ }} 与三元符,Jinja 会误解析),
-        # 故不走 render_template,按原文返回,跳过 Jinja(T-2026-0911-004 实证坑)。
-        p = Path(__file__).parent / "templates" / "office.html"
+        # 办公室正式入口 = 新 SPA(方块人沙盒,T-2026-0911-007);旧灰盒 office.html 退役。
+        # 产物 index.html 引用 /static/web/ 绝对路径,挂 /office 直出不影响资源解析。
+        p = Path(__file__).parent / "static" / "web" / "index.html"
         return p.read_text(encoding="utf-8"), 200, {"Content-Type": "text/html; charset=utf-8"}
 
     def _error(msg: str):
