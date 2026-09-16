@@ -6,6 +6,7 @@
 """
 from __future__ import annotations
 
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -128,3 +129,28 @@ def office_data(pool: Path, cfg: dict, project: str | None = None) -> dict:
         "observation": sorted(observation, key=lambda c: c["last_update"], reverse=True),
         "interactions": sorted(interactions, key=lambda x: x["ts"], reverse=True)[:8],
     }
+
+
+# --- 响应缓存(沙盒首屏 12-20s 实证:office_data 重复读 60 yaml×N,稳态 ~11s。
+# 轮询间隔本就 5-10s,4s TTL 内直接命中;写操作经 invalidate 主动失效) ---
+_CACHE: dict = {}
+# 30s:必须大于前端轮询间隔(10s)否则次次 miss 白缓存;监控看板 30s 新鲜度足够,
+# 写操作经 invalidate 主动失效,动作路径不受影响。
+_CACHE_TTL = 30.0
+
+
+def office_data_cached(pool: Path, cfg: dict, project: str | None = None,
+                       ttl: float = _CACHE_TTL) -> dict:
+    key = (str(pool), project)
+    hit = _CACHE.get(key)
+    if hit and time.time() - hit[0] < ttl:
+        return hit[1]
+    d = office_data(pool, cfg, project)
+    # 时间戳必须在计算后取:office_data 本身要 8-10s,先取则条目生下即过期
+    _CACHE[key] = (time.time(), d)
+    return d
+
+
+def invalidate_office_cache() -> None:
+    """写操作(approve/reject/resume/新建)后调用,下次轮询立即见新数据。"""
+    _CACHE.clear()

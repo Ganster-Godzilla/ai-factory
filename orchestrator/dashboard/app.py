@@ -60,8 +60,9 @@ def create_app(pool_dir: Path, cfg: dict) -> Flask:
     # --- 可视化办公室(T-2026-0911-004):只读 API + 灰盒页 ---
     @app.get("/api/v1/office")
     def api_office():
-        """只读:六岗位×关联工单×KPI×待办,5s 轮询消费;前端不得据此改状态。"""
-        d = office.office_data(
+        """只读:六岗位×关联工单×KPI×待办,轮询消费;4s TTL 缓存(首屏 12-20s 实证),
+        前端不得据此改状态。"""
+        d = office.office_data_cached(
             app.config["POOL"], app.config["CFG"],
             project=request.args.get("project"))
         return jsonify(d)
@@ -116,6 +117,7 @@ def create_app(pool_dir: Path, cfg: dict) -> Flask:
                 raise IllegalTransition(f"{t.state} 无可审批迁移")
         except IllegalTransition as e:
             return _error(f"批准失败({t.id}):{e}")
+        office.invalidate_office_cache()
         return redirect(url_for("approvals"))
 
     @app.post("/reject/<ticket_id>")
@@ -130,6 +132,7 @@ def create_app(pool_dir: Path, cfg: dict) -> Flask:
                 transition(pool, t, "closed", actor="boss")
         except IllegalTransition as e:
             return _error(f"驳回失败({t.id}):{e}")
+        office.invalidate_office_cache()
         return redirect(url_for("approvals"))
 
     @app.post("/resume/<ticket_id>")
@@ -142,6 +145,7 @@ def create_app(pool_dir: Path, cfg: dict) -> Flask:
             resume(pool, t, actor="boss", force=force)
         except IllegalTransition as e:
             return _error(f"恢复失败({t.id}):{e}")
+        office.invalidate_office_cache()
         return redirect(url_for("approvals"))
 
     return app
