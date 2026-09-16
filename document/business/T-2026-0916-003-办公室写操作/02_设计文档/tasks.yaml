@@ -1,0 +1,26 @@
+- id: S1
+  title: 写操作 JSON API(approve/reject/resume/create/artifacts)+版本冲突+缓存失效
+  scope:
+  - orchestrator/dashboard/app.py
+  - tests/orchestrator/test_dashboard.py
+  acceptance_cmd: python -m pytest tests/orchestrator/test_dashboard.py -q -k api_
+  depends_on: []
+  context: |
+    目标:design Architecture 后端。抽 _apply_approve 单一事实源(HTML 路由改用);
+    五端点;_check_fresh 版本冲突(base_ts vs 最后事件 ts,409);写后 invalidate 缓存;
+    建单校验(项目登记/空摘要,draft 不触发执行);产物 resolve 限项目目录内(越界 404)。
+    6 用例全过:批准+缓存失效/冲突/驳回/恢复/建单/产物+穿越。
+  status: done
+- id: S2
+  title: 沙盒写操作前端(待办面板+建单弹窗+产物芯片)
+  scope:
+  - web/src/Sandbox.vue
+  acceptance_cmd: cd web && npm run build
+  depends_on:
+  - S1
+  context: |
+    目标:design How-3。Sandbox.vue 加 attention 面板(批准/驳回/恢复+同因强制,
+    错误提示,409 自动刷新)、建单弹窗(项目选择+目标,提交即刷新)、
+    产物芯片+预览弹窗;acting 防重复点击;disabled 布尔化。
+    构建过;8321 端到端活性(未登记 400/空摘要 400/artifact 404/SPA 新构建)。
+  status: done

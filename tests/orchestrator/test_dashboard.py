@@ -695,3 +695,111 @@ def test_legacy_ticket_without_level_renders(pool):
     assert c.get("/tickets").status_code == 200
     r = c.get(f"/ticket/{t.id}")
     assert r.status_code == 200 and "L1" in r.get_data(as_text=True)
+
+
+# ================= T-2026-0916-003 阶段3:沙盒写操作 JSON API =================
+def _proj_with_proposal(tmp_path, tid):
+    d = tmp_path / "proj"
+    doc = d / f"document/business/{tid}-x/00_提案"
+    doc.mkdir(parents=True)
+    (doc / "提案.md").write_text("# 提案\n## 问题\nx\n## 方向\nx\n## 范围\nx\n## 不做\nx\n",
+                                 encoding="utf-8")
+    return d
+
+
+def _api_cfg(proj_dir):
+    c = _cfg()
+    c["projects"] = {"p": str(proj_dir)}
+    return c
+
+
+def _last_ts(pool, tid):
+    from orchestrator.daemon.events import read_events
+    return read_events(pool, tid)[-1]["ts"]
+
+
+def test_api_approve_ok_and_cache_invalidated(pool, tmp_path):
+    t = new_ticket(pool, project="p", summary="待批")
+    transition(pool, t, "p0_proposed", actor="pm")
+    proj = _proj_with_proposal(tmp_path, t.id)
+    app = create_app(pool, _api_cfg(proj))
+    app.config["TESTING"] = True
+    from orchestrator.dashboard import office
+    office.office_data_cached(pool, _api_cfg(proj))     # 预热缓存
+    c = app.test_client()
+    r = c.post(f"/api/v1/tickets/{t.id}/approve", json={"base_ts": _last_ts(pool, t.id)})
+    assert r.status_code == 200 and r.get_json()["ok"] is True
+    from orchestrator.daemon.ticket import load_ticket
+    assert load_ticket(pool, t.id).state == "p1_drafting"
+    assert office._CACHE == {}                            # 写后缓存已失效
+
+
+def test_api_approve_stale_conflict(pool, tmp_path):
+    t = new_ticket(pool, project="p", summary="待批")
+    transition(pool, t, "p0_proposed", actor="pm")
+    proj = _proj_with_proposal(tmp_path, t.id)
+    app = create_app(pool, _api_cfg(proj))
+    app.config["TESTING"] = True
+    r = app.test_client().post(f"/api/v1/tickets/{t.id}/approve",
+                               json={"base_ts": "2000-01-01T00:00:00+00:00"})
+    assert r.status_code == 409
+    assert "数据已变化" in r.get_json()["error"]
+    from orchestrator.daemon.ticket import load_ticket
+    assert load_ticket(pool, t.id).state == "p0_proposed"   # 未执行
+
+
+def test_api_reject_edges(pool):
+    t = new_ticket(pool, project="p", summary="待批")
+    transition(pool, t, "p0_proposed", actor="pm")
+    app = create_app(pool, _cfg())
+    app.config["TESTING"] = True
+    r = app.test_client().post(f"/api/v1/tickets/{t.id}/reject", json={})
+    assert r.status_code == 200
+    from orchestrator.daemon.ticket import load_ticket
+    assert load_ticket(pool, t.id).state == "closed"
+
+
+def test_api_resume_ok_and_illegal(pool):
+    from orchestrator.daemon.statemachine import suspend
+    t = new_ticket(pool, project="p", summary="挂起")
+    transition(pool, t, "p0_proposed", actor="pm")
+    suspend(pool, t, actor="system", reason="r", reason_code="manual")
+    app = create_app(pool, _cfg())
+    app.config["TESTING"] = True
+    c = app.test_client()
+    r = c.post(f"/api/v1/tickets/{t.id}/resume", json={})
+    assert r.status_code == 200 and r.get_json()["state"] == "p0_proposed"
+    r2 = c.post(f"/api/v1/tickets/{t.id}/resume", json={})   # 非挂起再恢复 → 409
+    assert r2.status_code == 409
+
+
+def test_api_create_ticket(pool, tmp_path):
+    app = create_app(pool, _api_cfg(tmp_path / "proj"))
+    app.config["TESTING"] = True
+    c = app.test_client()
+    r = c.post("/api/v1/tickets", json={"project": "p", "summary": "网页建单"})
+    assert r.status_code == 200
+    tid = r.get_json()["id"]
+    from orchestrator.daemon.ticket import load_ticket
+    t = load_ticket(pool, tid)
+    assert t.state == "draft" and t.created_by == "human"   # draft 不触发执行
+    r2 = c.post("/api/v1/tickets", json={"project": "ghost", "summary": "x"})
+    assert r2.status_code == 400                            # 未登记项目
+    r3 = c.post("/api/v1/tickets", json={"project": "p", "summary": ""})
+    assert r3.status_code == 400                            # 空摘要
+
+
+def test_api_artifact_serves_and_blocks_traversal(pool, tmp_path):
+    t = new_ticket(pool, project="p", summary="带产物")
+    proj = _proj_with_proposal(tmp_path, t.id)
+    t.artifacts = {"proposal": f"document/business/{t.id}-x/00_提案/提案.md",
+                   "evil": "../outside.txt"}
+    from orchestrator.daemon.ticket import save_ticket
+    save_ticket(pool, t)
+    app = create_app(pool, _api_cfg(proj))
+    app.config["TESTING"] = True
+    c = app.test_client()
+    r = c.get(f"/api/v1/tickets/{t.id}/artifacts/proposal")
+    assert r.status_code == 200 and "问题" in r.get_data(as_text=True)
+    r2 = c.get(f"/api/v1/tickets/{t.id}/artifacts/evil")
+    assert r2.status_code == 404                            # 越界拦截

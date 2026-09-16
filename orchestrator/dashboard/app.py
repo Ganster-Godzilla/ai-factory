@@ -103,18 +103,7 @@ def create_app(pool_dir: Path, cfg: dict) -> Flask:
         pool = app.config["POOL"]
         t = load_ticket(pool, ticket_id)
         try:
-            if t.state == "draft" and t.created_by == "probe":
-                # 探针草稿"采纳" = 老板直接提交 P0(裁决:actor=boss 真实记录)
-                transition(pool, t, "p0_proposed", actor="boss",
-                           project_dir=_project_dir(t))
-            elif t.state == "p2_designing" and t.owner_role != "boss":
-                # owner 门禁(终审 F3):设计尚未交还 boss,与审批中心列表过滤口径一致
-                return _error(f"批准失败({t.id}):设计尚未完成(owner={t.owner_role})")
-            elif approval_target(t) is not None:
-                transition(pool, t, approval_target(t), actor="boss",
-                           project_dir=_project_dir(t))
-            else:
-                raise IllegalTransition(f"{t.state} 无可审批迁移")
+            _apply_approve(pool, t, _project_dir(t))
         except IllegalTransition as e:
             return _error(f"批准失败({t.id}):{e}")
         office.invalidate_office_cache()
@@ -147,5 +136,116 @@ def create_app(pool_dir: Path, cfg: dict) -> Flask:
             return _error(f"恢复失败({t.id}):{e}")
         office.invalidate_office_cache()
         return redirect(url_for("approvals"))
+
+    # ================= 阶段3:沙盒写操作 JSON API(T-2026-0916-003) =================
+    # 与上面 HTML 路由同一套状态语义;写后 invalidate 缓存;base_ts 版本冲突校验。
+
+    def _last_ts(pool, tid: str) -> str:
+        """工单当前版本戳 = 最后一条事件 ts(与办公室卡片 last_update 同口径);
+        无事件回退 created_at(与 office._ticket_card 一致)。"""
+        from orchestrator.daemon.events import read_events
+        evs = read_events(pool, tid)
+        if evs:
+            return evs[-1]["ts"]
+        return load_ticket(pool, tid).created_at
+
+    def _check_fresh(pool, tid: str) -> str | None:
+        """base_ts 版本冲突:页面快照与当前不一致 → 返回错误消息(409),否则 None。"""
+        base = (request.get_json(silent=True) or {}).get("base_ts")
+        if base and base != _last_ts(pool, tid):
+            return "数据已变化,请刷新后重试"
+        return None
+
+    def _apply_approve(pool, t, project_dir) -> None:
+        """批准逻辑(与 /approve HTML 路由同语义);失败抛 IllegalTransition。"""
+        if t.state == "draft" and t.created_by == "probe":
+            transition(pool, t, "p0_proposed", actor="boss", project_dir=project_dir)
+        elif t.state == "p2_designing" and t.owner_role != "boss":
+            raise IllegalTransition(f"设计尚未完成(owner={t.owner_role})")
+        elif approval_target(t) is not None:
+            transition(pool, t, approval_target(t), actor="boss",
+                       project_dir=project_dir)
+        else:
+            raise IllegalTransition(f"{t.state} 无可审批迁移")
+
+    @app.post("/api/v1/tickets/<ticket_id>/approve")
+    def api_approve(ticket_id: str):
+        pool = app.config["POOL"]
+        t = load_ticket(pool, ticket_id)
+        stale = _check_fresh(pool, ticket_id)
+        if stale:
+            return jsonify({"ok": False, "error": stale}), 409
+        try:
+            _apply_approve(pool, t, _project_dir(t))
+        except IllegalTransition as e:
+            return jsonify({"ok": False, "error": str(e)}), 409
+        office.invalidate_office_cache()
+        return jsonify({"ok": True, "state": t.state})
+
+    @app.post("/api/v1/tickets/<ticket_id>/reject")
+    def api_reject(ticket_id: str):
+        pool = app.config["POOL"]
+        t = load_ticket(pool, ticket_id)
+        stale = _check_fresh(pool, ticket_id)
+        if stale:
+            return jsonify({"ok": False, "error": stale}), 409
+        try:
+            if t.state == "p2_designing":
+                transition(pool, t, "p1_drafting", actor="boss")
+            else:
+                transition(pool, t, "closed", actor="boss")
+        except IllegalTransition as e:
+            return jsonify({"ok": False, "error": str(e)}), 409
+        office.invalidate_office_cache()
+        return jsonify({"ok": True, "state": t.state})
+
+    @app.post("/api/v1/tickets/<ticket_id>/resume")
+    def api_resume(ticket_id: str):
+        pool = app.config["POOL"]
+        t = load_ticket(pool, ticket_id)
+        stale = _check_fresh(pool, ticket_id)
+        if stale:
+            return jsonify({"ok": False, "error": stale}), 409
+        force = bool((request.get_json(silent=True) or {}).get("force"))
+        try:
+            resume(pool, t, actor="boss", force=force)
+        except IllegalTransition as e:
+            return jsonify({"ok": False, "error": str(e)}), 409
+        office.invalidate_office_cache()
+        return jsonify({"ok": True, "state": t.state})
+
+    @app.post("/api/v1/tickets")
+    def api_create_ticket():
+        """网页建单:project 须已登记;created_by=human(boss 在环语义);
+        保存 draft 不触发执行,进 P0→P5 现有流程。"""
+        from orchestrator.daemon.ticket import new_ticket
+        body = request.get_json(silent=True) or {}
+        project = (body.get("project") or "").strip()
+        summary = (body.get("summary") or "").strip()
+        if not project or project not in (app.config["CFG"].get("projects") or {}):
+            return jsonify({"ok": False, "error": f"项目未登记: {project or '<空>'}"}), 400
+        if not summary:
+            return jsonify({"ok": False, "error": "目标/摘要不能为空"}), 400
+        pool = app.config["POOL"]
+        t = new_ticket(pool, project, summary, created_by="human")
+        office.invalidate_office_cache()
+        return jsonify({"ok": True, "id": t.id, "state": t.state})
+
+    @app.get("/api/v1/tickets/<ticket_id>/artifacts/<key>")
+    def api_artifact(ticket_id: str, key: str):
+        """交付物只读:按工单 artifacts 指针读项目内文件;
+        路径必须解析在项目登记目录内(防穿越),找不到/越界 → 404。"""
+        from orchestrator.daemon.gates import project_dir_for
+        pool = app.config["POOL"]
+        t = load_ticket(pool, ticket_id)
+        rel = (t.artifacts or {}).get(key)
+        base = project_dir_for(app.config["CFG"], t.project)
+        if not rel or base is None:
+            abort(404)
+        target = (base / rel).resolve()
+        if not str(target).startswith(str(base.resolve())) or not target.is_file():
+            abort(404)
+        from flask import send_file
+        return send_file(target)
 
     return app
