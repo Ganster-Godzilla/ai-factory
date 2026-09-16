@@ -12,7 +12,12 @@ export default defineConfig({
   },
   server: {
     proxy: {
-      '/api': 'http://127.0.0.1:8766',
+      '/api': process.env.OFFICE_API_URL || 'http://127.0.0.1:8321',
+      '/factory': {
+        target: process.env.OFFICE_API_URL || 'http://127.0.0.1:8321',
+        rewrite: path => path.replace(/^\/factory/, '') || '/',
+      },
+      '/ticket/': process.env.OFFICE_API_URL || 'http://127.0.0.1:8321',
     },
   },
 })

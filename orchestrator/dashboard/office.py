@@ -12,14 +12,14 @@ from pathlib import Path
 from orchestrator.dashboard import views
 from orchestrator.daemon.events import read_events
 
-# 六岗位定义(对应编排器 WORK_STATES);昵称=变形金刚,岗位恒显,头像=原创 SVG
+# 六岗位定义(对应编排器 WORK_STATES);昵称=变形金刚,岗位恒显,头像=统一风格 PNG
 ROLES = [
-    {"key": "pm", "title": "PM", "nick": "擎天柱", "icon": "/static/avatars/pm-optimus.svg", "states": ["p1_drafting"]},
-    {"key": "architect", "title": "架构师", "nick": "千斤顶", "icon": "/static/avatars/architect-wheeljack.svg", "states": ["p2_designing"]},
-    {"key": "dev", "title": "开发", "nick": "大黄蜂", "icon": "/static/avatars/dev-bumblebee.svg", "states": ["p3_running"]},
-    {"key": "qa", "title": "QA", "nick": "救护车", "icon": "/static/avatars/qa-ratchet.svg", "states": ["p4_verifying"]},
-    {"key": "release", "title": "发布", "nick": "铁皮", "icon": "/static/avatars/release-ironhide.svg", "states": ["p5_ready", "p5_releasing"]},
-    {"key": "sre", "title": "SRE", "nick": "爵士", "icon": "/static/avatars/sre-jazz.svg", "states": ["monitoring"]},
+    {"key": "pm", "title": "PM", "nick": "擎天柱", "icon": "/static/avatars/pm.png", "states": ["p1_drafting"]},
+    {"key": "architect", "title": "架构师", "nick": "千斤顶", "icon": "/static/avatars/architect.png", "states": ["p2_designing"]},
+    {"key": "dev", "title": "开发", "nick": "大黄蜂", "icon": "/static/avatars/dev.png", "states": ["p3_running"]},
+    {"key": "qa", "title": "QA", "nick": "救护车", "icon": "/static/avatars/qa.png", "states": ["p4_verifying"]},
+    {"key": "release", "title": "发布", "nick": "铁皮", "icon": "/static/avatars/release.png", "states": ["p5_ready", "p5_releasing"]},
+    {"key": "sre", "title": "SRE", "nick": "爵士", "icon": "/static/avatars/sre.png", "states": ["monitoring"]},
 ]
 
 # 事件 → 一句话气泡(结构化生成,不展示模型推理)
@@ -77,7 +77,12 @@ def office_data(pool: Path, cfg: dict, project: str | None = None) -> dict:
     by_role = {r["key"]: [] for r in ROLES}
     attention = []   # 待你处理:审批中 + 挂起
     observation = []  # 观察窗(monitoring):发布后待 sre 出报告转 done
+    interactions = []
     for t in tickets:
+        evs = read_events(pool, t.id)
+        for ev in evs[-8:]:
+            if ev.get("event") == "consult":
+                interactions.append({"id": f"{t.id}:{ev.get('ts')}", "from": "pm", "to": "architect", "type": "consult", "status": ev.get("status", "active"), "message": ev.get("output", "会诊请求")[:80], "ticket": t.id, "ts": ev.get("ts", "")})
         if t.state in ("done", "closed", "draft"):
             continue
         if t.state == "suspended":
@@ -121,4 +126,5 @@ def office_data(pool: Path, cfg: dict, project: str | None = None) -> dict:
         "roles": roles_out,
         "attention": sorted(attention, key=lambda c: c["last_update"], reverse=True)[:10],
         "observation": sorted(observation, key=lambda c: c["last_update"], reverse=True),
+        "interactions": sorted(interactions, key=lambda x: x["ts"], reverse=True)[:8],
     }

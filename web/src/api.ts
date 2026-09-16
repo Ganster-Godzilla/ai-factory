@@ -36,6 +36,18 @@ export interface OfficeData {
   roles: Role[]
   attention: TicketCard[]
   observation: TicketCard[]
+  interactions: Interaction[]
+}
+
+export interface Interaction {
+  id: string
+  from: string
+  to: string
+  type: string
+  status: string
+  message: string
+  ticket: string
+  ts: string
 }
 
 export async function fetchOffice(project: string | null): Promise<OfficeData> {
