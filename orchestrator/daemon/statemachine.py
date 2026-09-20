@@ -35,6 +35,16 @@ APPROVALS = {
     "p5_ready": "p5_releasing",
 }
 
+# T-2026-0919-011: 批准边完成后 owner 自动拨回下一阶段执行角色——
+# 否则工单带着 owner=boss 立刻亮进下一审批桶,产物未备就被点(boss 空点三次实证)。
+# 执行方产物齐后按 R16 交还 boss,本表只管"批准边后归谁"。
+APPROVAL_OWNER_NEXT = {
+    ("p0_proposed", "p1_drafting"): "pm",
+    ("p1_proposed", "p2_designing"): "pm",
+    ("p2_designing", "p2_approved"): "system",
+    ("p5_ready", "p5_releasing"): "release",
+}
+
 # suspend 事件 reason_code 词汇表(spec §5.2/§5.3);可选,None 表示无对应枚举
 SUSPEND_REASON_CODES = {
     "budget_cap", "daily_cap", "circuit_exhausted", "consult_exhausted",
@@ -105,6 +115,11 @@ def transition(pool: Path, ticket: Ticket, to_state: str, actor: str,
     _enforce_gate(project_dir, ticket, to_state)
     frm = ticket.state
     ticket.state = to_state
+    if (frm, to_state) in APPROVAL_OWNER_NEXT:
+        # 批准边:owner 拨回执行角色(T-2026-0919-011;审批桶按 owner 过滤,
+        # 翻转后工单不再提前亮单,产物齐交还 boss 才亮)
+        ticket.owner_role = APPROVAL_OWNER_NEXT[(frm, to_state)]
+        ev.setdefault("owner_flipped", ticket.owner_role)
     if (frm, to_state) == P1_REDO_EDGE:
         # 轮次追踪(D2):+1 不重置,历史轮次经事件流可追;
         # getattr 兜底:内存中的旧工单对象可能没有 p1_round 字段
