@@ -170,3 +170,46 @@ def test_resume_none_reason_not_treated_same(pool):
     _suspend_again_same(pool, t, None)
     resume(pool, t, actor="boss")
     assert t.state == "p0_proposed"
+
+
+# T-2026-0919-011: 批准边自动翻转 owner(下阶段执行角色),防审批桶提前亮单
+def test_approval_edge_flips_owner_to_pm_after_p0(pool):
+    t = new_ticket(pool, project="p", summary="x")
+    transition(pool, t, "p0_proposed", actor="pm")
+    t.owner_role = "boss"  # R16 待批态
+    transition(pool, t, "p1_drafting", actor="boss")
+    assert t.owner_role == "pm", "P0 批准后 owner 应收归 pm(需求起草)"
+
+
+def test_approval_edge_flips_owner_to_pm_after_p1(pool):
+    t = new_ticket(pool, project="p", summary="x")
+    transition(pool, t, "p0_proposed", actor="pm")
+    transition(pool, t, "p1_drafting", actor="boss")
+    t.owner_role = "boss"
+    # p1_proposed 需 artifacts,直连到该态(测试旁路门禁,见 conftest)
+    t.state = "p1_proposed"
+    transition(pool, t, "p2_designing", actor="boss")
+    assert t.owner_role == "pm", "P1 批准后 owner 应收归 pm(设计起草)"
+
+
+def test_approval_edge_flips_owner_to_system_after_p2(pool):
+    t = new_ticket(pool, project="p", summary="x")
+    t.state = "p2_designing"
+    t.owner_role = "boss"
+    transition(pool, t, "p2_approved", actor="boss")
+    assert t.owner_role == "system", "P2 批准后 owner 应收归 system(排队实施)"
+
+
+def test_release_edge_flips_owner_to_release(pool):
+    t = new_ticket(pool, project="p", summary="x")
+    t.state = "p5_ready"
+    t.owner_role = "boss"
+    transition(pool, t, "p5_releasing", actor="boss")
+    assert t.owner_role == "release", "P5 批准边后 owner 应收归 release(发布执行)"
+
+
+def test_non_approval_edge_keeps_owner(pool):
+    t = new_ticket(pool, project="p", summary="x")
+    transition(pool, t, "p0_proposed", actor="pm")
+    assert t.owner_role != "boss" or True  # pm 边不触动 owner
+    assert t.owner_role == "pm", "pm 执行边(owner 已是 pm)不应被误改"
