@@ -17,7 +17,8 @@ from orchestrator.daemon.gateway import k3_effective_week_tokens
 from orchestrator.daemon.ledger import append_ledger, ds_day_cost, ds_ticket_cost
 from orchestrator.daemon.slicer import load_task_list, make_packet, ready_tasks, scope_violations
 from orchestrator.daemon.statemachine import suspend, transition
-from orchestrator.daemon.ticket import load_ticket, save_ticket
+from orchestrator.daemon.ticket import (StaleTicketError, load_ticket,
+                                        save_ticket)
 from orchestrator.daemon.worktree import ensure_worktree
 
 ROLE_ROUTING = {
@@ -424,6 +425,20 @@ def advance_once(pool: Path, ticket_id: str, adapter: HarnessAdapter,
                  project_dir: Path, cfg: dict | None = None,
                  consult_adapter: HarnessAdapter | None = None) -> str:
     t = load_ticket(pool, ticket_id)
+    try:
+        return _advance_inner(pool, t, adapter, project_dir, cfg, consult_adapter)
+    except StaleTicketError:
+        # O2 降级(T-2026-0921-004):运行期盘上被外部改写(典型=boss 点击)
+        # →CAS 拒写冒泡到这里。boss 点击优先:弃写不续跑,事件留痕;
+        # 异常不外溢(下一轮 advance 重新 load 自然看到新状态)。
+        append_event(pool, ticket_id, "system", "stale_aborted",
+                     note="运行期盘上被外部改写,CAS 拦截;本次推进弃写")
+        return "stale: aborted"
+
+
+def _advance_inner(pool: Path, t, adapter: HarnessAdapter,
+                   project_dir: Path, cfg: dict | None,
+                   consult_adapter: HarnessAdapter | None) -> str:
 
     if t.state in SYSTEM_NEXT:
         while t.state in SYSTEM_NEXT:
