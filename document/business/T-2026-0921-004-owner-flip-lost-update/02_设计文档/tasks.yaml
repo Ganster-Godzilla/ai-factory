@@ -1,0 +1,36 @@
+- id: O1
+  title: CAS 硬门(ticket.py 指纹+按票锁+StaleTicketError)
+  scope:
+  - D:\workspace\ai-factory\orchestrator\daemon\ticket.py
+  acceptance_cmd: cd /d D:\workspace\ai-factory && python -m pytest tests/orchestrator -q
+  depends_on: []
+  context: 先红:双对象同载先后存→第二个 StaleTicketError 且 yaml 零污染;同对象连存不误伤;新建首存不受闸;读路径零影响。asdict/序列化路径核实 _disk_fp 不落盘。
+  status: pending
+  attempts: 0
+- id: O2
+  title: runner 存点 stale 降级(捕获+事件+弃写)+全链回归
+  scope:
+  - D:\workspace\ai-factory\orchestrator\daemon\runner.py
+  acceptance_cmd: cd /d D:\workspace\ai-factory && python -m pytest tests/orchestrator -q
+  depends_on: [O1]
+  context: 先红:角色运行期 boss 点击→runner 存点 StaleTicketError→stale_aborted 事件+弃写不续跑;既有批准/推进/挂起/恢复路径行为不变全绿。
+  status: pending
+  attempts: 0
+- id: O3
+  title: Dashboard 单实例 PID 锁(活拒启/死回收/退清锁)
+  scope:
+  - D:\workspace\ai-factory\orchestrator\dashboard\app.py
+  acceptance_cmd: cd /d D:\workspace\ai-factory && python -m pytest tests/orchestrator -q
+  depends_on: [O1]
+  context: 先红:活锁拒启打印占用 PID;死锁回收+pid_lock_reclaimed 事件;atexit 清锁且不误删后启者;Windows OpenProcess/POSIX kill(pid,0) 双活判。
+  status: pending
+  attempts: 0
+- id: O4
+  title: 全量回归+验收报告+交付说明
+  scope:
+  - D:\workspace\ai-factory\document\business\T-2026-0921-004-owner-flip-lost-update\
+  acceptance_cmd: cd /d D:\workspace\ai-factory && python -m pytest tests/ -q
+  depends_on: [O2, O3]
+  context: PRD O1-O4 逐条核;全套件绿(非仅 orchestrator 目录);验收报告"## 结论"+交付说明。
+  status: pending
+  attempts: 0
