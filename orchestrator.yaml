@@ -4,6 +4,7 @@ projects:
   sk-video-studio: d:/workspace/sk-video-studio   # 商K视频工具(2026-08-27 接入;首个全流程测试项目)
   ai-factory: d:/workspace/ai-factory   # 平台自身(2026-08-28 登记;编排器改进工单走自身流程,吃狗粮)
   datahub-demo: d:/workspace/datahub-demo   # 数据中台投资人演示 demo(2026-09-07 接入;boss 批准 P1-追因/闭环/动态接入)
+  ai-lab: d:/workspace/AI-Lab   # 星合涌现 Orvion(2026-09-19 接入;首批=5 项审批:008 盘点/009 对象草案/001 设计/010 契约/012 边界)
 # deploy 段(T-2026-0901-004):release 契约补"部署"环节,按项目名登记部署配置。
 # target 只有 local/remote 两形态,差异全部沉淀为配置值(代码零分支判断凭证/权限);
 # 校验规则(target/必填键/路径存在性)在加载时完成,见 orchestrator/daemon/deploy.py。

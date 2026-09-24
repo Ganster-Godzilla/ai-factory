@@ -8,11 +8,14 @@
 | 2026-09-09 | Dashboard 事故单无关闭入口(按钮缺口) | parked | boss 实证:T-2026-0909-001 详情页无关闭按钮;状态机关单径 suspended→closed(boss),但 UI 无对应动作;建议在「已挂起」桶加【关闭】按钮(actor=boss) |
 | 2026-09-09 | Dashboard 错误消息张冠李戴(校验失败渲染成"工单不存在") | parked | 实证:手工建单 type=bugfix 非法 → save_ticket ValueError 被笼统 errorhandler 捕获,boss 点批准看到「工单不存在」404,实际工单在、是校验失败;建议 errorhandler 按异常类型/消息分流,校验失败亮出具体字段错误(T-2026-0909-002 已改 type=feature 解封,沙盒试批过) |
 | 2026-09-09 | deploy 同版本重跑不幂等(撞 root 属主 __pycache__ 误报 FAIL) | parked | 实证(T-2026-0909-003):首轮 deploy 成功后服务(root 运行)在 release 目录生成 root 属主 pycache;同版本二次 deploy 解包覆盖在飞目录后 chown -R EPERM 退出 1,误报 FAIL 并自动建事故单;且首轮成功零输出(成功路径无回显,诱发重跑)。建议:①成功路径打印版本/冒烟结果摘要;②chown 失败降级 warning(属主已正确则跳过)或解包到全新临时目录再原子换名;③同版本重跑前置检测直接报"已在产" |
+| 2026-09-11 | 批准边不自动翻转 owner(下一审批桶提前亮单) | **已修(T-2026-0919-011,7ecbcd1)** | boss 实证(T-2026-0911-003):P1 点完批准,单立刻亮在 P2 桶带批准按钮,但设计产物还没做——transition 只改 state 不动 owner_role,上一棒为审批挂的 owner=boss 被带进下一阶段;建议批准类迁移完成时自动把 owner 拨回下一阶段的执行角色(P1 后→pm/architect,P2 后→system/runner,P5 后→release),执行方完成产物后再按 R16 交还 boss |
 
 ## Blocked
 (空)
 
 ## Done
+- 2026-09-20 T-2026-0919-011(批准边 owner 自动翻转)已合 main(7ecbcd1):四边映射+5 新用例;452/452 绿;parked 0911-003 病灶销案;授权包自动合并第 5 单
+
 | 日期 | 事项 |
 |---|---|
 | 2026-09-02 | **T-2026-0902-009 P3 执行层切 k3 订阅池(基座,B 方案)交付,进观察窗(长窗至 09-09)**:relay 溢出梯 kimi1-4(k3-d 入池)→glm-flash(免费)→ds-flash(廉价,DS 充值自动生效)→zen-k3($ 硬帽);runner 全角色切 claude_code(dsh 保留回退);k3 水位 150M→600M warn-only(mingfang 复用);DS 现金字段标注;dev 小切片 k3 首验 59718be;node 16+pytest 445 绿。relay d1fcaae/factory fe15145。遗留:dsh 直调计量管道与 relay 池级口径统一(后续) |
