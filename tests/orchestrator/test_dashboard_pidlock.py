@@ -26,6 +26,13 @@ class TestAliveLockRefuses:
             acquire_pid_lock(pool, alive_check=lambda pid: True)
         assert "4242" in str(e.value)
 
+    def test_same_pid_reentry_is_idempotent(self, tmp_path):
+        """同进程重入=同一实例(进程内二次启动/冒烟复跑),放行非孤儿。"""
+        pool = tmp_path / "pool"
+        _write_lock(pool, pid=4242)
+        assert acquire_pid_lock(pool, pid=4242,
+                                alive_check=lambda pid: True) is True
+
     def test_refusal_does_not_touch_lock(self, tmp_path):
         pool = tmp_path / "pool"
         _write_lock(pool, pid=4242)

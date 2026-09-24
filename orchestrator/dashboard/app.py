@@ -58,6 +58,8 @@ def acquire_pid_lock(pool: Path, pid: int | None = None,
             occupant = json.loads(lock.read_text(encoding="utf-8")).get("pid")
         except (ValueError, AttributeError):
             occupant = None  # 锁内容损坏=来源不明,按死锁回收(可启动)
+        if occupant is not None and int(occupant) == pid:
+            return True  # 同进程重入=同一实例(进程内二次启动/冒烟复跑),非孤儿
         if occupant is not None and alive_check(int(occupant)):
             raise SystemExit(
                 f"dashboard 已在运行(PID={occupant}),拒启防孤儿;"
