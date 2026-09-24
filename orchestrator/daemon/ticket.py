@@ -1,6 +1,14 @@
-"""工单:pool 中的状态权威对象。YAML 序列化,字段见 spec 第 2 节。"""
+"""工单:pool 中的状态权威对象。YAML 序列化,字段见 spec 第 2 节。
+
+CAS 硬门(T-2026-0921-004 O1):每个 load 的对象带盘上内容指纹(内存私有
+_disk_fp,绝不序列化);save_ticket 在按票锁内比对——盘上指纹≠对象指纹
+=有人在我加载后写过(lost-update),StaleTicketError 响亮抛出,不合并不
+重试。保存成功后指纹自更新,同对象连存不误伤;手工构造(无指纹)首存
+=创建语义不受闸。
+"""
 from __future__ import annotations
 
+import hashlib
 import os, time
 import re
 from dataclasses import dataclass, field, asdict
@@ -10,6 +18,10 @@ from pathlib import Path
 import yaml
 
 from orchestrator.daemon.events import append_event
+
+
+class StaleTicketError(Exception):
+    """盘上指纹≠对象指纹:lost-update 拦截(0921-004 事故根治,响亮失败)。"""
 
 VALID_STATES = {
     "draft", "p0_proposed", "p1_drafting", "p1_proposed", "p2_designing",
@@ -44,11 +56,14 @@ class Ticket:
 
     @classmethod
     def load(cls, path: Path) -> "Ticket":
-        data = yaml.safe_load(path.read_text(encoding="utf-8"))
+        text = path.read_text(encoding="utf-8")
+        data = yaml.safe_load(text)
         # 忽略未知键:integration 线可能写入更新的字段(如 p1_round),
         # main 线加载不应崩——否则整个 dashboard 对真实 pool 全 500(2026-08-29 事故)
         known = {k: v for k, v in data.items() if k in cls.__dataclass_fields__}
-        return cls(**known)
+        t = cls(**known)
+        t._disk_fp = _fingerprint(text)  # CAS 指纹:内存私有,不随 asdict 序列化
+        return t
 
     def save(self, path: Path) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -76,6 +91,25 @@ def _path(pool: Path, ticket_id: str) -> Path:
     if not ID_RE.match(ticket_id):
         raise ValueError(f"ticket id 格式非法: {ticket_id!r}")
     return pool / "tickets" / f"{ticket_id}.yaml"
+
+
+def _fingerprint(text: str) -> str:
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
+def _ticket_lock(pool: Path, ticket_id: str) -> Path:
+    """按票文件锁(O_EXCL 自旋,与 _locked 同范式;锁内完成 CAS 校验+写盘,
+    关死 check-then-write 的 TOCTOU 窗)。"""
+    (pool / "tickets").mkdir(parents=True, exist_ok=True)  # 首存时目录可能未建
+    lock = pool / "tickets" / f"{ticket_id}.lock"
+    for _ in range(50):
+        try:
+            fd = os.open(str(lock), os.O_CREAT | os.O_EXCL | os.O_RDWR)
+            os.close(fd)
+            return lock
+        except FileExistsError:
+            time.sleep(0.1)
+    raise TimeoutError(f"ticket 锁超时: {ticket_id}")
 
 
 def _next_id(pool: Path) -> str:
@@ -138,4 +172,21 @@ def save_ticket(pool: Path, ticket: Ticket) -> None:
     problems = ticket.validate() + _validate_tasks(ticket.tasks)
     if problems:
         raise ValueError(f"工单校验失败: {problems}")
-    ticket.save(_path(pool, ticket.id))
+    path = _path(pool, ticket.id)
+    lock = _ticket_lock(pool, ticket.id)
+    try:
+        fp = getattr(ticket, "_disk_fp", None)
+        if fp is not None:
+            # CAS:盘上在我加载后被人改过(或票被删)→响亮拒绝,不合并不重试
+            if not path.exists():
+                raise StaleTicketError(
+                    f"{ticket.id} 盘上文件已不存在(持旧对象保存=重建幽灵票,拒)")
+            if _fingerprint(path.read_text(encoding="utf-8")) != fp:
+                raise StaleTicketError(
+                    f"{ticket.id} 盘上已被他人改写(lost-update 拦截);"
+                    f"请重新 load 后再写")
+        ticket.save(path)
+        # 指纹自更新:同对象连存不误伤
+        ticket._disk_fp = _fingerprint(path.read_text(encoding="utf-8"))
+    finally:
+        lock.unlink(missing_ok=True)
