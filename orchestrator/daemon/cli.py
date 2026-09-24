@@ -158,7 +158,8 @@ def main(argv: list[str] | None = None) -> int:
                                cfg=cfg,
                                consult_adapter=FakeHarness() if args.consult_fake else None))
         elif args.cmd == "dashboard":
-            from orchestrator.dashboard.app import create_app
+            from orchestrator.dashboard.app import _register_pid_lock, create_app
+            _register_pid_lock(_pool())  # 单实例闸(O3):活锁拒启防孤儿
             create_app(_pool(), _cfg()).run(host=args.host, port=args.port, debug=False)
     except (IllegalTransition, ValueError) as e:
         print(f"error: {e}", file=sys.stderr)

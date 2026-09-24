@@ -1,18 +1,93 @@
-"""Dashboard Flask 应用工厂。测试可注入 tmp pool。"""
+"""Dashboard Flask 应用工厂。测试可注入 tmp pool。
+
+单实例 PID 锁(T-2026-0921-004 O3):启动前 acquire_pid_lock——活锁拒启
+(打印占用 PID,孤儿旧代码抢流量有前科:0921-004 事故直接诱因);
+死锁回收+pid_lock_reclaimed 事件;release 只清自己的锁(防退出竞态误删)。
+"""
 from __future__ import annotations
 
+import atexit
+import json
+import os
+import sys
+from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import urlparse
 
 from flask import Flask, abort, jsonify, redirect, render_template, request, url_for
 
 from orchestrator.dashboard import office, views
+from orchestrator.daemon.events import append_event
 from orchestrator.daemon.statemachine import (IllegalTransition,
                                               approval_target, resume, transition)
 from orchestrator.daemon.ticket import load_ticket
 
 # 本地 CSRF 防护(终审 F2):POST 的 Origin/Referer host 只认回环
 _LOOPBACK_HOSTS = {"127.0.0.1", "localhost"}
+
+_PID_LOCK = ".dashboard.pid"
+
+
+def _pid_alive_default(pid: int) -> bool:
+    """活判:Windows=ctypes OpenProcess(0x1000),POSIX=os.kill(pid, 0)。"""
+    if os.name == "nt":
+        import ctypes
+        handle = ctypes.windll.kernel32.OpenProcess(0x1000, False, pid)
+        if not handle:
+            return False
+        ctypes.windll.kernel32.CloseHandle(handle)
+        return True
+    try:
+        os.kill(pid, 0)
+        return True
+    except OSError:
+        return False
+
+
+def acquire_pid_lock(pool: Path, pid: int | None = None,
+                     alive_check=None) -> bool:
+    """单实例闸:活锁占用→SystemExit(打印占用 PID);死锁→回收+事件;
+    无锁→登记自 PID+启动时刻。"""
+    pool = Path(pool)
+    pool.mkdir(parents=True, exist_ok=True)
+    pid = pid if pid is not None else os.getpid()
+    alive_check = alive_check or _pid_alive_default
+    lock = pool / _PID_LOCK
+    if lock.exists():
+        try:
+            occupant = json.loads(lock.read_text(encoding="utf-8")).get("pid")
+        except (ValueError, AttributeError):
+            occupant = None  # 锁内容损坏=来源不明,按死锁回收(可启动)
+        if occupant is not None and alive_check(int(occupant)):
+            raise SystemExit(
+                f"dashboard 已在运行(PID={occupant}),拒启防孤儿;"
+                f"确认死进程后可删 {lock} 或走回收启动")
+        lock.unlink(missing_ok=True)
+        append_event(pool, "dashboard", "system", "pid_lock_reclaimed",
+                     note=f"死锁回收(前 PID={occupant}),本次 PID={pid}")
+    lock.write_text(json.dumps({
+        "pid": pid,
+        "started_at": datetime.now(timezone.utc).isoformat(),
+    }), encoding="utf-8")
+    return True
+
+
+def release_pid_lock(pool: Path, pid: int | None = None) -> None:
+    """只清自己的锁(锁内容 PID 不符=后启者所有,绝不动)。"""
+    lock = Path(pool) / _PID_LOCK
+    pid = pid if pid is not None else os.getpid()
+    try:
+        content = json.loads(lock.read_text(encoding="utf-8"))
+    except (FileNotFoundError, ValueError):
+        return
+    if content.get("pid") == pid:
+        lock.unlink(missing_ok=True)
+
+
+def _register_pid_lock(pool: Path) -> None:
+    """启动钩:取锁+登记退出清锁(cli dashboard 路径调用)。"""
+    acquire_pid_lock(pool)
+    atexit.register(release_pid_lock, pool)
 
 
 def create_app(pool_dir: Path, cfg: dict) -> Flask:
