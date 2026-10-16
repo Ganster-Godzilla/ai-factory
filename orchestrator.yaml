@@ -31,6 +31,27 @@ deploy:
       - {name: dashboard, pidfile: ".orc-local/dashboard.pid",
          start_cmd: "python -m orchestrator.daemon.cli dashboard --port 8765"}
     smoke: ["http://127.0.0.1:8765/"]
+  ai-lab:
+    target: remote
+    host: "root@113.140.77.112"
+    ssh_key: "D:/Tool/keys/orvion-uat-ed25519"
+    app_dir: "/data/apps/orvion"             # releases/<版本> 逐版留存 + current 软链(1014/1015 实证路径)
+    service: "orvion-backend"
+    # Java 项目:后端 jar 本机 mvnw 构建;前端 dist 本机 vite 构建(服务器不装 node/maven)
+    build_cmd: "./mvnw -q -pl backend/orvion-app -am package -DskipTests && cd frontend && npx vite build"
+    dist_dir: "frontend/dist"
+    # Java 项目无 requirements.txt;deploy.py 该键硬必填→空占位文件(差异检查无意义,依赖锚=pom.xml)
+    requirements: "deploy/uat/requirements-placeholder.txt"
+    env_example: ".env.example"
+    remote_env: "/data/apps/orvion/shared/.env"
+    # 双服务本工单实证(1015):backend 必重启;kernel 仅当内核仓有改动时需另 restart
+    # (deploy.py 单 service 模型,内核重启靠发布记录显式声明;内核仓为独立仓,改动独立提交)
+    restart_cmd: "systemctl restart orvion-backend"
+    # 持久件(1014/1015 实证):.env 与内核 SQLite(mandara-kernel.db)挂 shared/,不进 release
+    persist: [".env"]
+    smoke: ["http://113.140.77.112:8802/actuator/health",
+            "http://113.140.77.112:8810/health",
+            "https://orvion.cc/"]
 thresholds:
   concurrent_max: 2
 budgets:
