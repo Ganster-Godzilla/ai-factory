@@ -38,7 +38,9 @@ deploy:
     app_dir: "/data/apps/orvion"             # releases/<版本> 逐版留存 + current 软链(1014/1015 实证路径)
     service: "orvion-backend"
     # Java 项目:后端 jar 本机 mvnw 构建;前端 dist 本机 vite 构建(服务器不装 node/maven)
-    build_cmd: "./mvnw -q -pl backend/orvion-app -am package -DskipTests && cd frontend && npx vite build"
+    # Windows 实证(1022-002 部署):deploy._local_run 走 shell=True→cmd.exe,cmd 不搜
+    # 当前目录,`./mvnw`/`mvnw.cmd` 均报"不是内部或外部命令";必须 `.\mvnw.cmd`
+    build_cmd: ".\\mvnw.cmd -q -pl backend/orvion-app -am package -DskipTests && cd frontend && npx vite build"
     dist_dir: "frontend/dist"
     # Java 项目无 requirements.txt;deploy.py 该键硬必填→空占位文件(差异检查无意义,依赖锚=pom.xml)
     requirements: "deploy/uat/requirements-placeholder.txt"
