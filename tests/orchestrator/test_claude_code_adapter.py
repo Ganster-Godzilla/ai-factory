@@ -47,7 +47,7 @@ def _captured_cmd(tmp_path, model):
 
 
 def test_driver_model_whitelist_passes_flag(tmp_path):
-    for model in ("k2.6", "gpt-6-astra"):
+    for model in ("k2.6", "gpt-6-astra", "k3.1-pro"):
         cmd = _captured_cmd(tmp_path, model)
         assert "--model" in cmd and model in cmd, f"{model} 应传 --model"
 

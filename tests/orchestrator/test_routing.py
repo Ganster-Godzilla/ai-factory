@@ -257,33 +257,35 @@ def _p3_ticket_with_task(pool):
     return t
 
 
-def test_cfg_models_override_dev_model(pool, tmp_path):
+# Finding S4 的 cfg/ROLE_MODEL 层改为直测纯函数 _model_for(T-2026-1028-003):
+# claude_code 路径上 level 驾驶员(L1→k3.1-pro,L2/L3→k2.6)恒优先,packet.model
+# 不再回落 cfg;该层仅 dsh 回退路径(ROLE_ROUTING 切回时)仍消费,语义单独钉住。
+
+def test_cfg_models_override_dev_model():
     # Finding S4:cfg["models"][role] 优先于 ROLE_MODEL 兜底
+    from orchestrator.daemon.runner import _model_for
+    assert _model_for({"models": {"dev": "glm-5.3-flash"}}, "dev") == "glm-5.3-flash"
+
+
+def test_no_cfg_falls_back_to_role_model():
+    # Finding S4:无 cfg 时维持 ROLE_MODEL 兜底
+    from orchestrator.daemon.runner import _model_for
+    assert _model_for(None, "dev") == "deepseek-v4-flash"
+
+
+def test_cfg_models_override_role_model():
+    # Finding S4:非 dev 角色同样走 cfg["models"]
+    from orchestrator.daemon.runner import _model_for
+    assert _model_for({"models": {"qa": "glm-5.3-flash"}}, "qa") == "glm-5.3-flash"
+
+
+def test_l1_dispatch_prefers_driver_over_cfg_models(pool, tmp_path):
+    # T-2026-1028-003:L1 显式驾驶员(k3.1-pro)在 claude_code 路径恒优先于
+    # cfg models/ROLE_MODEL(0908-003 L2/L3 既有模式扩展至 L1)。
     proj = _git_repo(tmp_path)
     t = _p3_ticket_with_task(pool)
     h = FakeHarness()
     cfg = {"models": {"dev": "glm-5.3-flash"},
            "budgets": {"k3_week_token_budget": 10**9, "ds_daily_cny": 10**9}}
     advance_once(pool, t.id, h, proj, cfg=cfg)
-    assert h.received[0].model == "glm-5.3-flash"
-
-
-def test_no_cfg_falls_back_to_role_model(pool, tmp_path):
-    # Finding S4:无 cfg 时维持 ROLE_MODEL 兜底
-    proj = _git_repo(tmp_path)
-    t = _p3_ticket_with_task(pool)
-    h = FakeHarness()
-    advance_once(pool, t.id, h, proj)
-    assert h.received[0].model == "deepseek-v4-flash"
-
-
-def test_cfg_models_override_role_model(pool, tmp_path):
-    # Finding S4:非 p3 角色(advance_once 直发)同样走 cfg["models"]
-    t = new_ticket(pool, project="p", summary="x")
-    t.state = "p4_verifying"
-    save_ticket(pool, t)
-    h = FakeHarness()
-    cfg = {"models": {"qa": "glm-5.3-flash"},
-           "budgets": {"k3_week_token_budget": 10**9, "ds_daily_cny": 10**9}}
-    advance_once(pool, t.id, h, tmp_path, cfg=cfg)
-    assert h.received[0].model == "glm-5.3-flash"
+    assert h.received[0].model == "k3.1-pro"

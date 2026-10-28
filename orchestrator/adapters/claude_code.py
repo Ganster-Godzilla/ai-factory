@@ -12,8 +12,9 @@ class ClaudeCodeAdapter(HarnessAdapter):
     name = "claude_code"
 
     # relay 路由组键(T-2026-0908-003 分流):只有这组 model 才传 --model;
+    # k3.1-pro = L1 显式驾驶员(T-2026-1028-003,relay defaultChain 透传 kimi 池);
     # dsh 语义模型(deepseek-v4-flash 等)透传会注崩 kimi 上游,一律忽略。
-    DRIVER_MODELS = {"k2.6", "gpt-6-astra"}
+    DRIVER_MODELS = {"k2.6", "gpt-6-astra", "k3.1-pro"}
 
     def run(self, packet: TaskPacket) -> HarnessResult:
         # Windows 上 npm 安装的 claude 是 .cmd shim,CreateProcess 只自动补 .exe;

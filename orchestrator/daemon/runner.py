@@ -30,7 +30,8 @@ ROLE_ROUTING = {
     # dsh 适配器保留作回退路径(回本表四行即切回)。
 }
 
-# 角色 → 模型维度(仅 dsh 路径使用;claude_code 适配器不读 model,relay 侧自选/重写)
+# 角色 → 模型维度(dsh 回退路径使用;claude_code 路径由 level 驾驶员覆盖,
+# 见 _driver_for_level——0908-003 起 claude_code 经 DRIVER_MODELS 白名单读 model)
 ROLE_MODEL = {
     "dev": "deepseek-v4-flash", "qa": "deepseek-v4-flash",
     "release": "deepseek-v4-flash", "sre": "deepseek-v4-flash",
@@ -73,9 +74,12 @@ def _model_for(cfg: dict | None, role: str) -> str | None:
 
 def _driver_for_level(ticket) -> str | None:
     """level→驾驶员模型(T-2026-0908-003 分流):L2/L3 → 'k2.6'(relay 路由组,
-    免费渠道);L1 → None(claude 默认 k3 付费池语义不变)。
+    免费渠道);L1 → 'k3.1-pro'(T-2026-1028-003:kimi 订阅池新一代,
+    relay defaultChain 透传,endpoint 已实证接受;原 None=CLI 隐式默认 k3)。
     返回值经 DRIVER_MODELS 白名单才会变成 claude --model,dsh 语义不受影响。"""
-    return "k2.6" if getattr(ticket, "level", "L1") in ("L2", "L3") else None
+    if getattr(ticket, "level", "L1") in ("L2", "L3"):
+        return "k2.6"
+    return "k3.1-pro"
 
 
 def _mingfang(cfg: dict | None) -> bool:
