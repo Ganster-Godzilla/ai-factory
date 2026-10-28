@@ -1,0 +1,26 @@
+- id: T1
+  title: L1 驾驶员切 k3.1-pro(runner+adapter 白名单),测试先红后绿
+  scope:
+  - orchestrator/daemon/runner.py
+  - orchestrator/adapters/claude_code.py
+  - tests/orchestrator/test_level.py
+  - tests/orchestrator/test_claude_code_adapter.py
+  acceptance_cmd: cd /d/workspace/tmp/aif-1028-003 && python -m pytest tests/orchestrator/test_level.py tests/orchestrator/test_claude_code_adapter.py -q
+  depends_on: []
+  context: 先红:test_level.test_driver_for_level_mapping 的 L1 断言改 'k3.1-pro'、test_claude_code_adapter
+    白名单通过集加 'k3.1-pro' —— 改完测试必红(咬现状);后绿:_driver_for_level L1 返回 'k3.1-pro'
+    (L2/L3 仍 k2.6、legacy 无 level 仍 None),DRIVER_MODELS 加 'k3.1-pro'。dsh 语义模型
+    (deepseek-v4-flash 等)仍被白名单忽略,断言不动。
+- id: T2
+  title: 口径文件+全量回归+relay 真实链路冒烟+四章验收报告
+  scope:
+  - scripts/canary-report.py
+  - docs/orchestrator-guide.md
+  - document/business/T-2026-1028-003-l1-driver-k31/
+  acceptance_cmd: cd /d/workspace/tmp/aif-1028-003 && python -m pytest tests/ -q
+  depends_on:
+  - T1
+  context: canary-report DRIVER_OF['L1'] 'k3'→'k3.1-pro';orchestrator-guide 路由表 L1 行同步;
+    pytest tests/ 全量绿;真链路冒烟 claude -p --model k3.1-pro 经 relay(127.0.0.1:8787)出字
+    且 is_error=false、relay /__stats kimi* 计数增长;04_测试/验收报告.md 四章齐(环境/范围/用例结果/结论),
+    结论=通过。

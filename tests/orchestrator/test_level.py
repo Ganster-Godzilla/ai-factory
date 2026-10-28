@@ -137,15 +137,15 @@ def test_driver_for_level_mapping():
     t.level = "L2"
     assert _driver_for_level(t) == "k2.6"
     t.level = "L1"
-    assert _driver_for_level(t) is None
-    # 存量无 level 属性对象:getattr 兜底 L1 → None
+    assert _driver_for_level(t) == "k3.1-pro"
+    # 存量无 level 属性对象:getattr 兜底 L1 → 'k3.1-pro'(T-2026-1028-003)
     class Legacy: pass
-    assert _driver_for_level(Legacy()) is None
+    assert _driver_for_level(Legacy()) == "k3.1-pro"
 
 
 def test_dispatch_injects_driver_model(pool, tmp_path, monkeypatch):
     """端到端(T-2026-0908-003 R1):_dispatch_task 按 level 注入 packet.model;
-    L1 回落 _model_for(cfg 缺省 → ROLE_MODEL['dev']=deepseek-v4-flash)。"""
+    L1 注入 'k3.1-pro'(T-2026-1028-003;原行为=回落 _model_for dsh 语义,已废)。"""
     from orchestrator.daemon import runner
     from orchestrator.adapters.base import HarnessResult
     seen = {}
@@ -167,4 +167,4 @@ def test_dispatch_injects_driver_model(pool, tmp_path, monkeypatch):
     l1.tasks = [{"id": "S1", "title": "x", "status": "pending", "attempts": 0,
                  "acceptance_cmd": "echo ok"}]
     runner._dispatch_task(pool, l1, l1.tasks[0], object(), tmp_path, None, None)
-    assert seen["model"] == "deepseek-v4-flash"   # L1 零变化(现默认)
+    assert seen["model"] == "k3.1-pro"   # L1→k3.1-pro(T-2026-1028-003)
