@@ -30,7 +30,8 @@ ROLE_ROUTING = {
     # dsh 适配器保留作回退路径(回本表四行即切回)。
 }
 
-# 角色 → 模型维度(仅 dsh 路径使用;claude_code 适配器不读 model,relay 侧自选/重写)
+# 角色 → 模型维度(dsh 回退路径使用;claude_code 路径由 level 驾驶员覆盖,
+# 见 _driver_for_level——0908-003 起 claude_code 经 DRIVER_MODELS 白名单读 model)
 ROLE_MODEL = {
     "dev": "deepseek-v4-flash", "qa": "deepseek-v4-flash",
     "release": "deepseek-v4-flash", "sre": "deepseek-v4-flash",

@@ -135,7 +135,7 @@ HEAD;git 侧字段由守卫模块 `gitguard.make_loop_merge_fields()` 生成,`ti
 
 | level | 驾驶员 | relay 落点 | 适用 |
 |---|---|---|---|
-| L1 | k3(订阅池) | kimi1-4 → glm → **zy-ds(免费)** → ds-flash → zen-k3 | 大特性/高风险/跨项目 |
+| L1 | **k3.1-pro**(订阅池,T-2026-1028-003;原 k3 隐式默认已显式化) | kimi1-4 → glm → **zy-ds(免费)** → ds-flash → zen-k3 | 大特性/高风险/跨项目 |
 | L2/L3 | **kimi-k2.6**(免费渠道) | zy-k2 → zy-ds → glm → ds-flash → kimi 池 → zen-k3 | 文档/单点 bug/小特性 |
 
 - 渠道=合伙人免费账号(折愿知心);**官方 key 全部保留在链尾**,渠道冷却自动掉回,业务无感

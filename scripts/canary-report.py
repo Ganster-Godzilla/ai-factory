@@ -19,7 +19,7 @@ import urllib.request
 from datetime import datetime
 from pathlib import Path
 
-DRIVER_OF = {"L1": "k3", "L2": "k2.6", "L3": "k2.6"}
+DRIVER_OF = {"L1": "k3.1-pro", "L2": "k2.6", "L3": "k2.6"}   # L1→k3.1-pro(T-2026-1028-003)
 POOL = Path(__file__).resolve().parent.parent / "pool"
 RELAY = "http://127.0.0.1:8787/__stats"
 
