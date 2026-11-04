@@ -47,6 +47,15 @@
         "phase5_release": "completed"
       }
     },
+    "dashboard-daemon-hardening": {
+      "phase": "phase1_requirements",
+      "ticket": "T-2026-1104-001",
+      "requirements_dir": "document/business/T-2026-1104-001-dashboard-daemon-hardening/01_需求分析",
+      "milestones": {
+        "phase0_proposal": "completed",
+        "phase1_requirements": "completed"
+      }
+    },
     "orchestrator-001": {
       "phase": "completed",
       "ticket": "T-2026-0829-001",
