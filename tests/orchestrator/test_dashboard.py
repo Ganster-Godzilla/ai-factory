@@ -77,6 +77,18 @@ def test_overview_data_empty_pool(pool):
     assert d["pending_approval"] == 0
     assert d["running"] == 0
     assert d["suspended"] == 0
+
+
+def test_overview_survives_bom_prefixed_events(pool):
+    """2026-11-04 实证:某事件台账被 PowerShell 写出 UTF-8 BOM,总览 / 被 404 吞掉
+    (JSONDecodeError 是 ValueError 子类,撞上"工单不存在"处理器)。读须 utf-8-sig 容错。"""
+    t = new_ticket(pool, project="p", summary="BOM 现场")
+    transition(pool, t, "p0_proposed", actor="pm")
+    events_file = pool / "tickets" / f"{t.id}.events.jsonl"
+    raw = events_file.read_bytes()
+    events_file.write_bytes(b"\xef\xbb\xbf" + raw)   # BOM 污染前缀
+    d = overview_data(pool, _cfg())
+    assert d["today_events"][t.id] >= 2   # BOM 行也计入,不炸不丢
     # 空池也有 gateway 回退留痕事件(system)
     assert isinstance(d["today_events"], dict)
 

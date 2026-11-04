@@ -42,7 +42,8 @@ def _today_events(pool: Path, now: datetime | None = None) -> dict[str, int]:
     if not tickets_dir.exists():
         return counts
     for path in sorted(tickets_dir.glob("*.events.jsonl")):
-        for line in path.read_text(encoding="utf-8").splitlines():
+        # utf-8-sig:台账可能被外部工具(PowerShell 等)写入 BOM,容错不炸总览(2026-11-04 实证)
+        for line in path.read_text(encoding="utf-8-sig").splitlines():
             if not line.strip():
                 continue
             e = json.loads(line)
