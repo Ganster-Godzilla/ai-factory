@@ -1,10 +1,15 @@
 """T-2026-0921-004 O3 先红:Dashboard 单实例 PID 锁——活锁拒启(打印占用 PID);
 死锁回收启动+pid_lock_reclaimed 事件;release 只清自己的锁(不误删后启者);
 锁内容含 pid+started_at。
+
+T-2026-1104-001 G2:Windows 僵尸判死活判——OpenProcess 可打开≠活着,
+须 GetExitCodeProcess==STILL_ACTIVE(259);非 259/调用失败判死,回收不误拒。
 """
 from __future__ import annotations
 
 import json
+import sys
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -82,3 +87,60 @@ class TestRelease:
 
     def test_release_missing_lock_is_noop(self, tmp_path):
         release_pid_lock(tmp_path / "pool", pid=1111)  # 不炸
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="Windows ctypes 语义")
+class TestWindowsRealLiveness:
+    """T-2026-1104-001:OpenProcess 可打开僵尸对象 ≠ 活着;
+    真活判 = OpenProcess 成功 + GetExitCodeProcess==STILL_ACTIVE(259)。"""
+
+    def _mock_kernel32(self, open_ok=True, exit_code=259, get_exit_ok=True):
+        k = MagicMock()
+        k.OpenProcess.return_value = 1234 if open_ok else None
+        def _get_exit(h, p):
+            if not get_exit_ok:
+                return 0
+            # DWORD buffer:写入给定退出码
+            p._obj.value = getattr(self, "_exit_code", 259)
+            return 1
+        k.GetExitCodeProcess.side_effect = _get_exit
+        k.CloseHandle.return_value = 1
+        return k
+
+    def test_zombie_process_judged_dead_and_reclaimed(self, tmp_path):
+        """僵尸(可打开但退出码非 259)→ 判死,回收锁不拒启。"""
+        self._exit_code = 0
+        k = self._mock_kernel32(open_ok=True, get_exit_ok=True)
+        with patch("ctypes.windll.kernel32", k):
+            from orchestrator.dashboard.app import _pid_alive_default
+            assert _pid_alive_default(9999) is False
+        pool = tmp_path / "pool"
+        _write_lock(pool, pid=9999)
+        with patch("ctypes.windll.kernel32", k):
+            acquired = acquire_pid_lock(pool, pid=1111)
+        assert acquired is True
+        assert json.loads((pool / ".dashboard.pid")
+                          .read_text(encoding="utf-8"))["pid"] == 1111
+        kinds = [e["event"] for e in read_events(pool, "dashboard")]
+        assert "pid_lock_reclaimed" in kinds
+
+    def test_alive_process_still_active_refuses(self, tmp_path):
+        """真活(退出码 259=STILL_ACTIVE)→ 判活,拒启防孤儿。"""
+        self._exit_code = 259
+        k = self._mock_kernel32(open_ok=True, get_exit_ok=True)
+        with patch("ctypes.windll.kernel32", k):
+            from orchestrator.dashboard.app import _pid_alive_default
+            assert _pid_alive_default(4242) is True
+        pool = tmp_path / "pool"
+        _write_lock(pool, pid=4242)
+        with patch("ctypes.windll.kernel32", k):
+            with pytest.raises(SystemExit) as e:
+                acquire_pid_lock(pool)
+        assert "4242" in str(e.value)
+
+    def test_get_exit_code_failure_judged_dead(self, tmp_path):
+        """GetExitCodeProcess 调用失败(句柄失效/权限)→ 判死,可回收。"""
+        k = self._mock_kernel32(open_ok=True, get_exit_ok=False)
+        with patch("ctypes.windll.kernel32", k):
+            from orchestrator.dashboard.app import _pid_alive_default
+            assert _pid_alive_default(5555) is False

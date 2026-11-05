@@ -28,14 +28,21 @@ _PID_LOCK = ".dashboard.pid"
 
 
 def _pid_alive_default(pid: int) -> bool:
-    """活判:Windows=ctypes OpenProcess(0x1000),POSIX=os.kill(pid, 0)。"""
+    """活判:Windows=OpenProcess(0x1000) 成功后还须 GetExitCodeProcess==STILL_ACTIVE(259)
+    (僵尸对象可打开≠活着,T-2026-1104-001);POSIX=os.kill(pid, 0)。"""
     if os.name == "nt":
         import ctypes
+        from ctypes import wintypes
         handle = ctypes.windll.kernel32.OpenProcess(0x1000, False, pid)
         if not handle:
             return False
-        ctypes.windll.kernel32.CloseHandle(handle)
-        return True
+        try:
+            code = wintypes.DWORD()
+            ok = ctypes.windll.kernel32.GetExitCodeProcess(handle, ctypes.byref(code))
+            # 只有仍在运行(STILL_ACTIVE)才算活;退出码 259 撞码为已知残余风险(见 design Q3)
+            return bool(ok) and code.value == 259
+        finally:
+            ctypes.windll.kernel32.CloseHandle(handle)
     try:
         os.kill(pid, 0)
         return True

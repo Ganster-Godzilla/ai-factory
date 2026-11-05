@@ -17,7 +17,16 @@ def test_append_and_week_sum(pool):
     assert ds_ticket_cost(pool, "T-1") == 1.5
 
 
-def test_budget_flags(pool):
+def test_append_ledger_writes_utf8_no_bom(pool):
+    """T-2026-1104-001 G3:台账写手必须 UTF-8 无 BOM(同 events 口径)。"""
+    append_ledger(pool, "k3", 100, "tokens", "T-bom", "pm", "k3")
+    path = pool / "ledger.jsonl"
+    raw = path.read_bytes()
+    assert raw[:3] != b"\xef\xbb\xbf", "ledger.jsonl 写入带 BOM"
+    lines = [l for l in raw.decode("utf-8").splitlines() if l.strip()]
+    assert len(lines) == 1
+    import json as _json
+    _json.loads(lines[0])
     assert not k3_budget_exceeded(pool, CFG)
     append_ledger(pool, "k3", 1001, "tokens", "T-1", "pm", "k3")
     assert k3_budget_exceeded(pool, CFG)
