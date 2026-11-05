@@ -1,0 +1,39 @@
+# 任务切片-T-2026-1104-001: Dashboard 长驻化根治
+# 设计依据:document/business/T-2026-1104-001-dashboard-daemon-hardening/02_设计文档/design.md
+# 契约:[{id,title,acceptance_cmd,depends_on}];验收失败须打印 FAIL: <子句> 行。
+# G1(代码)+G2(测试)同文件簇串行;G3(脚本/runbook)与 G4(守卫测试)跨文件可并行,排在 G2 后串行。
+
+- id: G1
+  title: "PID 真活判:app.py _pid_alive_default Windows 分支加 GetExitCodeProcess==STILL_ACTIVE(259),POSIX 不动"
+  # 上下文:orchestrator/dashboard/app.py _pid_alive_default,OpenProcess(0x1000) 成功后
+  # 再调 GetExitCodeProcess,仅 code==259 视为活;句柄无效/调用失败判死;finally CloseHandle。
+  acceptance_cmd: "python -m pytest tests/orchestrator/test_dashboard_pidlock.py -q"
+  depends_on: []
+
+- id: G2
+  title: "PID 锁测试补强:僵尸锁(退出码非259)判死回收+事件、真活(259)拒启、GetExitCodeProcess 失败判死"
+  # 上下文:tests/orchestrator/test_dashboard_pidlock.py 新增三类用例;
+  # 既有 拒启/回收/只清自己/损坏锁 用例保持绿;经注入 alive_check 或 mock ctypes 覆盖。
+  acceptance_cmd: "python -m pytest tests/orchestrator/test_dashboard_pidlock.py -q"
+  depends_on: [G1]
+
+- id: G3
+  title: "台账写手无 BOM 守卫:append_event/append_ledger 产物首三字节非 EF BB BF"
+  # 上下文:tests/orchestrator/test_events.py 增一例(append_event 两条后 read_bytes()[:3]!=BOM 且逐行可解);
+  # tests/orchestrator/test_ledger.py 增一例(append_ledger 后首三字节非 BOM)。
+  acceptance_cmd: "python -m pytest tests/orchestrator/test_events.py tests/orchestrator/test_ledger.py -q"
+  depends_on: []
+
+- id: G4
+  title: "一键脚本 scripts/dashboard-service.ps1(register/unregister/start/stop/status)+ docs/dashboard-runbook.md"
+  # 上下文:新脚本四动作,默认用户级启动文件夹 lnk,-Admin 走计划任务;status 输出 PID/端口/存活/锁一致;
+  # 日志用 cmd 追加或 python logging,禁 PS > 重定向写 jsonl;迁移并删除 pool/register-dashboard-autostart.ps1。
+  # runbook 记注册/启动/停止/状态/排错 + 台账写入纪律(F7)。
+  acceptance_cmd: "powershell -NoProfile -File scripts/dashboard-service.ps1 status"
+  depends_on: []
+
+- id: G5
+  title: "全量回归:pytest 全绿 + check-pool-load 0 bad + orc guard pre-merge PASS"
+  # 上下文:确认 PID 改动无跨模块回归;台账守卫不破既有测试;门禁与池健康通过。
+  acceptance_cmd: "python -m pytest -q"
+  depends_on: [G2, G3, G4]

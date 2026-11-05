@@ -3,7 +3,7 @@
 > 会话启动读取;任务完成时更新(/ai-factory:backlog-sync)。
 
 ## In Progress
-- 2026-11-04 T-2026-1104-001(Dashboard 长驻化根治):p1_proposed 待批——需求分析产物已出(prd/功能清单/歧义记录),歧义 Q1/Q3/Q5/Q6 待 boss 裁定;范围=脱会话拉起/PID 真活判/台账写手无 BOM
+- 2026-11-04 T-2026-1104-001(Dashboard 长驻化根治):p2_designing 待批——设计两件套已出(design.md+tasks.yaml),owner 已交还 boss;三件套=脱会话拉起(脚本入仓)/PID 真活判(GetExitCodeProcess 259)/台账写手无 BOM 守卫
 
 | 2026-09-09 | Dashboard 事故单无关闭入口(按钮缺口) | parked | boss 实证:T-2026-0909-001 详情页无关闭按钮;状态机关单径 suspended→closed(boss),但 UI 无对应动作;建议在「已挂起」桶加【关闭】按钮(actor=boss) |
 | 2026-09-09 | Dashboard 错误消息张冠李戴(校验失败渲染成"工单不存在") | parked | 实证:手工建单 type=bugfix 非法 → save_ticket ValueError 被笼统 errorhandler 捕获,boss 点批准看到「工单不存在」404,实际工单在、是校验失败;建议 errorhandler 按异常类型/消息分流,校验失败亮出具体字段错误(T-2026-0909-002 已改 type=feature 解封,沙盒试批过) |
