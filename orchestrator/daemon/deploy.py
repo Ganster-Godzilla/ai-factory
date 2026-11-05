@@ -246,15 +246,30 @@ def requirements_sha(local_path: str | Path) -> str:
     return hashlib.sha256(Path(local_path).read_bytes()).hexdigest()
 
 
+def is_placeholder_requirements(local_path: str | Path) -> bool:
+    """占位 requirements 判定(T-2026-1105-001):内容为空或仅注释/空白行,
+    视为无依赖意义(如 Java 项目占位文件),远端无基准时不硬拦。
+    有任意非注释非空行即非占位,真实依赖差异仍保守硬拦。"""
+    text = Path(local_path).read_text(encoding="utf-8")
+    for line in text.splitlines():
+        s = line.strip()
+        if s and not s.startswith("#"):
+            return False
+    return True
+
+
 def requirements_changed(local_path: str | Path, remote_sha: str | None) -> bool:
     """依赖差异判定(design §2.3):本地 requirements 哈希 vs 远端
     current/.requirements.sha 内容;不一致即 True(部署中止条件,
     G4 流水线据此 FAIL,或 --allow-deps-change 显式放行并写 venv 重建说明)。
 
     远端无基准(None/空/首装无 current)→ True:无从比对即保守视为有差异,
-    须显式处置(首装按依赖变更放行)。"""
+    须显式处置(首装按依赖变更放行)。
+    例外(T-2026-1105-001):本地为占位文件(空/仅注释)时,远端无基准不判差异。"""
     local = requirements_sha(local_path)
     baseline = (remote_sha or "").strip()
+    if not baseline and is_placeholder_requirements(local_path):
+        return False  # 占位文件无基准:豁免,留痕由调用方记 placeholder_exempt
     return not baseline or local != baseline
 
 

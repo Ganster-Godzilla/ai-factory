@@ -211,3 +211,25 @@ def test_requirements_changed_missing_baseline_is_changed(tmp_path):
     assert requirements_changed(req, None) is True  # 首装无基准:保守判差异
     assert requirements_changed(req, "") is True
     assert requirements_changed(req, "  ") is True
+
+
+def test_requirements_placeholder_exempt_from_missing_baseline(tmp_path):
+    """T-2026-1105-001:占位 requirements(空/仅注释)远端无基准不硬拦,
+    但留痕 placeholder_exempt;真实依赖仍硬拦。"""
+    from orchestrator.daemon.deploy import is_placeholder_requirements
+    # 空文件
+    empty = tmp_path / "empty.txt"
+    empty.write_text("", encoding="utf-8")
+    assert is_placeholder_requirements(empty) is True
+    # 仅注释
+    comment = tmp_path / "comment.txt"
+    comment.write_text("# 占位\n# java 项目无 python 依赖\n", encoding="utf-8")
+    assert is_placeholder_requirements(comment) is True
+    # 有真实依赖
+    real = tmp_path / "real.txt"
+    real.write_text("flask==3.0\n", encoding="utf-8")
+    assert is_placeholder_requirements(real) is False
+    # 注释+真实依赖混合 → 非占位
+    mixed = tmp_path / "mixed.txt"
+    mixed.write_text("# 注释\nflask\n", encoding="utf-8")
+    assert is_placeholder_requirements(mixed) is False
